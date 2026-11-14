@@ -29,6 +29,7 @@ import type { LinkContext } from "@/lib/markdown/remark-links";
 import { splitLinkText } from "@/lib/links/parse";
 import { splitFrontmatter } from "@/lib/markdown/frontmatter";
 import { extractHeadings } from "@/lib/markdown/outline";
+import { blockIdChange, listBlocks } from "@/lib/markdown/blocks";
 import { previewMarkdown } from "@/lib/markdown/preview";
 import { sectionUnder } from "@/lib/markdown/remark-links";
 import {
@@ -394,6 +395,18 @@ export function Workspace() {
           })),
       linkText: (p) => (vault.entries.some((e) => e.path === p && e.kind === "file") ? vault.links.linkText(p) : null),
       linkSelection: () => setLinkPickerOpen(true),
+      currentPath: () => vault.active?.path ?? null,
+      noteContent: (p) => (isNote(p) ? vault.links.content(p) : undefined),
+      addBlockId: (p, block, id) => {
+        const content = vault.links.content(p);
+        if (content === undefined) return;
+        // Find the block again in the saved text, in case it moved.
+        const now = listBlocks(content);
+        const same = now.find((b) => b.from === block.from && b.text === block.text) ?? now.find((b) => b.text === block.text);
+        if (!same || same.id) return;
+        const c = blockIdChange(same, id);
+        void vault.writeNote(p, content.slice(0, c.from) + c.insert + content.slice(c.from));
+      },
       headings: (p) => vault.links.get(p)?.headings.map((h) => h.text) ?? [],
       notePreview: (t, sub) => {
         const p = vault.links.resolve(t, vault.active?.path);

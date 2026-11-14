@@ -21,6 +21,7 @@ import { tags } from "@lezer/highlight";
 import type { MarkdownConfig } from "@lezer/markdown";
 import { hasModKey, openHow, type OpenHow } from "../links/open";
 import { splitLinkText } from "../links/parse";
+import { blockIdChange, blockIds, listBlocks, newBlockId, type Block } from "../markdown/blocks";
 import { linkBoost } from "../links/rank";
 import { TREE_DRAG_TYPE } from "../vault/drag";
 
@@ -42,6 +43,12 @@ export interface LinkHost {
   notes(): Array<{ title: string; path: string; aliases: string[]; linkText: string; recentRank?: number; inbound?: number }>;
   /** The shortest unambiguous link text for a file dragged in from the file tree; null for a folder. */
   linkText?(path: string): string | null;
+  /** The path of the note being edited. */
+  currentPath?(): string | null;
+  /** The saved text of another note, for listing its blocks. */
+  noteContent?(path: string): string | undefined;
+  /** Gives a block in another note the id `id` (" ^id" at its end), saving that note. */
+  addBlockId?(path: string, block: Block, id: string): void;
   /** Opens a note picker that links the selection to the chosen note (Ctrl/Cmd+Shift+K). */
   linkSelection?(): void;
   headings(path: string): string[];
@@ -345,9 +352,16 @@ function completeLinks(ctx: CompletionContext): CompletionResult | null {
 
   const hash = typed.indexOf("#");
   if (hash !== -1) {
-    const path = host.resolve(typed.slice(0, hash));
-    if (!path) return null;
-    const options: Completion[] = host.headings(path).map((h) => ({
+    // "[[#..." means this note; so does a link that names it.
+    const targetText = typed.slice(0, hash);
+    const path = targetText ? host.resolve(targetText) : null;
+    if (targetText && !path) return null;
+    const here = !targetText || path === host.currentPath?.();
+    if (typed.slice(hash + 1).startsWith("^")) {
+      return blockCompletions(ctx, host, here ? null : path!, from + hash + 2, closing);
+    }
+    const headings = here ? headingsIn(ctx.state.doc.toString()) : host.headings(path!);
+    const options: Completion[] = headings.map((h) => ({
       label: h,
       type: "heading",
       apply: (view, _c, f, t) => {
@@ -358,7 +372,7 @@ function completeLinks(ctx: CompletionContext): CompletionResult | null {
         });
       },
     }));
-    return { from: from + hash + 1, options, validFor: /^[^\]\n#|]*$/ };
+    return { from: from + hash + 1, options, validFor: /^[^\]\n#|^]*$/ };
   }
 
   const apply = (text: string) => (view: EditorView, _c: Completion, f: number, t: number) => {
@@ -401,6 +415,61 @@ function completeLinks(ctx: CompletionContext): CompletionResult | null {
   }
   // No validFor: the list is rebuilt on each keystroke so the "New note" entry follows the typing.
   return { from, options };
+}
+
+/** Headings of a note, outside code fences. */
+function headingsIn(markdown: string): string[] {
+  const out: string[] = [];
+  let fence = false;
+  for (const line of markdown.split("\n")) {
+    if (/^\s{0,3}(```|~~~)/.test(line)) fence = !fence;
+    const m = !fence && /^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$/.exec(line);
+    if (m && m[1]) out.push(m[1]);
+  }
+  return out;
+}
+
+/**
+ * "[[Note#^" suggests the note's paragraphs, list items and quotes. Picking one
+ * without an id gives it a new one (" ^a1b2c3" at its end), as Obsidian does.
+ * `path` null means the note being edited, which is changed in the same edit.
+ */
+function blockCompletions(
+  ctx: CompletionContext,
+  host: LinkHost,
+  path: string | null,
+  from: number,
+  closing: string,
+): CompletionResult | null {
+  const content = path ? host.noteContent?.(path) : ctx.state.doc.toString();
+  if (content === undefined) return null;
+  const blocks = listBlocks(content).filter((b) => path || !(b.from <= ctx.pos && ctx.pos <= b.to + 2));
+  const options: Completion[] = blocks.map((b, index) => ({
+    label: b.text,
+    detail: b.id ? `^${b.id}` : undefined,
+    type: "block",
+    apply: (view: EditorView, _c: Completion, f: number, t: number) => {
+      let id = b.id;
+      const changes: Array<{ from: number; to?: number; insert: string }> = [];
+      if (!id) {
+        if (path) {
+          id = newBlockId(blockIds(content));
+          host.addBlockId?.(path, b, id);
+        } else {
+          // This note may have changed since the list was made: find the block again.
+          const doc = view.state.doc.toString();
+          const now = listBlocks(doc).filter((x) => !(x.from <= f && f <= x.to + 2));
+          const same = now[index]?.text === b.text ? now[index] : now.find((x) => x.text === b.text);
+          id = same?.id ?? newBlockId(blockIds(doc));
+          if (same && !same.id) changes.push(blockIdChange(same, id));
+        }
+      }
+      changes.push({ from: f, to: t, insert: id + closing });
+      const set = view.state.changes(changes);
+      view.dispatch({ changes: set, selection: { anchor: set.mapPos(t, 1) + (closing ? 0 : 2) }, userEvent: "input.complete" });
+    },
+  }));
+  return { from, options, filter: true };
 }
 
 /** Loads images and drawings in rendered HTML (they carry their vault path in data-asset). */
