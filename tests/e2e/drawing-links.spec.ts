@@ -29,7 +29,6 @@ test("typing [[ in a drawing's text box suggests notes and links the box", async
   await expect(editor).toHaveValue("See [[Welcome]]");
   await page.keyboard.press("Escape"); // finish editing the text
   await expect(page.getByTestId("drawing-notice")).toHaveText("Linked to Welcome");
-  await expect(page.locator('[data-link-marker="note"]')).toHaveCount(1);
   await expect(page.getByRole("status")).toHaveText("Saved");
 
   // The drawing now links to Welcome: it shows up in Welcome's backlinks.
@@ -52,7 +51,6 @@ test("linking a drawing to a note that doesn't exist yet says so", async ({ page
   await expect(editor).toHaveValue("[[Ideas]]");
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("drawing-notice")).toContainText("a new note");
-  await expect(page.locator('[data-link-marker="new"]')).toHaveCount(1);
 });
 
 test("the drawing toolbar links to notes and inserts vault images", async ({ page }) => {

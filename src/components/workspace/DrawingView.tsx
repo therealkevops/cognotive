@@ -13,7 +13,7 @@ import type { BinaryFileData, ExcalidrawImperativeAPI, ExcalidrawInitialDataStat
 import { FilePlus2, ImagePlus, Link2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isDark } from "@/lib/appearance";
-import { completeWikilink, linkedBoxes, newNoteName, openWikilink, textLinkUpdates, type LinkedBox } from "@/lib/drawing/links";
+import { completeWikilink, newNoteName, openWikilink, textLinkUpdates } from "@/lib/drawing/links";
 import { elementLinkTarget } from "@/lib/drawing/parse";
 import { splitLinkText } from "@/lib/links/parse";
 import { matches, Picker } from "./Picker";
@@ -52,14 +52,6 @@ export interface DrawingVault {
   pictureData(path: string): Promise<{ dataURL: string; mimeType: string } | null>;
   /** The note a link target resolves to, or null if there's no such note yet. */
   resolve(target: string): string | null;
-}
-
-/** Where linked elements are, and the scroll and zoom, for drawing link markers. */
-interface MarkerView {
-  boxes: LinkedBox[];
-  scrollX: number;
-  scrollY: number;
-  zoom: number;
 }
 
 export interface DrawingViewProps {
@@ -107,14 +99,13 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
   }, [onChange, onOpenLink]);
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   const [picker, setPicker] = useState<null | "link" | "picture">(null);
-  const [markerView, setMarkerView] = useState<MarkerView | null>(null);
   const [notice, setNotice] = useState<{ text: string; key: number } | null>(null);
 
   // Say what a new link points to, and whether that note exists yet.
   const announce = useCallback(
     (links: string[]) => {
       if (!vault || !links.length) return;
-      const target = linkedBoxes([{ id: "", x: 0, y: 0, width: 0, height: 0, link: links[0] }])[0]?.target;
+      const target = elementLinkTarget(links[0])?.split("|")[0].split("#")[0].trim();
       if (!target) return;
       const text = vault.resolve(target)
         ? `Linked to ${target}`
@@ -129,18 +120,6 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
     return () => clearTimeout(t);
   }, [notice]);
 
-  // Underline every element that links to a note: solid if it exists, dashed if not yet.
-  const markers = useMemo(() => {
-    if (!markerView || !vault) return [];
-    const { boxes, scrollX, scrollY, zoom } = markerView;
-    return boxes.map((b) => ({
-      id: b.id,
-      left: (b.x + scrollX) * zoom,
-      top: (b.y + b.height + scrollY) * zoom + 2,
-      width: Math.max(b.width * zoom, 8),
-      exists: vault.resolve(b.target) !== null,
-    }));
-  }, [markerView, vault]);
 
   // Parsed once per drawing; Excalidraw owns the scene afterwards.
   const { initialData, error } = useMemo(() => {
@@ -273,13 +252,6 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
             if (lastFingerprint.current !== null) announce([...links.values()]);
             return; // the update triggers another onChange, which saves
           }
-          const next: MarkerView = {
-            boxes: linkedBoxes(elements),
-            scrollX: appState.scrollX,
-            scrollY: appState.scrollY,
-            zoom: appState.zoom.value,
-          };
-          setMarkerView((prev) => (prev && JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
           // Element versions change on every real edit; selection and scrolling don't.
           const fingerprint = `${elements.map((e) => `${e.id}:${e.version}`).join(",")}|${Object.keys(files).join(",")}|${appState.viewBackgroundColor}`;
           if (lastFingerprint.current === null) {
@@ -298,20 +270,6 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
           onOpenLinkRef.current(parts.target, parts.heading ?? (parts.block ? `^${parts.block}` : undefined));
         }}
       />
-      {markers.length > 0 && (
-        <div aria-hidden className="pointer-events-none absolute inset-0 z-[1] overflow-hidden" data-testid="link-markers">
-          {markers.map((m) => (
-            <div
-              key={m.id}
-              data-link-marker={m.exists ? "note" : "new"}
-              className={`absolute border-t-2 border-accent ${m.exists ? "" : "border-dashed opacity-70"}`}
-              style={{ left: m.left, top: m.top, width: m.width }}
-            >
-              {!m.exists && <span className="absolute top-0.5 left-0 text-[10px] whitespace-nowrap text-accent">new note</span>}
-            </div>
-          ))}
-        </div>
-      )}
       {notice && (
         <div
           key={notice.key}

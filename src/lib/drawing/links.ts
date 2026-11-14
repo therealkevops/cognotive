@@ -53,43 +53,6 @@ export function completeWikilink(text: string, start: number, caret: number, lin
   };
 }
 
-export interface LinkedBox {
-  id: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  /** The note the element links to, as written ("Note#Heading|alias" → "Note"). */
-  target: string;
-}
-
-/** Elements that link to a note, with their scene bounds, for drawing link markers. */
-export function linkedBoxes(
-  elements: ReadonlyArray<{
-    id: string;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    link?: string | null;
-    isDeleted?: boolean;
-  }>,
-): LinkedBox[] {
-  const out: LinkedBox[] = [];
-  for (const el of elements) {
-    if (el.isDeleted) continue;
-    const t = elementLinkTarget(el.link);
-    if (!t) continue;
-    const target = t.split("|")[0].split("#")[0].trim();
-    if (!target) continue;
-    // Lines and arrows can have negative sizes; normalise to a box.
-    const x = Math.min(el.x, el.x + el.width);
-    const y = Math.min(el.y, el.y + el.height);
-    out.push({ id: el.id, x, y, width: Math.abs(el.width), height: Math.abs(el.height), target });
-  }
-  return out;
-}
-
 /**
  * The name for a "create new note" suggestion: the typed query, when it is
  * not empty and no existing note already has that title or link text.
