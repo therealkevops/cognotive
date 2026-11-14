@@ -86,4 +86,28 @@ describe("LinkIndex", () => {
       "[the plan](Plans/New%20Plan.md#Step)",
     );
   });
+
+  it("treats drawings as graph nodes whose links count as backlinks", () => {
+    const ix = vault();
+    ix.set(
+      "Drawings/Layout.excalidraw",
+      JSON.stringify({ elements: [{ type: "rectangle", link: "[[Garden]]" }, { type: "text", text: "[[Home]]" }] }),
+    );
+    const bl = ix.backlinks("Garden.md").find((b) => b.source === "Drawings/Layout.excalidraw");
+    expect(bl?.context).toBe("Linked from the drawing");
+    const node = ix.graph().nodes.find((n) => n.id === "Drawings/Layout.excalidraw");
+    expect(node).toMatchObject({ kind: "drawing", title: "Layout", degree: 2 });
+    expect(ix.resolve("Layout.excalidraw")).toBe("Drawings/Layout.excalidraw");
+  });
+
+  it("rewrites links inside drawings on rename", () => {
+    const ix = vault();
+    ix.set("D.excalidraw", JSON.stringify({ elements: [{ type: "rectangle", link: "[[Garden]]" }] }));
+    const before = ix.snapshotResolver();
+    const garden = ix.content("Garden.md")!;
+    ix.remove("Garden.md");
+    ix.set("Plot.md", garden);
+    const updated = ix.rewriteLinksTo("Garden.md", "Plot.md", before).get("D.excalidraw");
+    expect(JSON.parse(updated!).elements[0].link).toBe("[[Plot]]");
+  });
 });

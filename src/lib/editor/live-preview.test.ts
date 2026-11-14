@@ -90,6 +90,33 @@ describe("live preview", () => {
     expect(lineText(v, 4)).toBe("Title");
   });
 
+  it("shows ![[image]] embeds as images, loaded through the host", async () => {
+    const doc = "Before\n![[pic.png|200]]\nend";
+    const v = new EditorView({
+      doc,
+      selection: EditorSelection.cursor(doc.length),
+      extensions: editorExtensions({
+        livePreview: true,
+        onChange: () => {},
+        links: {
+          resolve: () => "attachments/pic.png",
+          open: () => {},
+          notes: () => [],
+          headings: () => [],
+          preview: () => "",
+          embedPath: (t) => (t === "pic.png" ? "attachments/pic.png" : null),
+          fileUrl: async () => "blob:fake-url",
+        },
+      }),
+      parent: document.body,
+    });
+    views.push(v);
+    const img = v.contentDOM.querySelector<HTMLImageElement>("img.cm-embed")!;
+    expect(img.style.width).toBe("200px");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(img.getAttribute("src")).toBe("blob:fake-url");
+  });
+
   it("ticks a task when its checkbox is clicked", () => {
     const v = view(doc, doc.length);
     v.contentDOM.querySelector<HTMLInputElement>("input.cm-task-checkbox")!.click();

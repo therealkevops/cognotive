@@ -1,4 +1,5 @@
-import { isMarkdown, noteTitle } from "../vault/paths";
+import { parseDrawing, rewriteDrawingLinks } from "../drawing/parse";
+import { isDrawing, isMarkdown, noteTitle } from "../vault/paths";
 import { parseNote, splitLinkText, type ParsedLink, type ParsedNote } from "./parse";
 import { Resolver } from "./resolve";
 
@@ -23,6 +24,7 @@ export interface Mention {
 export interface GraphNode {
   id: string;
   title: string;
+  kind: "note" | "drawing";
   /** Unresolved link targets appear as ghost nodes. */
   unresolved: boolean;
   tags: string[];
@@ -57,6 +59,13 @@ export class LinkIndex {
   set(path: string, content: string): void {
     this.resolver.add(path);
     if (isMarkdown(path)) this.notes.set(path, { content, parsed: parseNote(content) });
+    else if (isDrawing(path)) {
+      const { links } = parseDrawing(content);
+      this.notes.set(path, {
+        content,
+        parsed: { links, tags: [], properties: {}, aliases: [], headings: [], propertiesError: false },
+      });
+    }
   }
 
   remove(path: string): void {
@@ -106,7 +115,8 @@ export class LinkIndex {
       if (source === path) continue;
       for (const link of e.parsed.links) {
         if (this.resolve(link.target, source) === path) {
-          out.push({ source, line: link.line, context: lineText(e.content, link.from), link });
+          const context = isDrawing(source) ? "Linked from the drawing" : lineText(e.content, link.from);
+          out.push({ source, line: link.line, context, link });
         }
       }
     }
@@ -144,7 +154,7 @@ export class LinkIndex {
     );
     const out: Mention[] = [];
     for (const [source, other] of this.notes) {
-      if (source === path) continue;
+      if (source === path || isDrawing(source)) continue;
       const masked = maskLinks(other.content, other.parsed);
       for (const m of masked.matchAll(pattern)) {
         const from = m.index!;
@@ -187,7 +197,14 @@ export class LinkIndex {
   graph(opts: { includeUnresolved?: boolean } = {}): { nodes: GraphNode[]; edges: GraphEdge[] } {
     const nodes = new Map<string, GraphNode>();
     for (const [p, e] of this.notes) {
-      nodes.set(p, { id: p, title: noteTitle(p), unresolved: false, tags: e.parsed.tags, degree: 0 });
+      nodes.set(p, {
+        id: p,
+        title: noteTitle(p).replace(/\.excalidraw$/i, ""),
+        kind: isDrawing(p) ? "drawing" : "note",
+        unresolved: false,
+        tags: e.parsed.tags,
+        degree: 0,
+      });
     }
     const edges = new Map<string, GraphEdge>();
     for (const [source, e] of this.notes) {
@@ -198,7 +215,7 @@ export class LinkIndex {
           if (!opts.includeUnresolved) continue;
           target = `unresolved:${link.target.toLowerCase()}`;
           if (!nodes.has(target)) {
-            nodes.set(target, { id: target, title: link.target, unresolved: true, tags: [], degree: 0 });
+            nodes.set(target, { id: target, title: link.target, kind: "note", unresolved: true, tags: [], degree: 0 });
           }
         }
         if (target === source || !nodes.has(target)) continue;
@@ -262,6 +279,11 @@ export class LinkIndex {
     const out = new Map<string, string>();
     const newText = this.linkText(newPath);
     for (const [source, e] of this.notes) {
+      if (isDrawing(source)) {
+        const updated = rewriteDrawingLinks(e.content, (t) => resolveOld(t, source) === oldPath, newText);
+        if (updated) out.set(source, updated);
+        continue;
+      }
       const edits: Array<{ from: number; to: number; insert: string }> = [];
       for (const link of e.parsed.links) {
         if (!link.target || resolveOld(link.target, source) !== oldPath) continue;

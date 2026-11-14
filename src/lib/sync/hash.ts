@@ -1,6 +1,6 @@
 /** Git's blob id: SHA-1 of "blob <byte length>\0<content>". Lets us compare with GitHub without downloading. */
-export async function gitBlobSha(content: string): Promise<string> {
-  const body = new TextEncoder().encode(content);
+export async function gitBlobSha(content: string | Uint8Array): Promise<string> {
+  const body = typeof content === "string" ? new TextEncoder().encode(content) : content;
   const header = new TextEncoder().encode(`blob ${body.length}\0`);
   const buf = new Uint8Array(header.length + body.length);
   buf.set(header);

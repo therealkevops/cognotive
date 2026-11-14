@@ -48,6 +48,9 @@ export default function MarkdownEditor({
       notes: () => linksRef.current?.notes() ?? [],
       headings: (p) => linksRef.current?.headings(p) ?? [],
       preview: (p) => linksRef.current?.preview(p) ?? "",
+      embedPath: (t) => linksRef.current?.embedPath?.(t) ?? null,
+      fileUrl: async (p) => (await linksRef.current?.fileUrl?.(p)) ?? null,
+      saveFiles: async (f) => (await linksRef.current?.saveFiles?.(f)) ?? [],
     }),
     [],
   );

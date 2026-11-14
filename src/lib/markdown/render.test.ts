@@ -128,3 +128,25 @@ describe("renderMarkdown links", () => {
     expect(renderMarkdown("`[[Garden]]`", ctx)).toContain("<code>[[Garden]]</code>");
   });
 });
+
+describe("renderMarkdown attachments", () => {
+  const ctx = {
+    resolve: (t: string) =>
+      ({ "pic.png": "attachments/pic.png", "attachments/pic.png": "attachments/pic.png", "map.excalidraw": "Map.excalidraw" })[
+        t.toLowerCase()
+      ] ?? null,
+    read: () => undefined,
+  };
+
+  it("embeds images and drawings by vault path, for the view to load", () => {
+    const html = renderMarkdown("![[pic.png|300]]\n\nInline ![[Map.excalidraw]] here", ctx);
+    expect(html).toContain('<img src="" alt="pic.png" class="embed-image" data-asset="attachments/pic.png" width="300">');
+    expect(html).toContain('class="embed-drawing" data-asset="Map.excalidraw"');
+  });
+
+  it("rewrites markdown images that point into the vault, and leaves web images alone", () => {
+    const html = renderMarkdown("![a](attachments/pic.png) ![b](https://x.io/b.png)", ctx);
+    expect(html).toContain('data-asset="attachments/pic.png"');
+    expect(html).toContain('src="https://x.io/b.png"');
+  });
+});

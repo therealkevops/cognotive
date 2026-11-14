@@ -6,13 +6,13 @@ import { RemoteMovedError, type Change, type Head, type RemoteRepo } from "./rem
  * path → content; `push` simulates someone else (e.g. Obsidian) committing.
  */
 export class FakeRemote implements RemoteRepo {
-  private commits = new Map<string, Map<string, string>>();
-  private blobs = new Map<string, string>();
+  private commits = new Map<string, Map<string, string | Uint8Array>>();
+  private blobs = new Map<string, string | Uint8Array>();
   private headId: string | null = null;
   private n = 0;
   commitCount = 0;
   /** Set to make the next commit fail as if someone pushed just before us. */
-  raceOnNextCommit: Map<string, string | null> | null = null;
+  raceOnNextCommit: Map<string, string | Uint8Array | null> | null = null;
 
   async head(): Promise<Head | null> {
     return this.headId ? { commit: this.headId, tree: `tree-${this.headId}` } : null;
@@ -28,7 +28,13 @@ export class FakeRemote implements RemoteRepo {
   async readBlob(sha: string): Promise<string> {
     const c = this.blobs.get(sha);
     if (c === undefined) throw new Error(`no blob ${sha}`);
-    return c;
+    return typeof c === "string" ? c : new TextDecoder().decode(c);
+  }
+
+  async readBlobBytes(sha: string): Promise<Uint8Array> {
+    const c = this.blobs.get(sha);
+    if (c === undefined) throw new Error(`no blob ${sha}`);
+    return typeof c === "string" ? new TextEncoder().encode(c) : c;
   }
 
   async commit(parent: Head | null, changes: Change[]): Promise<Head> {
@@ -48,7 +54,7 @@ export class FakeRemote implements RemoteRepo {
   }
 
   /** Someone else commits. null deletes. */
-  async push(files: Record<string, string | null> | Map<string, string | null>) {
+  async push(files: Record<string, string | Uint8Array | null> | Map<string, string | Uint8Array | null>) {
     const next = new Map(this.headId ? this.commits.get(this.headId) : []);
     for (const [p, c] of files instanceof Map ? files : Object.entries(files)) {
       if (c === null) next.delete(p);
@@ -57,11 +63,11 @@ export class FakeRemote implements RemoteRepo {
     return this.record(next);
   }
 
-  snapshot(): Record<string, string> {
+  snapshot(): Record<string, string | Uint8Array> {
     return Object.fromEntries(this.headId ? this.commits.get(this.headId)! : []);
   }
 
-  private async record(snap: Map<string, string>): Promise<Head> {
+  private async record(snap: Map<string, string | Uint8Array>): Promise<Head> {
     for (const c of snap.values()) await this.store(c);
     const id = `c${++this.n}`;
     this.commits.set(id, snap);
@@ -69,7 +75,7 @@ export class FakeRemote implements RemoteRepo {
     return { commit: id, tree: `tree-${id}` };
   }
 
-  private async store(content: string) {
+  private async store(content: string | Uint8Array) {
     const sha = await gitBlobSha(content);
     this.blobs.set(sha, content);
     return sha;

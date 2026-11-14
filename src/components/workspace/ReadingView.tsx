@@ -46,10 +46,21 @@ export interface ReadingViewProps {
   properties?: Record<string, unknown>;
   onOpenLink?(target: string, heading?: string): void;
   onTag?(tag: string): void;
+  /** Loads embedded images and drawings (rendered with only a vault path). */
+  fileUrl?(path: string): Promise<string | null>;
+  onOpenFile?(path: string): void;
 }
 
 /** Rendered, read-only view of a note. HTML comes from the sanitizing pipeline. */
-export default function ReadingView({ markdown, links, properties, onOpenLink, onTag }: ReadingViewProps) {
+export default function ReadingView({
+  markdown,
+  links,
+  properties,
+  onOpenLink,
+  onTag,
+  fileUrl,
+  onOpenFile,
+}: ReadingViewProps) {
   const html = useMemo(() => renderMarkdown(markdown, links), [markdown, links]);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -57,9 +68,27 @@ export default function ReadingView({ markdown, links, properties, onOpenLink, o
     if (!ref.current) return;
     const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     void drawMermaid(ref.current, dark);
+    let live = true;
+    for (const img of ref.current.querySelectorAll<HTMLImageElement>("img[data-asset]")) {
+      void fileUrl?.(img.dataset.asset!).then((url) => {
+        if (!live) return;
+        if (url) img.src = url;
+        else img.classList.add("embed-missing");
+      });
+    }
+    return () => {
+      live = false;
+    };
+    // fileUrl changes identity each render; the HTML decides what to load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [html]);
 
   const onClick = (e: MouseEvent) => {
+    const drawing = (e.target as HTMLElement).closest<HTMLImageElement>("img.embed-drawing");
+    if (drawing?.dataset.asset) {
+      onOpenFile?.(drawing.dataset.asset);
+      return;
+    }
     const a = (e.target as HTMLElement).closest("a");
     if (!a) return;
     if (a.classList.contains("internal-link")) {

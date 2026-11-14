@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import type { Page, Route } from "@playwright/test";
 
-const blobSha = (content: string) => {
-  const body = Buffer.from(content, "utf8");
+const blobSha = (content: string | Buffer) => {
+  const body = typeof content === "string" ? Buffer.from(content, "utf8") : content;
   return createHash("sha1").update(Buffer.concat([Buffer.from(`blob ${body.length}\0`), body])).digest("hex");
 };
 
@@ -11,7 +11,7 @@ const blobSha = (content: string) => {
  * Playwright route interception. One repo ("me/notes"), one branch ("main").
  */
 export class FakeGitHub {
-  blobs = new Map<string, string>();
+  blobs = new Map<string, Buffer>();
   trees = new Map<string, Map<string, string>>(); // tree sha → path → blob sha
   commits = new Map<string, { tree: string; parents: string[]; message: string }>();
   head: string | null = null;
@@ -22,13 +22,14 @@ export class FakeGitHub {
   }
 
   /** Someone else commits (e.g. from Obsidian). */
-  push(files: Record<string, string | null>, message = "external") {
+  push(files: Record<string, string | Buffer | null>, message = "external") {
     const current = new Map(this.head ? this.trees.get(this.commits.get(this.head)!.tree) : []);
     for (const [p, c] of Object.entries(files)) {
       if (c === null) current.delete(p);
       else {
-        const sha = blobSha(c);
-        this.blobs.set(sha, c);
+        const buf = typeof c === "string" ? Buffer.from(c, "utf8") : c;
+        const sha = blobSha(buf);
+        this.blobs.set(sha, buf);
         current.set(p, sha);
       }
     }
@@ -39,9 +40,16 @@ export class FakeGitHub {
     this.head = commit;
   }
 
+  /** Text of every file in the head commit. */
   files(): Record<string, string> {
     const tree = this.trees.get(this.commits.get(this.head!)!.tree)!;
-    return Object.fromEntries([...tree].map(([p, sha]) => [p, this.blobs.get(sha)!]));
+    return Object.fromEntries([...tree].map(([p, sha]) => [p, this.blobs.get(sha)!.toString("utf8")]));
+  }
+
+  bytes(path: string): Buffer | undefined {
+    const tree = this.trees.get(this.commits.get(this.head!)!.tree)!;
+    const sha = tree.get(path);
+    return sha ? this.blobs.get(sha) : undefined;
   }
 
   async install(page: Page) {
@@ -91,10 +99,10 @@ export class FakeGitHub {
       return ok({ truncated: false, tree: [...tree].map(([p, sha]) => ({ path: p, type: "blob", sha, mode: "100644" })) });
     }
     if ((m = path.match(/\/git\/blobs\/(\w+)$/))) {
-      return ok({ encoding: "base64", content: Buffer.from(this.blobs.get(m[1])!, "utf8").toString("base64") });
+      return ok({ encoding: "base64", content: this.blobs.get(m[1])!.toString("base64") });
     }
     if (method === "POST" && path === `${repo}/git/blobs`) {
-      const content = Buffer.from(body.content, "base64").toString("utf8");
+      const content = Buffer.from(body.content, "base64");
       const sha = blobSha(content);
       this.blobs.set(sha, content);
       return ok({ sha }, 201);

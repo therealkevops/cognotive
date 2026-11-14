@@ -1,15 +1,20 @@
 import { LinkIndex } from "../links/link-index";
 import { NoteIndex } from "../search/note-index";
-import { isMarkdown } from "./paths";
+import { parseDrawing } from "../drawing/parse";
+import { isDrawing, isMarkdown } from "./paths";
 
 /** The vault's derived indexes, updated together: keyword search and the link graph. */
 export class VaultIndexes {
   readonly search = new NoteIndex();
   readonly links = new LinkIndex();
 
-  /** Indexes a file. Notes are parsed; other files are only known by name (for link resolution). */
+  /**
+   * Indexes a text file. Notes and drawings are parsed and searchable; other
+   * files are only known by name (for link resolution).
+   */
   set(path: string, content: string): void {
     if (isMarkdown(path)) this.search.set(path, content);
+    else if (isDrawing(path)) this.search.set(path, parseDrawing(content).text);
     this.links.set(path, content);
   }
 

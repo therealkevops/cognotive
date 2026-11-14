@@ -29,6 +29,12 @@ export interface LinkHost {
   headings(path: string): string[];
   /** A short plain-text preview of a note, for hover cards. */
   preview(path: string): string;
+  /** If `target` resolves to an image or drawing, its path (for inline embeds). */
+  embedPath?(target: string): string | null;
+  /** A displayable URL for an image or drawing. */
+  fileUrl?(path: string): Promise<string | null>;
+  /** Saves pasted or dropped files as attachments; returns the link text for each. */
+  saveFiles?(files: File[]): Promise<string[]>;
 }
 
 export const linkHost = Facet.define<LinkHost, LinkHost | null>({
@@ -273,6 +279,41 @@ const linkPreview = hoverTooltip(
   { hoverTime: 400 },
 );
 
+/** Pasting or dropping files saves them as attachments and inserts ![[embeds]]. */
+const fileDrops = EditorView.domEventHandlers({
+  paste(event, view) {
+    const host = view.state.facet(linkHost);
+    const files = [...(event.clipboardData?.files ?? [])];
+    if (!host?.saveFiles || files.length === 0) return false;
+    event.preventDefault();
+    void insertFiles(view, host, files, view.state.selection.main.from, view.state.selection.main.to);
+    return true;
+  },
+  drop(event, view) {
+    const host = view.state.facet(linkHost);
+    const files = [...(event.dataTransfer?.files ?? [])];
+    if (!host?.saveFiles || files.length === 0) return false;
+    event.preventDefault();
+    const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? view.state.selection.main.head;
+    void insertFiles(view, host, files, pos, pos);
+    return true;
+  },
+});
+
+async function insertFiles(view: EditorView, host: LinkHost, files: File[], from: number, to: number) {
+  const links = await host.saveFiles!(files);
+  if (!links.length) return;
+  // Keep embeds on their own line when dropped in front of existing text.
+  const line = view.state.doc.lineAt(to);
+  const tail = to < line.to ? "\n" : "";
+  const insert = links.map((l) => `![[${l}]]`).join("\n") + tail;
+  view.dispatch({
+    changes: { from, to, insert },
+    selection: { anchor: from + insert.length - tail.length },
+    userEvent: "input.paste",
+  });
+}
+
 export function wikilinkExtensions(): Extension {
-  return [linkMarks, linkClicks, linkPreview, autocompletion({ override: [completeLinks], icons: false })];
+  return [linkMarks, linkClicks, linkPreview, fileDrops, autocompletion({ override: [completeLinks], icons: false })];
 }

@@ -11,7 +11,7 @@ afterEach(async () => Promise.all(open.splice(0).map((s) => s.close())));
 
 const DAY = new Date("2026-11-14T10:00:00Z");
 
-async function setup(remoteFiles: Record<string, string> = {}, folder = "") {
+async function setup(remoteFiles: Record<string, string | Uint8Array> = {}, folder = "") {
   const remote = new FakeRemote();
   if (Object.keys(remoteFiles).length) await remote.push(remoteFiles);
   const local = new LocalStore(`sync-${n++}`);
@@ -22,9 +22,10 @@ async function setup(remoteFiles: Record<string, string> = {}, folder = "") {
 }
 
 async function localSnapshot(local: LocalStore) {
-  const out: Record<string, string> = {};
+  const out: Record<string, string | Uint8Array> = {};
   for (const e of await local.list()) {
-    if (e.kind === "file") out[e.path] = (await local.read(e.path))!.content;
+    if (e.kind !== "file") continue;
+    out[e.path] = (await local.read(e.path))?.content ?? (await local.readBinary(e.path))!;
   }
   return out;
 }
@@ -35,7 +36,8 @@ describe("isSyncable", () => {
     expect(isSyncable("Drawings/x.excalidraw")).toBe(true);
     expect(isSyncable(".obsidian/app.json")).toBe(false);
     expect(isSyncable("a/.hidden/b.md")).toBe(false);
-    expect(isSyncable("attachments/pic.png")).toBe(false);
+    expect(isSyncable("attachments/pic.png")).toBe(true);
+    expect(isSyncable("tool.exe")).toBe(false);
   });
 });
 
@@ -45,7 +47,7 @@ describe("SyncEngine", () => {
       "Welcome.md": "hi",
       "Projects/Plan.md": "plan",
       ".obsidian/app.json": "{}",
-      "pic.png": "binary",
+      "tool.exe": "binary",
     });
     const r = await engine.sync();
     expect(await localSnapshot(local)).toEqual({ "Welcome.md": "hi", "Projects/Plan.md": "plan" });
@@ -55,7 +57,7 @@ describe("SyncEngine", () => {
   });
 
   it("pushes local edits, additions and deletions in one commit", async () => {
-    const { local, engine, remote } = await setup({ "a.md": "A", "b.md": "B", "keep.png": "img" });
+    const { local, engine, remote } = await setup({ "a.md": "A", "b.md": "B", "keep.exe": "bin" });
     await engine.sync();
     await local.write("a.md", "A2");
     await local.write("new.md", "N");
@@ -66,7 +68,7 @@ describe("SyncEngine", () => {
     expect(remote.commitCount).toBe(1);
     expect(r.pushed.sort()).toEqual(["a.md", "b.md", "new.md"]);
     // Files we don't sync are left alone in the repo.
-    expect(remote.snapshot()).toEqual({ "a.md": "A2", "new.md": "N", "keep.png": "img" });
+    expect(remote.snapshot()).toEqual({ "a.md": "A2", "new.md": "N", "keep.exe": "bin" });
     expect(await engine.pendingChanges()).toBe(0);
   });
 
@@ -179,6 +181,46 @@ describe("SyncEngine", () => {
     await local.write("Welcome.md", "hello");
     await engine.sync();
     expect(remote.snapshot()).toEqual({ "Welcome.md": "hello" });
+  });
+});
+
+describe("SyncEngine attachments and drawings", () => {
+  const png = (n: number) => new Uint8Array([137, 80, 78, 71, n, 0, 255]);
+
+  it("syncs attachments as bytes, both ways", async () => {
+    const { local, engine, remote } = await setup({ "attachments/a.png": png(1) });
+    await engine.sync();
+    expect(await local.readBinary("attachments/a.png")).toEqual(png(1));
+
+    await local.writeBinary("attachments/b.png", png(2));
+    await engine.sync();
+    expect(remote.snapshot()["attachments/b.png"]).toEqual(png(2));
+
+    await remote.push({ "attachments/a.png": png(3) });
+    await engine.sync();
+    expect(await local.readBinary("attachments/a.png")).toEqual(png(3));
+    expect(await engine.pendingChanges()).toBe(0);
+  });
+
+  it("keeps both versions of an attachment changed on both sides", async () => {
+    const { local, engine, remote } = await setup({ "pic.png": png(1) });
+    await engine.sync();
+    await local.writeBinary("pic.png", png(2));
+    await remote.push({ "pic.png": png(3) });
+    const r = await engine.sync();
+    expect(r.conflicts).toEqual(["pic (conflict 2026-11-14).png"]);
+    expect(await local.readBinary("pic.png")).toEqual(png(3));
+    expect(await local.readBinary("pic (conflict 2026-11-14).png")).toEqual(png(2));
+  });
+
+  it("never line-merges drawings: both edited means a conflict copy", async () => {
+    const base = '{\n"elements": [\n1\n],\n"x": 1\n}';
+    const { local, engine, remote } = await setup({ "d.excalidraw": base });
+    await engine.sync();
+    await local.write("d.excalidraw", base.replace("1\n]", "1,\n2\n]"));
+    await remote.push({ "d.excalidraw": base.replace('"x": 1', '"x": 2') });
+    const r = await engine.sync();
+    expect(r.conflicts).toEqual(["d (conflict 2026-11-14).excalidraw"]);
   });
 });
 
