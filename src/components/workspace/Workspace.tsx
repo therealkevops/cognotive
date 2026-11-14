@@ -115,6 +115,9 @@ export function Workspace() {
   /** A note about to be created from a link, waiting for the user to confirm its name and folder. */
   const [creating, setCreating] = useState<{ name: string; folder: string } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [linkPickerOpen, setLinkPickerOpen] = useState(false);
+  /** Notes opened in this session, most recent first, for ranking link suggestions. */
+  const [recent, setRecent] = useState<string[]>([]);
   const [importNote, setImportNote] = useState<string | null>(null);
   const zipInput = useRef<HTMLInputElement>(null);
   const chooseZip = useCallback(() => zipInput.current?.click(), []);
@@ -201,6 +204,7 @@ export function Workspace() {
     setSeenPath(activePath);
     setSidebarOpen(false);
     const renamed = !!seenPath && !!activePath && !vault.exists(seenPath);
+    if (activePath) setRecent((r) => [activePath, ...r.filter((p) => p !== activePath && p !== (renamed ? seenPath : null))].slice(0, 50));
     const intent = navIntent && navIntent.path === activePath ? navIntent.kind : null;
     if (navIntent) setNavIntent(null);
     if (renamed) setNav((h) => renameInHistory(h, seenPath, activePath));
@@ -362,6 +366,13 @@ export function Workspace() {
     setSidebarOpen(true);
   }, []);
 
+  // How many notes link to each file, for ranking link suggestions.
+  const inbound = useMemo(
+    () => vault.links.inboundCounts(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
+    [vault.links, vault.indexVersion],
+  );
+
   // What the editor needs for [[links]].
   const linkHost = useMemo<LinkHost>(
     () => ({
@@ -378,7 +389,11 @@ export function Workspace() {
             title: noteTitle(p),
             aliases: vault.links.get(p)?.aliases ?? [],
             linkText: vault.links.linkText(p),
+            recentRank: recent.includes(p) ? recent.filter((r) => r !== vault.active?.path).indexOf(p) : undefined,
+            inbound: inbound.get(p) ?? 0,
           })),
+      linkText: (p) => (vault.entries.some((e) => e.path === p && e.kind === "file") ? vault.links.linkText(p) : null),
+      linkSelection: () => setLinkPickerOpen(true),
       headings: (p) => vault.links.get(p)?.headings.map((h) => h.text) ?? [],
       preview: (p) => plainText(vault.links.content(p) ?? "").slice(0, 500),
       embedPath: (t) => {
@@ -406,8 +421,19 @@ export function Workspace() {
         return { markdown, title: heading ? `${noteTitle(p)} › ${heading}` : noteTitle(p) };
       },
     }),
-    [vault, openLink],
+    [vault, openLink, recent, inbound],
   );
+
+  /** Links the editor's selection to `path`: "[[Note|selection]]", or "[[Note]]" if nothing (or the link text) is selected. */
+  const linkSelectionTo = (path: string) => {
+    if (!view) return;
+    const target = vault.links.linkText(path);
+    const { from, to } = view.state.selection.main;
+    const selected = view.state.sliceDoc(from, to).trim();
+    const insert = !selected || selected === target ? `[[${target}]]` : `[[${target}|${selected}]]`;
+    view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length }, userEvent: "input" });
+    view.focus();
+  };
 
   // What a drawing needs to link to notes and place vault pictures, as in Obsidian.
   const drawingVault = useMemo<DrawingVault>(() => {
@@ -586,6 +612,7 @@ export function Workspace() {
       label: "Open yesterday's daily note",
     },
     { id: "template", label: "Insert template…", when: editing },
+    { id: "link-selection", label: "Link selection to a note…", hint: "Ctrl/Cmd+Shift+K", when: editing },
     { id: "switcher", label: "Open a note…", hint: "Ctrl/Cmd+O" },
     {
       id: "search",
@@ -624,6 +651,7 @@ export function Workspace() {
     daily: () => void openDaily(),
     "daily-yesterday": () => void openDaily(new Date(Date.now() - 86_400_000)),
     template: () => setTemplatesOpen(true),
+    "link-selection": () => setLinkPickerOpen(true),
     switcher: () => setSwitcherOpen(true),
     search: () => {
       setTab("search");
@@ -875,6 +903,22 @@ export function Workspace() {
           empty={`No templates yet. Add notes to the “${vault.settings.templateFolder}” folder (Settings → This vault).`}
           onPick={(item) => insertTemplate(item.id)}
           onClose={() => setTemplatesOpen(false)}
+        />
+      )}
+      {linkPickerOpen && (
+        <Picker
+          title="Link selection to"
+          placeholder="Link to which note?"
+          items={vault.links
+            .paths()
+            .filter((p) => p !== activePathNow)
+            .sort((a, b) => (inbound.get(b) ?? 0) - (inbound.get(a) ?? 0) || a.localeCompare(b))
+            .map((p) => ({ id: p, label: isNote(p) ? noteTitle(p) : basename(p), hint: dirname(p) }))}
+          onPick={(item) => linkSelectionTo(item.id)}
+          onClose={() => {
+            setLinkPickerOpen(false);
+            view?.focus();
+          }}
         />
       )}
       {creating && <CreateNoteDialog {...creating} onClose={() => setCreating(null)} />}

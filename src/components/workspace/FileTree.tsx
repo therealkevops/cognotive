@@ -9,7 +9,7 @@ import { ATTACHMENT_FOLDER, useVault } from "../vault/useVault";
 import { DeleteDialog } from "./DeleteDialog";
 import { SidePaneContext } from "./SidePane";
 
-const DRAG_TYPE = "application/x-noted-path";
+import { TREE_DRAG_TYPE as DRAG_TYPE } from "@/lib/vault/drag";
 
 export function FileTree() {
   const vault = useVault();
@@ -214,7 +214,8 @@ function Node({
         draggable={!isRenaming}
         onDragStart={(e) => {
           e.dataTransfer.setData(DRAG_TYPE, node.path);
-          e.dataTransfer.effectAllowed = "move";
+          // Move into a folder, or link from the editor.
+          e.dataTransfer.effectAllowed = "linkMove";
         }}
         onClick={activate}
         onKeyDown={onKeyDown}

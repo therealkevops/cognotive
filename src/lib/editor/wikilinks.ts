@@ -1,11 +1,12 @@
 import {
   autocompletion,
+  startCompletion,
   type Completion,
   type CompletionContext,
   type CompletionResult,
 } from "@codemirror/autocomplete";
 import { syntaxTree } from "@codemirror/language";
-import { Facet, type EditorState, type Extension, type Range } from "@codemirror/state";
+import { EditorSelection, Facet, Prec, type EditorState, type Extension, type Range } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -20,6 +21,8 @@ import { tags } from "@lezer/highlight";
 import type { MarkdownConfig } from "@lezer/markdown";
 import { hasModKey, openHow, type OpenHow } from "../links/open";
 import { splitLinkText } from "../links/parse";
+import { linkBoost } from "../links/rank";
+import { TREE_DRAG_TYPE } from "../vault/drag";
 
 /** What the editor needs from the app to work with links. */
 export interface LinkHost {
@@ -32,8 +35,15 @@ export interface LinkHost {
   open(target: string, sub?: string, how?: OpenHow): void;
   /** Whether a plain click on a link in live preview follows it (true) or edits it. */
   clickFollows?(): boolean;
-  /** Notes to offer when typing "[[". */
-  notes(): Array<{ title: string; path: string; aliases: string[]; linkText: string }>;
+  /**
+   * Notes to offer when typing "[[". `recentRank` is 0 for the note opened most
+   * recently; `inbound` is how many notes link to it. Both only rank suggestions.
+   */
+  notes(): Array<{ title: string; path: string; aliases: string[]; linkText: string; recentRank?: number; inbound?: number }>;
+  /** The shortest unambiguous link text for a file dragged in from the file tree; null for a folder. */
+  linkText?(path: string): string | null;
+  /** Opens a note picker that links the selection to the chosen note (Ctrl/Cmd+Shift+K). */
+  linkSelection?(): void;
   headings(path: string): string[];
   /** A short plain-text preview of a note, for hover cards. */
   preview(path: string): string;
@@ -346,22 +356,46 @@ function completeLinks(ctx: CompletionContext): CompletionResult | null {
     return { from: from + hash + 1, options, validFor: /^[^\]\n#|]*$/ };
   }
 
+  const apply = (text: string) => (view: EditorView, _c: Completion, f: number, t: number) => {
+    const insert = text + closing;
+    view.dispatch({
+      changes: { from: f, to: t, insert },
+      selection: { anchor: f + insert.length + (closing ? 0 : 2) },
+    });
+  };
   const options: Completion[] = [];
-  for (const n of host.notes()) {
-    const apply = (text: string) => (view: EditorView, _c: Completion, f: number, t: number) => {
-      const insert = text + closing;
-      view.dispatch({
-        changes: { from: f, to: t, insert },
-        selection: { anchor: f + insert.length + (closing ? 0 : 2) },
-      });
-    };
+  const notes = host.notes();
+  for (const n of notes) {
+    const boost = linkBoost(n);
     const folder = n.path.includes("/") ? n.path.slice(0, n.path.lastIndexOf("/")) : undefined;
-    options.push({ label: n.title, detail: folder, type: "note", apply: apply(n.linkText) });
+    options.push({ label: n.title, detail: folder, type: "note", boost, apply: apply(n.linkText) });
     for (const a of n.aliases) {
-      options.push({ label: a, detail: `→ ${n.title}`, type: "alias", apply: apply(`${n.linkText}|${a}`) });
+      options.push({ label: a, detail: `→ ${n.title}`, type: "alias", boost, apply: apply(`${n.linkText}|${a}`) });
     }
   }
-  return { from, options, validFor: /^[^\]\n#|]*$/ };
+  // When no note has exactly this name, offer to link to a new one (created when the link is opened).
+  const name = typed.trim();
+  const lower = name.toLowerCase();
+  if (
+    name &&
+    !notes.some(
+      (n) =>
+        n.title.toLowerCase() === lower ||
+        n.linkText.toLowerCase() === lower ||
+        n.aliases.some((a) => a.toLowerCase() === lower),
+    )
+  ) {
+    // In its own section, so it always comes after the notes that match.
+    options.push({
+      label: typed,
+      detail: "New note",
+      type: "new-note",
+      section: { name: "Not created yet", rank: 1 },
+      apply: apply(name),
+    });
+  }
+  // No validFor: the list is rebuilt on each keystroke so the "New note" entry follows the typing.
+  return { from, options };
 }
 
 /** Hovering a wikilink shows the start of the linked note. */
@@ -402,8 +436,27 @@ const fileDrops = EditorView.domEventHandlers({
     void insertFiles(view, host, files, view.state.selection.main.from, view.state.selection.main.to);
     return true;
   },
+  dragover(event, view) {
+    // Accept files dragged from the file tree (the browser only accepts text by default).
+    if (!view.state.facet(linkHost) || !event.dataTransfer?.types.includes(TREE_DRAG_TYPE)) return false;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "link";
+    return true;
+  },
   drop(event, view) {
     const host = view.state.facet(linkHost);
+    // A note or file dragged from the file tree: insert a link to it.
+    const dragged = event.dataTransfer?.getData(TREE_DRAG_TYPE);
+    if (host && dragged) {
+      event.preventDefault();
+      const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? view.state.selection.main.head;
+      const text = host.linkText ? host.linkText(dragged) : dragged.replace(/\.md$/i, "");
+      if (!text) return true; // a folder: nothing to link
+      const insert = `${/\.(png|jpe?g|gif|webp|svg|avif|bmp|excalidraw)$/i.test(dragged) || /\.excalidraw\.md$/i.test(dragged) ? "!" : ""}[[${text}]]`;
+      view.dispatch({ changes: { from: pos, insert }, selection: { anchor: pos + insert.length }, userEvent: "input.drop" });
+      view.focus();
+      return true;
+    }
     const files = [...(event.dataTransfer?.files ?? [])];
     if (!host?.saveFiles || files.length === 0) return false;
     event.preventDefault();
@@ -427,8 +480,47 @@ async function insertFiles(view: EditorView, host: LinkHost, files: File[], from
   });
 }
 
+/**
+ * Typing "[" with text selected, right after another "[" that already wraps
+ * it, makes "[[selection]]" and opens link suggestions for it, as in Obsidian.
+ */
+// Highest precedence: closeBrackets would otherwise wrap the selection in "[...]" again.
+const wrapSelection = Prec.highest(EditorView.inputHandler.of((view, from, to, text) => {
+  if (text !== "[" || from === to || !view.state.facet(linkHost)) return false;
+  const doc = view.state.doc;
+  if (doc.sliceString(from - 1, from) !== "[" || doc.sliceString(to, to + 1) !== "]") return false;
+  if (doc.sliceString(from, to).includes("\n")) return false;
+  view.dispatch({
+    changes: [
+      { from, insert: "[" },
+      { from: to, insert: "]" },
+    ],
+    selection: EditorSelection.cursor(to + 1),
+    userEvent: "input.type",
+  });
+  startCompletion(view);
+  return true;
+}));
+
+/** Ctrl/Cmd+Shift+K: link the selection to a note picked from a list. */
+const linkSelectionKey = Prec.high(
+  keymap.of([
+    {
+      key: "Mod-Shift-k",
+      run: (view) => {
+        const host = view.state.facet(linkHost);
+        if (!host?.linkSelection) return false;
+        host.linkSelection();
+        return true;
+      },
+    },
+  ]),
+);
+
 export function wikilinkExtensions(): Extension {
   return [
+    wrapSelection,
+    linkSelectionKey,
     linkMarks,
     linkClicks,
     followKeys,

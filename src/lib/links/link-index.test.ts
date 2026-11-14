@@ -35,6 +35,13 @@ describe("LinkIndex", () => {
     });
   });
 
+  it("counts the notes linking to each file", () => {
+    const counts = vault().inboundCounts();
+    expect(counts.get("Garden.md")).toBe(3);
+    expect(counts.get("Home.md")).toBe(1);
+    expect(counts.has("Lonely.md")).toBe(false);
+  });
+
   it("lists unresolved links by target", () => {
     expect([...vault().unresolved()]).toEqual([["Missing note", ["Home.md"]]]);
   });

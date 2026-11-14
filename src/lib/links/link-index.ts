@@ -123,6 +123,22 @@ export class LinkIndex {
     return out.sort((a, b) => a.source.localeCompare(b.source) || a.line - b.line);
   }
 
+  /** How many other notes link to each file, in one pass (for ranking suggestions). */
+  inboundCounts(): Map<string, number> {
+    const out = new Map<string, number>();
+    for (const [source, e] of this.notes) {
+      const seen = new Set<string>();
+      for (const link of e.parsed.links) {
+        const p = link.target ? this.resolve(link.target, source) : null;
+        if (p && p !== source && !seen.has(p)) {
+          seen.add(p);
+          out.set(p, (out.get(p) ?? 0) + 1);
+        }
+      }
+    }
+    return out;
+  }
+
   /** Link targets that don't match any file: target → notes that use it. */
   unresolved(): Map<string, string[]> {
     const out = new Map<string, string[]>();

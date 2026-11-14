@@ -46,6 +46,8 @@ export default function MarkdownEditor({
       resolve: (t) => linksRef.current?.resolve(t) ?? null,
       open: (t, h, how) => linksRef.current?.open(t, h, how),
       clickFollows: () => linksRef.current?.clickFollows?.() ?? true,
+      linkText: (p) => (linksRef.current?.linkText ? linksRef.current.linkText(p) : p.replace(/\.md$/i, "")),
+      linkSelection: () => linksRef.current?.linkSelection?.(),
       notes: () => linksRef.current?.notes() ?? [],
       headings: (p) => linksRef.current?.headings(p) ?? [],
       preview: (p) => linksRef.current?.preview(p) ?? "",
