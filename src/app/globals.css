@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/* Dark mode follows the system unless Settings → Appearance picks one (data-theme on <html>). */
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+}
+
 /* Design tokens. Components use the Tailwind names (bg-surface, text-muted, ...). */
 :root {
   --background: #ffffff;
@@ -7,18 +19,32 @@
   --surface: #f6f7f9;
   --border: #e3e5e9;
   --muted: #5f6672;
-  --accent: #6d5bd0;
+  --accent: var(--accent-light, #6d5bd0);
+  --editor-font-size: 16px;
+  --line-width: 46rem;
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --background: #0f1115;
     --foreground: #e6e8ec;
     --surface: #16191f;
     --border: #262a33;
     --muted: #9aa1ad;
-    --accent: #a294f0;
+    --accent: var(--accent-dark, #a294f0);
+    color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  --background: #0f1115;
+  --foreground: #e6e8ec;
+  --surface: #16191f;
+  --border: #262a33;
+  --muted: #9aa1ad;
+  --accent: var(--accent-dark, #a294f0);
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -152,6 +178,15 @@ mark {
 .cm-tok-fn { color: #4078f2; }
 .cm-tok-type { color: #c18401; }
 @media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  .cm-tok-keyword { color: #c678dd; }
+  .cm-tok-string { color: #98c379; }
+  .cm-tok-number { color: #d19a66; }
+  .cm-tok-fn { color: #61afef; }
+  .cm-tok-type { color: #e5c07b; }
+  }
+}
+:root[data-theme="dark"] {
   .cm-tok-keyword { color: #c678dd; }
   .cm-tok-string { color: #98c379; }
   .cm-tok-number { color: #d19a66; }
@@ -240,6 +275,15 @@ mark {
 .hljs-title, .hljs-title.function_ { color: #4078f2; }
 .hljs-type, .hljs-title.class_, .hljs-attr { color: #c18401; }
 @media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  .hljs-keyword, .hljs-selector-tag, .hljs-built_in { color: #c678dd; }
+  .hljs-string, .hljs-attr-value, .hljs-regexp { color: #98c379; }
+  .hljs-number, .hljs-literal { color: #d19a66; }
+  .hljs-title, .hljs-title.function_ { color: #61afef; }
+  .hljs-type, .hljs-title.class_, .hljs-attr { color: #e5c07b; }
+  }
+}
+:root[data-theme="dark"] {
   .hljs-keyword, .hljs-selector-tag, .hljs-built_in { color: #c678dd; }
   .hljs-string, .hljs-attr-value, .hljs-regexp { color: #98c379; }
   .hljs-number, .hljs-literal { color: #d19a66; }
@@ -375,4 +419,41 @@ mark {
 .prose-note img.embed-drawing {
   cursor: pointer;
   border: 1px solid var(--border);
+}
+
+/* ---------- Live preview blocks and tags ---------- */
+
+.cm-tag {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-radius: 4px;
+  padding: 0 2px;
+}
+.cm-rendered-block {
+  margin: 0.4em 0;
+  cursor: text;
+  font-size: 0.95em;
+}
+.cm-rendered-block .prose-note table {
+  margin: 0;
+}
+.cm-rendered-embed {
+  border-left: 3px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  padding: 0.2em 0 0.2em 1em;
+}
+.cm-rendered-title {
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  margin-bottom: 0.3em;
+}
+
+/* ---------- Touch screens ---------- */
+
+@media (hover: none) {
+  .icon-button {
+    height: 2.25rem;
+    width: 2.25rem;
+  }
 }

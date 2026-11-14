@@ -3,6 +3,7 @@
 import "katex/dist/katex.min.css";
 import { useEffect, useMemo, useRef, type MouseEvent } from "react";
 import { splitLinkText } from "@/lib/links/parse";
+import { isDark } from "@/lib/appearance";
 import { renderMarkdown } from "@/lib/markdown/render";
 import type { LinkContext } from "@/lib/markdown/remark-links";
 
@@ -66,7 +67,7 @@ export default function ReadingView({
 
   useEffect(() => {
     if (!ref.current) return;
-    const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const dark = isDark();
     void drawMermaid(ref.current, dark);
     let live = true;
     for (const img of ref.current.querySelectorAll<HTMLImageElement>("img[data-asset]")) {
@@ -93,8 +94,8 @@ export default function ReadingView({
     if (!a) return;
     if (a.classList.contains("internal-link")) {
       e.preventDefault();
-      const { target, heading } = splitLinkText(a.dataset.href ?? "");
-      onOpenLink?.(target, heading);
+      const { target, heading, block } = splitLinkText(a.dataset.href ?? "");
+      onOpenLink?.(target, heading ?? (block ? `^${block}` : undefined));
     } else if (a.classList.contains("tag")) {
       e.preventDefault();
       onTag?.(a.dataset.tag ?? "");
@@ -103,7 +104,7 @@ export default function ReadingView({
 
   const props = Object.entries(properties ?? {});
   return (
-    <div className="mx-auto max-w-[46rem] px-6 pt-8 pb-[40vh]">
+    <div className="mx-auto px-6 pt-8 pb-[40vh]" style={{ maxWidth: "var(--line-width, 46rem)", fontSize: "var(--editor-font-size, 16px)" }}>
       {props.length > 0 && (
         <dl aria-label="Properties" className="properties mb-6">
           {props.map(([k, v]) => (

@@ -5,7 +5,7 @@ explore them. Notes are stored in a GitHub repository you choose (or locally in 
 
 See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 
-**Status:** phase 4 (drawings and attachments). Vaults live in this browser or in GitHub repositories.
+**Status:** phases 1–4 and 6 are done; phase 5 (the LLM) is postponed. Vaults live in this browser or in GitHub repositories.
 
 ### What works
 - File tree: create, rename (double-click, F2 or the pencil), delete, and drag notes or
@@ -37,6 +37,21 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 - Attachments: paste or drop images into a note (saved to `attachments/` and embedded as
   `![[Pasted image ….png]]`), add files with the upload button or by dropping them on a folder,
   and open images, PDFs, audio and video. `![[pic.png|300]]` sets an image's width
+- Live preview renders tables and `![[Note]]` embeds in place, and highlights `#tags`;
+  `[[Note#^block]]` links scroll to the block
+- Command palette (Ctrl/Cmd+P) for every action
+- Daily notes (the **Today** button, or Ctrl/Cmd+Shift+D) and templates with `{{title}}`,
+  `{{date}}`, `{{time}}` and `{{date:FORMAT}}`, inserted from the palette
+- Tabs for open files, and a side pane to read one note while writing another (the columns
+  button in the file tree, or Shift+Enter in the quick switcher)
+- Version history for GitHub vaults: see how a note changed and restore an older version
+- Export a vault as a zip, and import notes from one (e.g. a zipped Obsidian vault)
+- Appearance settings per browser (theme, accent colour, text size, line width), and vault
+  settings kept in `.noted/settings.json` (attachment folder, daily notes, templates, SVG
+  copies of drawings)
+- Drawings also open from the Obsidian Excalidraw plugin's `.excalidraw.md` files; Excalidraw's
+  fonts are served by the app itself, not a CDN
+- Installable as an app (desktop or phone) that opens offline; notes are kept in the browser
 - Several vaults, with a switcher at the top of the sidebar
 - GitHub vaults: sign in with GitHub, pick a repository, branch and optional subfolder.
   Notes sync both ways; see [How sync works](#how-sync-works)

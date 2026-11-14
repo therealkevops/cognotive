@@ -117,6 +117,39 @@ describe("live preview", () => {
     expect(img.getAttribute("src")).toBe("blob:fake-url");
   });
 
+  it("renders tables and note embeds as blocks until the cursor enters them", async () => {
+    const doc = "Intro #idea\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n![[Other]]\n\nend";
+    const v = new EditorView({
+      doc,
+      selection: EditorSelection.cursor(doc.length),
+      extensions: editorExtensions({
+        livePreview: true,
+        onChange: () => {},
+        links: {
+          resolve: () => "Other.md",
+          open: () => {},
+          notes: () => [],
+          headings: () => [],
+          preview: () => "",
+          renderHtml: async (md) => `<p>rendered:${md.length}</p>`,
+          noteEmbed: (t) => (t === "Other" ? { markdown: "Other body", title: "Other" } : null),
+        },
+      }),
+      parent: document.body,
+    });
+    views.push(v);
+    expect(v.contentDOM.querySelector(".cm-tag")?.textContent).toBe("#idea");
+    expect(v.dom.querySelector(".cm-rendered-table")).not.toBeNull();
+    const embed = v.dom.querySelector(".cm-rendered-embed")!;
+    expect(embed.querySelector(".cm-rendered-title")?.textContent).toBe("Other");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(embed.textContent).toContain("rendered:10");
+
+    // Cursor inside the table shows its source again.
+    v.dispatch({ selection: { anchor: doc.indexOf("| 1") } });
+    expect(v.dom.querySelector(".cm-rendered-table")).toBeNull();
+  });
+
   it("ticks a task when its checkbox is clicked", () => {
     const v = view(doc, doc.length);
     v.contentDOM.querySelector<HTMLInputElement>("input.cm-task-checkbox")!.click();

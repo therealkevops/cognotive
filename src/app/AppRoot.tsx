@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { AuthProvider } from "@/components/auth/useAuth";
 import { SyncProvider } from "@/components/sync/useSync";
 import { VaultProvider } from "@/components/vault/useVault";
@@ -43,6 +43,12 @@ function Vaults() {
 const ClientOnlyVaults = dynamic(async () => Vaults, { ssr: false });
 
 export function AppRoot() {
+  // Offline support for the installed app (production builds only; dev reloads would fight a cache).
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  }, []);
   return (
     <AuthProvider>
       <VaultsProvider>

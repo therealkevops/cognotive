@@ -1,11 +1,12 @@
 "use client";
 
-import { ChevronRight, File, FilePlus, FolderPlus, Image as ImageIcon, PenTool, Pencil, Trash2, Upload } from "lucide-react";
-import { useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
+import { ChevronRight, Columns2, File, FilePlus, FolderPlus, Image as ImageIcon, PenTool, Pencil, Trash2, Upload } from "lucide-react";
+import { useContext, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { readPref, writePref } from "@/lib/prefs";
 import { dirname, isDrawing, isImage, isMarkdown } from "@/lib/vault/paths";
 import { buildTree, type TreeNode } from "@/lib/vault/tree";
 import { ATTACHMENT_FOLDER, useVault } from "../vault/useVault";
+import { SidePaneContext } from "./SidePane";
 
 const DRAG_TYPE = "application/x-noted-path";
 
@@ -173,6 +174,7 @@ function Node({
   onNewNote(folder: string): void;
 }) {
   const vault = useVault();
+  const openSide = useContext(SidePaneContext);
   const isFolder = node.kind === "folder";
   const open = isFolder && expanded.has(node.path);
   const isActive = vault.active?.path === node.path;
@@ -251,7 +253,12 @@ function Node({
           <span className="min-w-0 flex-1 truncate">{node.name}</span>
         )}
         {!isRenaming && (
-          <span className="ml-auto hidden shrink-0 gap-0.5 group-focus-within:flex group-hover:flex">
+          // Touch screens have no hover: show the actions on the selected item instead.
+          <span
+            className={`ml-auto hidden shrink-0 gap-0.5 group-focus-within:flex group-hover:flex ${
+              isActive ? "[@media(hover:none)]:flex" : ""
+            }`}
+          >
             {isFolder && (
               <button
                 type="button"
@@ -263,6 +270,19 @@ function Node({
                 }}
               >
                 <FilePlus size={14} aria-hidden />
+              </button>
+            )}
+            {!isFolder && openSide && (
+              <button
+                type="button"
+                className="icon-button hidden h-6 w-6 lg:inline-flex"
+                aria-label={`Open ${node.name} in the side pane`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openSide(node.path);
+                }}
+              >
+                <Columns2 size={14} aria-hidden />
               </button>
             )}
             <button

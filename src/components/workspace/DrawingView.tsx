@@ -1,27 +1,28 @@
 "use client";
 
+import "@/lib/drawing/assets";
 import "@excalidraw/excalidraw/index.css";
 import { Excalidraw, serializeAsJSON } from "@excalidraw/excalidraw";
 import type { ExcalidrawInitialDataState } from "@excalidraw/excalidraw/types";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { isDark } from "@/lib/appearance";
 import { elementLinkTarget } from "@/lib/drawing/parse";
 import { splitLinkText } from "@/lib/links/parse";
 
 type InitialData = ExcalidrawInitialDataState;
 
-// The "source" field Excalidraw writes into files; keep it stable across
-// deployments (preview URLs would otherwise change it on every save).
-if (typeof window !== "undefined") {
-  (window as unknown as { EXCALIDRAW_EXPORT_SOURCE?: string }).EXCALIDRAW_EXPORT_SOURCE = "noted-ai";
-}
 
 function useDarkMode() {
-  const [dark, setDark] = useState(() => window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const [dark, setDark] = useState(isDark);
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const on = () => setDark(mq.matches);
+    const on = () => setDark(isDark());
     mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
+    window.addEventListener("noted-appearance", on);
+    return () => {
+      mq.removeEventListener("change", on);
+      window.removeEventListener("noted-appearance", on);
+    };
   }, []);
   return dark;
 }
@@ -96,7 +97,7 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink }: D
           if (!target) return; // a web link: let Excalidraw open it
           event.preventDefault();
           const parts = splitLinkText(target);
-          onOpenLinkRef.current(parts.target, parts.heading);
+          onOpenLinkRef.current(parts.target, parts.heading ?? (parts.block ? `^${parts.block}` : undefined));
         }}
       />
     </div>

@@ -104,8 +104,19 @@ export function isImage(path: string): boolean {
   return mimeType(path).startsWith("image/");
 }
 
+/** Excalidraw drawings: ".excalidraw", or the Obsidian plugin's ".excalidraw.md". */
 export function isDrawing(path: string): boolean {
-  return path.toLowerCase().endsWith(".excalidraw");
+  return /\.excalidraw(\.md)?$/i.test(path);
+}
+
+/** A markdown note (not a drawing stored as markdown). */
+export function isNote(path: string): boolean {
+  return isMarkdown(path) && !isDrawing(path);
+}
+
+/** A drawing's name without ".excalidraw" / ".excalidraw.md". */
+export function drawingName(path: string): string {
+  return basename(path).replace(/\.excalidraw(\.md)?$/i, "");
 }
 
 export function mimeType(path: string): string {

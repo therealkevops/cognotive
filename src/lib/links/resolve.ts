@@ -55,7 +55,9 @@ export class Resolver {
       const want = (isMarkdown(t) || extname(t) ? t : `${t}.md`).toLowerCase();
       matches = candidates.filter((p) => p.toLowerCase() === want || p.toLowerCase().endsWith("/" + want));
     } else if (extname(t) && !isMarkdown(t)) {
-      matches = candidates.filter((p) => basename(p).toLowerCase() === name.toLowerCase());
+      // "Map.excalidraw" also finds the Obsidian plugin's "Map.excalidraw.md".
+      const want = name.toLowerCase();
+      matches = candidates.filter((p) => [want, `${want}.md`].includes(basename(p).toLowerCase()));
     } else {
       // A bare name means a note unless only another file type has that exact name.
       const notes = candidates.filter(isMarkdown);

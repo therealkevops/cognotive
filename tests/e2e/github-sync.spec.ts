@@ -8,7 +8,7 @@ async function connectRepo(page: Page) {
   const dialog = page.getByRole("dialog", { name: "Settings" });
   await expect(dialog.getByText("Signed in as @tester")).toBeVisible();
   await dialog.getByRole("button", { name: "Connect a GitHub repository" }).click();
-  await dialog.getByRole("combobox").first().selectOption("me/notes");
+  await dialog.getByRole("combobox", { name: /^Repository/ }).selectOption("me/notes");
   await dialog.getByRole("button", { name: "Connect and open" }).click();
   // Opening the new vault replaces the workspace, which closes the dialog.
   await expect(dialog).toBeHidden();

@@ -122,6 +122,30 @@ export class FakeGitHub {
       this.commits.set(sha, { tree: body.tree, parents: body.parents, message: body.message });
       return ok({ sha }, 201);
     }
+    if (method === "GET" && path === `${repo}/commits`) {
+      // Commits on main that changed `path`, newest first.
+      const file = url.searchParams.get("path")!;
+      const out = [];
+      for (let c = this.head; c; c = this.commits.get(c)!.parents[0] ?? null) {
+        const info = this.commits.get(c)!;
+        const mine = this.trees.get(info.tree)!.get(file);
+        const parent = info.parents[0] ? this.trees.get(this.commits.get(info.parents[0])!.tree)!.get(file) : undefined;
+        if (mine !== parent) {
+          out.push({
+            sha: c,
+            html_url: `https://github.com/me/notes/commit/${c}`,
+            commit: { message: info.message, author: { name: "tester", date: new Date(2026, 10, 14, 9, out.length).toISOString() } },
+          });
+        }
+      }
+      return ok(out);
+    }
+    if ((m = path.match(/^\/repos\/me\/notes\/contents\/(.+)$/)) && method === "GET") {
+      const ref = url.searchParams.get("ref")!;
+      const sha = this.trees.get(this.commits.get(ref)!.tree)!.get(decodeURIComponent(m[1]));
+      if (!sha) return ok({ message: "Not Found" }, 404);
+      return ok({ sha, encoding: "base64", content: this.blobs.get(sha)!.toString("base64") });
+    }
     if (method === "PATCH" && path === `${repo}/git/refs/heads/main`) {
       const parent = this.commits.get(body.sha)!.parents[0];
       if (parent !== this.head) return ok({ message: "Update is not a fast forward" }, 422);

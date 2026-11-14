@@ -150,3 +150,11 @@ describe("renderMarkdown attachments", () => {
     expect(html).toContain('src="https://x.io/b.png"');
   });
 });
+
+describe("renderMarkdown block ids", () => {
+  it("hides block ids at the end of a paragraph or list item", () => {
+    const html = renderMarkdown("A thought ^idea-1\n\n- item ^b2");
+    expect(html).toContain("<p>A thought</p>");
+    expect(html).toContain("<li>item</li>");
+  });
+});

@@ -23,6 +23,16 @@ export interface RepoSummary {
   private: boolean;
 }
 
+export interface FileCommit {
+  sha: string;
+  /** First line of the commit message. */
+  message: string;
+  author: string;
+  /** ISO date. */
+  date: string;
+  url: string;
+}
+
 export interface TreeEntry {
   path: string;
   type: "blob" | "tree" | "commit";
@@ -217,6 +227,41 @@ export class GitHubClient {
 
   async createBranch(owner: string, repo: string, branch: string, sha: string): Promise<void> {
     await this.request("POST", `${this.repoPath(owner, repo)}/git/refs`, { ref: `refs/heads/${branch}`, sha });
+  }
+
+  /** Commits on `branch` that touched `path`, newest first. */
+  async fileHistory(owner: string, repo: string, branch: string, path: string, perPage = 30): Promise<FileCommit[]> {
+    const q = new URLSearchParams({ sha: branch, path, per_page: String(perPage) });
+    const r = await this.request<
+      Array<{
+        sha: string;
+        html_url: string;
+        commit: { message: string; author: { name: string; date: string } | null };
+      }>
+    >("GET", `${this.repoPath(owner, repo)}/commits?${q}`);
+    return r.map((c) => ({
+      sha: c.sha,
+      message: c.commit.message.split("\n")[0],
+      author: c.commit.author?.name ?? "",
+      date: c.commit.author?.date ?? "",
+      url: c.html_url,
+    }));
+  }
+
+  /** A file's content at a commit, or null if it didn't exist there. */
+  async fileAt(owner: string, repo: string, ref: string, path: string): Promise<Uint8Array | null> {
+    try {
+      const r = await this.request<{ content?: string; encoding?: string; sha: string }>(
+        "GET",
+        `${this.repoPath(owner, repo)}/contents/${path.split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(ref)}`,
+      );
+      // Files over 1 MB come back without content; fetch the blob instead.
+      if (r.encoding === "base64" && r.content) return base64ToBytes(r.content);
+      return this.blobBytes(owner, repo, r.sha);
+    } catch (e) {
+      if (e instanceof GitHubError && e.status === 404) return null;
+      throw e;
+    }
   }
 
   /** Creates a file with the Contents API: the only way to make the first commit in an empty repo. */

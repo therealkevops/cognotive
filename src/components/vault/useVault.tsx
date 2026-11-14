@@ -13,9 +13,18 @@ import {
 import { readPref, writePref } from "@/lib/prefs";
 import type { LinkIndex } from "@/lib/links/link-index";
 import type { NoteIndex } from "@/lib/search/note-index";
-import { drawingToSvgUrl } from "@/lib/drawing/svg";
+import { drawingToSvgText, drawingToSvgUrl } from "@/lib/drawing/svg";
+import {
+  DEFAULT_SETTINGS,
+  parseSettings,
+  serializeSettings,
+  SETTINGS_PATH,
+  type VaultSettings,
+} from "@/lib/vault/settings";
+import { drawingJson } from "@/lib/drawing/obsidian";
 import { EMPTY_DRAWING } from "@/lib/drawing/parse";
 import { VaultIndexes } from "@/lib/vault/indexes";
+import { exportVault } from "@/lib/vault/zip";
 import { LocalStore } from "@/lib/vault/local-store";
 import {
   basename,
@@ -24,7 +33,7 @@ import {
   extname,
   isBinary,
   isDrawing,
-  isMarkdown,
+  isNote,
   isWithin,
   mimeType,
   joinPath,
@@ -98,6 +107,18 @@ export interface VaultApi {
   rename(path: string, newName: string): Promise<boolean>;
   move(path: string, toFolder: string): Promise<void>;
   remove(path: string): Promise<void>;
+  /** The whole vault as a .zip file's bytes. */
+  exportZip(): Promise<Uint8Array>;
+  /**
+   * Adds files (from an imported zip). Identical files are skipped; a different
+   * file at the same path is kept and the import gets a numbered name.
+   */
+  importFiles(files: Map<string, Uint8Array>): Promise<{ added: number; skipped: number; renamed: number }>;
+  /** This vault's settings (.noted/settings.json). */
+  settings: VaultSettings;
+  updateSettings(patch: Partial<VaultSettings>): Promise<void>;
+  /** Creates a note with content (e.g. from a template) and opens it. */
+  createNoteWith(path: string, content: string): Promise<string | undefined>;
   /** Replaces a note's text from outside the editor (e.g. linking a mention). Reloads it if open. */
   writeNote(path: string, content: string): Promise<void>;
   /** Case-insensitive, like most file systems Obsidian vaults live on. */
@@ -140,6 +161,11 @@ export function VaultProvider({
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [error, setError] = useState<string | null>(null);
   const [changeCounter, setChangeCounter] = useState(0);
+  const [settings, setSettings] = useState<VaultSettings>(DEFAULT_SETTINGS);
+  const settingsRef = useRef(settings);
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
   const changed = useCallback(() => setChangeCounter((c) => c + 1), []);
 
   const pending = useRef<{ path: string; text: string } | null>(null);
@@ -175,6 +201,15 @@ export function VaultProvider({
       bumpIndex();
       if (!pending.current) setSaveState("saved");
       setEntries((prev) => prev.map((e) => (e.path === p.path ? { ...e, mtime: file.mtime } : e)));
+      if (isDrawing(p.path) && settingsRef.current.drawingSvgCopy) {
+        // "Name.excalidraw.svg" next to the drawing, so it shows on github.com.
+        const svg = await drawingToSvgText(drawingJson(p.path, p.text), false).catch(() => null);
+        if (svg) {
+          await store.writeBinary(`${p.path}.svg`, new TextEncoder().encode(svg));
+          indexes.addFile(`${p.path}.svg`);
+          setEntries(await store.list());
+        }
+      }
       changed();
     } catch (e) {
       setSaveState("error");
@@ -215,6 +250,7 @@ export function VaultProvider({
         writePref(`vault:${vaultId}:seeded`, true);
         list = await store.list();
       }
+      setSettings(parseSettings((await store.read(SETTINGS_PATH))?.content));
       indexes.clear();
       for (const e of list) {
         if (e.kind !== "file") continue;
@@ -228,7 +264,7 @@ export function VaultProvider({
       setEntries(list);
       bumpIndex();
       const last = readPref<string | null>(`vault:${vaultId}:last`, null);
-      const notes = list.filter((e) => e.kind === "file" && isMarkdown(e.path));
+      const notes = list.filter((e) => e.kind === "file" && isNote(e.path));
       const start =
         notes.find((f) => f.path === last) ??
         notes.find((f) => f.path === "Welcome.md") ??
@@ -314,7 +350,7 @@ export function VaultProvider({
   );
 
   const addAttachments = useCallback(
-    async (files: File[], folder = ATTACHMENT_FOLDER) => {
+    async (files: File[], folder = settingsRef.current.attachmentFolder || ATTACHMENT_FOLDER) => {
       const saved: string[] = [];
       try {
         for (const file of files) {
@@ -363,7 +399,7 @@ export function VaultProvider({
       const url = (async () => {
         if (isDrawing(path)) {
           const f = await store.read(path);
-          return f ? drawingToSvgUrl(f.content, !!opts.dark) : null;
+          return f ? drawingToSvgUrl(drawingJson(path, f.content), !!opts.dark) : null;
         }
         if (!isBinary(path)) return null;
         const bytes = await store.readBinary(path);
@@ -430,6 +466,10 @@ export function VaultProvider({
       await flush();
       const before = links.snapshotResolver();
       await store.rename(from, to);
+      // A drawing's SVG copy follows it.
+      if (isDrawing(from) && entriesRef.current.some((e) => e.path === `${from}.svg`)) {
+        await store.rename(`${from}.svg`, `${to}.svg`).catch(() => {});
+      }
       const moved = await afterMove(from, to);
 
       // Update links in other notes so they follow the renamed files.
@@ -491,8 +531,11 @@ export function VaultProvider({
           pending.current = null;
           await open(null);
         }
-        const removed = entriesRef.current.filter((e) => isWithin(e.path, path));
+        const removed = entriesRef.current.filter(
+          (e) => isWithin(e.path, path) || (isDrawing(path) && e.path === `${path}.svg`),
+        );
         await store.delete(path);
+        if (isDrawing(path)) await store.delete(`${path}.svg`);
         for (const e of removed) indexes.remove(e.path);
         bumpIndex();
         await refresh();
@@ -505,6 +548,93 @@ export function VaultProvider({
   );
 
   const clearError = useCallback(() => setError(null), []);
+
+  const updateSettings = useCallback(
+    async (patch: Partial<VaultSettings>) => {
+      const next = { ...settingsRef.current, ...patch };
+      setSettings(next);
+      try {
+        await store.write(SETTINGS_PATH, serializeSettings(next));
+        changed();
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [store, changed, fail],
+  );
+
+  const exportZip = useCallback(async () => {
+    await flush();
+    return exportVault(store);
+  }, [flush, store]);
+
+  const importFiles = useCallback(
+    async (files: Map<string, Uint8Array>) => {
+      await flush();
+      const result = { added: 0, skipped: 0, renamed: 0 };
+      const same = (a: Uint8Array | undefined, b: Uint8Array) =>
+        !!a && a.length === b.length && a.every((x, i) => x === b[i]);
+      try {
+        for (const [p, bytes] of files) {
+          const binary = isBinary(p);
+          let existing: Uint8Array | undefined;
+          if (binary) existing = await store.readBinary(p);
+          else {
+            const f = await store.read(p);
+            existing = f ? new TextEncoder().encode(f.content) : undefined;
+          }
+          if (existing && same(existing, bytes)) {
+            result.skipped++;
+            continue;
+          }
+          if (existing && p === SETTINGS_PATH) {
+            result.skipped++; // keep this vault's settings
+            continue;
+          }
+          const target = existing ? uniquePath(p, (x) => exists(x) || files.has(x)) : p;
+          if (existing) result.renamed++;
+          else result.added++;
+          if (binary) {
+            await store.writeBinary(target, bytes);
+            indexes.addFile(target);
+          } else {
+            const text = new TextDecoder().decode(bytes);
+            await store.write(target, text);
+            indexes.set(target, text);
+          }
+        }
+        if (files.has(SETTINGS_PATH)) setSettings(parseSettings((await store.read(SETTINGS_PATH))?.content));
+        bumpIndex();
+        await refresh();
+        changed();
+      } catch (e) {
+        fail(e);
+      }
+      return result;
+    },
+    [flush, store, exists, indexes, bumpIndex, refresh, changed, fail],
+  );
+
+  const createNoteWith = useCallback(
+    async (path: string, content: string) => {
+      try {
+        if (exists(path)) {
+          await open(path);
+          return path;
+        }
+        await store.write(path, content);
+        indexes.set(path, content);
+        bumpIndex();
+        await refresh();
+        changed();
+        await open(path);
+        return path;
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [store, indexes, exists, refresh, open, bumpIndex, changed, fail],
+  );
 
   const writeNote = useCallback(
     async (path: string, content: string) => {
@@ -527,6 +657,7 @@ export function VaultProvider({
     async (paths: string[]) => {
       if (paths.length === 0) return;
       const list = await store.list();
+      if (paths.includes(SETTINGS_PATH)) setSettings(parseSettings((await store.read(SETTINGS_PATH))?.content));
       const present = new Set(list.map((e) => e.path));
       for (const path of paths) {
         if (!present.has(path)) indexes.remove(path);
@@ -541,7 +672,7 @@ export function VaultProvider({
       const current = activePath.current;
       if (!current) {
         // An empty vault just received its first notes: open one.
-        const first = list.find((e) => e.kind === "file" && isMarkdown(e.path));
+        const first = list.find((e) => e.kind === "file" && isNote(e.path));
         if (first) await open(first.path);
         return;
       }
@@ -582,6 +713,11 @@ export function VaultProvider({
       move,
       remove,
       writeNote,
+      exportZip,
+      importFiles,
+      settings,
+      updateSettings,
+      createNoteWith,
       createDrawing,
       addAttachments,
       fileUrl,
@@ -610,6 +746,11 @@ export function VaultProvider({
       move,
       remove,
       writeNote,
+      exportZip,
+      importFiles,
+      settings,
+      updateSettings,
+      createNoteWith,
       createDrawing,
       addAttachments,
       fileUrl,

@@ -51,6 +51,8 @@ export default function MarkdownEditor({
       embedPath: (t) => linksRef.current?.embedPath?.(t) ?? null,
       fileUrl: async (p) => (await linksRef.current?.fileUrl?.(p)) ?? null,
       saveFiles: async (f) => (await linksRef.current?.saveFiles?.(f)) ?? [],
+      renderHtml: async (md) => (await linksRef.current?.renderHtml?.(md)) ?? "",
+      noteEmbed: (t) => linksRef.current?.noteEmbed?.(t) ?? null,
     }),
     [],
   );
@@ -82,6 +84,9 @@ export default function MarkdownEditor({
         }),
       }),
     );
+    // A new note starts at the top, not at the previous note's scroll position.
+    v.dispatch({ effects: EditorView.scrollIntoView(0, { y: "start" }) });
+    v.scrollDOM.scrollTop = 0;
     if (autoFocus) v.focus();
     // `initial` is read only when docKey changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps

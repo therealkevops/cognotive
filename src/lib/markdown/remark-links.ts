@@ -185,6 +185,8 @@ function transform(tree: Root, ctx: LinkContext, depth: number) {
   visit(tree, "text", (node: Text, index, parent) => {
     if (!parent || index === undefined) return;
     if (parent.type === "link" || parent.type === "linkReference") return;
+    // Block ids ("text ^abc123") are link targets, not content: hide them, as Obsidian does.
+    if (index === parent.children.length - 1) node.value = node.value.replace(/\s\^[A-Za-z0-9-]+\s*$/, "");
     const parts = splitText(node.value, ctx);
     if (!parts) return;
     parent.children.splice(index, 1, ...(parts as never[]));

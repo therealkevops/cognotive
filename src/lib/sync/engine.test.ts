@@ -35,6 +35,7 @@ describe("isSyncable", () => {
     expect(isSyncable("Notes/a.md")).toBe(true);
     expect(isSyncable("Drawings/x.excalidraw")).toBe(true);
     expect(isSyncable(".obsidian/app.json")).toBe(false);
+    expect(isSyncable(".noted/settings.json")).toBe(true);
     expect(isSyncable("a/.hidden/b.md")).toBe(false);
     expect(isSyncable("attachments/pic.png")).toBe(true);
     expect(isSyncable("tool.exe")).toBe(false);
@@ -221,6 +222,28 @@ describe("SyncEngine attachments and drawings", () => {
     await remote.push({ "d.excalidraw": base.replace('"x": 1', '"x": 2') });
     const r = await engine.sync();
     expect(r.conflicts).toEqual(["d (conflict 2026-11-14).excalidraw"]);
+  });
+});
+
+describe("SyncEngine downloads", () => {
+  it("fetches a large first sync in parallel", async () => {
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 40; i++) files[`n${i}.md`] = `note ${i}`;
+    const { local, engine, remote } = await setup(files);
+    let inFlight = 0;
+    let peak = 0;
+    const read = remote.readBlob.bind(remote);
+    remote.readBlob = async (sha) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 2));
+      inFlight--;
+      return read(sha);
+    };
+    await engine.sync();
+    expect((await local.list()).length).toBe(40);
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(8);
   });
 });
 

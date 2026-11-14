@@ -1,7 +1,8 @@
 import { LinkIndex } from "../links/link-index";
 import { NoteIndex } from "../search/note-index";
+import { drawingJson } from "../drawing/obsidian";
 import { parseDrawing } from "../drawing/parse";
-import { isDrawing, isMarkdown } from "./paths";
+import { isDrawing, isNote } from "./paths";
 
 /** The vault's derived indexes, updated together: keyword search and the link graph. */
 export class VaultIndexes {
@@ -13,8 +14,8 @@ export class VaultIndexes {
    * files are only known by name (for link resolution).
    */
   set(path: string, content: string): void {
-    if (isMarkdown(path)) this.search.set(path, content);
-    else if (isDrawing(path)) this.search.set(path, parseDrawing(content).text);
+    if (isDrawing(path)) this.search.set(path, parseDrawing(drawingJson(path, content)).text);
+    else if (isNote(path)) this.search.set(path, content);
     this.links.set(path, content);
   }
 

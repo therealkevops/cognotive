@@ -1,6 +1,7 @@
 import { merge } from "node-diff3";
 import type { LocalStore } from "../vault/local-store";
-import { basename, dirname, extname, isBinary, isWithin, joinPath, noteTitle } from "../vault/paths";
+import { basename, dirname, extname, isBinary, isDrawing, isWithin, joinPath, noteTitle } from "../vault/paths";
+import { SETTINGS_PATH } from "../vault/settings";
 import { gitBlobSha } from "./hash";
 import { RemoteMovedError, type Change, type RemoteRepo } from "./remote";
 import type { SyncStateStore } from "./state";
@@ -12,6 +13,7 @@ const MERGEABLE = new Set([".md", ".markdown", ".txt", ".csv"]);
 
 /** Hidden paths (.obsidian, .git, .github, ...) never sync. */
 export function isSyncable(path: string): boolean {
+  if (path === SETTINGS_PATH) return true;
   if (path.split("/").some((seg) => seg.startsWith("."))) return false;
   return TEXT_EXTENSIONS.has(extname(path)) || isBinary(path);
 }
@@ -76,8 +78,30 @@ export class SyncEngine {
     return out;
   }
 
+  /** Downloads made during one pass, keyed by sha (and kind), shared by prefetch and reads. */
+  private downloads = new Map<string, Promise<Content>>();
+
   private read(path: string, sha: string): Promise<Content> {
-    return isBinary(path) ? this.remote.readBlobBytes(sha) : this.remote.readBlob(sha);
+    const binary = isBinary(path);
+    const key = `${binary ? "b" : "t"}:${sha}`;
+    let p = this.downloads.get(key);
+    if (!p) {
+      p = binary ? this.remote.readBlobBytes(sha) : this.remote.readBlob(sha);
+      this.downloads.set(key, p);
+    }
+    return p;
+  }
+
+  /** Fetches many files at once (a first sync of a big repo), a few at a time. */
+  private async prefetch(items: Array<[string, string]>, concurrency = 8): Promise<void> {
+    let next = 0;
+    const worker = async () => {
+      while (next < items.length) {
+        const [path, sha] = items[next++];
+        await this.read(path, sha);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
   }
 
   private write(w: LocalWrite): Promise<boolean> {
@@ -121,6 +145,17 @@ export class SyncEngine {
     }
     const local = await this.localFiles();
 
+    // Download everything this pass will need in parallel up front.
+    this.downloads.clear();
+    const needed: Array<[string, string]> = [];
+    for (const [path, r] of remote) {
+      if (local.get(path)?.sha === r) continue;
+      needed.push([path, r]);
+      const b = base.get(path);
+      if (b && local.has(path) && b !== r && b !== local.get(path)!.sha) needed.push([path, b]);
+    }
+    await this.prefetch(needed);
+
     const pushes: Change[] = [];
     const writes: LocalWrite[] = [];
     const newBase = new Map(base);
@@ -161,8 +196,12 @@ export class SyncEngine {
         // Both edited.
         const theirs = await this.read(path, r);
         const merged =
-          b !== undefined && MERGEABLE.has(extname(path)) && typeof l.content === "string" && typeof theirs === "string"
-            ? mergeText(l.content, await this.remote.readBlob(b), theirs)
+          b !== undefined &&
+          MERGEABLE.has(extname(path)) &&
+          !isDrawing(path) &&
+          typeof l.content === "string" &&
+          typeof theirs === "string"
+            ? mergeText(l.content, (await this.read(path, b)) as string, theirs)
             : null;
         if (merged !== null) {
           const sha = await gitBlobSha(merged);

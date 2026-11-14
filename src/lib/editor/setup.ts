@@ -27,7 +27,9 @@ import {
 } from "./formatting";
 import { FrontmatterSyntax } from "./frontmatter-syntax";
 import { highlightTag, HighlightSyntax } from "./highlight-syntax";
+import { liveBlocks } from "./live-blocks";
 import { livePreview } from "./live-preview";
+import { tagHighlighter } from "./tags";
 import { linkHost, livePreviewOn, WikiLinkSyntax, wikilinkExtensions, type LinkHost } from "./wikilinks";
 
 /** Formatting shortcuts. "Mod" is Cmd on macOS and Ctrl elsewhere. */
@@ -75,7 +77,7 @@ const markdownHighlight = HighlightStyle.define([
 const theme = EditorView.theme({
   "&": {
     height: "100%",
-    fontSize: "16px",
+    fontSize: "var(--editor-font-size, 16px)",
     backgroundColor: "transparent",
     color: "var(--foreground)",
   },
@@ -85,7 +87,7 @@ const theme = EditorView.theme({
     lineHeight: "1.65",
   },
   ".cm-content": {
-    maxWidth: "46rem",
+    maxWidth: "var(--line-width, 46rem)",
     margin: "0 auto",
     padding: "2rem 1.5rem 40vh",
     caretColor: "var(--accent)",
@@ -107,7 +109,9 @@ const theme = EditorView.theme({
 export const livePreviewMode = new Compartment();
 
 export function livePreviewExtension(on: boolean): Extension {
-  return on ? [livePreview, livePreviewOn.of(true), EditorView.contentAttributes.of({ class: "cm-live-preview" })] : [];
+  return on
+    ? [livePreview, liveBlocks, livePreviewOn.of(true), EditorView.contentAttributes.of({ class: "cm-live-preview" })]
+    : [];
 }
 
 export function editorExtensions(opts: {
@@ -128,6 +132,7 @@ export function editorExtensions(opts: {
     placeholder("Start writing…"),
     markdown({ base: markdownLanguage, codeLanguages: languages, extensions: [FrontmatterSyntax, HighlightSyntax, WikiLinkSyntax] }),
     syntaxHighlighting(markdownHighlight),
+    tagHighlighter,
     ...(opts.links ? [linkHost.of(opts.links), wikilinkExtensions()] : []),
     keymap.of([
       ...completionKeymap,

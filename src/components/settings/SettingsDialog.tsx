@@ -2,7 +2,9 @@
 
 import { FolderGit2, HardDrive, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { ACCENTS, loadAppearance, saveAppearance, type Appearance } from "@/lib/appearance";
 import { GitHubClient, type RepoSummary } from "@/lib/github/client";
+import { formatDate } from "@/lib/vault/settings";
 import { normalizePath } from "@/lib/vault/paths";
 import {
   DEFAULT_IDLE_SECONDS,
@@ -13,6 +15,7 @@ import {
   type VaultConfig,
 } from "@/lib/vault/registry";
 import { useAuth } from "../auth/useAuth";
+import { useVault } from "../vault/useVault";
 import { useVaults } from "../vault/useVaults";
 
 /** Settings: GitHub account, the vault list, and connecting a repository. */
@@ -41,6 +44,8 @@ export function SettingsDialog({ onClose }: { onClose(): void }) {
           </button>
         </div>
         <div className="space-y-6 px-5 py-4">
+          <AppearanceSection />
+          <ThisVaultSection />
           <AccountSection />
           <VaultList />
           {adding === "github" ? (
@@ -56,6 +61,116 @@ export function SettingsDialog({ onClose }: { onClose(): void }) {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">{children}</h3>;
+}
+
+function AppearanceSection() {
+  const [a, setA] = useState<Appearance>(loadAppearance);
+  const set = (patch: Partial<Appearance>) => {
+    const next = { ...a, ...patch };
+    setA(next);
+    saveAppearance(next);
+  };
+  return (
+    <section aria-label="Appearance">
+      <SectionTitle>Appearance (this browser)</SectionTitle>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Theme">
+          <select className="input" value={a.theme} onChange={(e) => set({ theme: e.target.value as Appearance["theme"] })}>
+            <option value="system">Match the system</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </Field>
+        <Field label="Line width">
+          <select
+            className="input"
+            value={a.lineWidth}
+            onChange={(e) => set({ lineWidth: e.target.value as Appearance["lineWidth"] })}
+          >
+            <option value="narrow">Narrow</option>
+            <option value="normal">Normal</option>
+            <option value="wide">Wide</option>
+            <option value="full">Full width</option>
+          </select>
+        </Field>
+        <Field label={`Text size: ${a.fontSize}px`}>
+          <input
+            type="range"
+            min={13}
+            max={22}
+            value={a.fontSize}
+            onChange={(e) => set({ fontSize: Number(e.target.value) })}
+            className="w-full"
+          />
+        </Field>
+        <fieldset>
+          <legend className="mb-1 text-sm font-medium">Accent colour</legend>
+          <div className="flex gap-2">
+            {(Object.keys(ACCENTS) as Array<Appearance["accent"]>).map((name) => (
+              <button
+                key={name}
+                type="button"
+                aria-label={name}
+                aria-pressed={a.accent === name}
+                className={`h-7 w-7 rounded-full border-2 ${a.accent === name ? "border-foreground" : "border-transparent"}`}
+                style={{ background: ACCENTS[name].light }}
+                onClick={() => set({ accent: name })}
+              />
+            ))}
+          </div>
+        </fieldset>
+      </div>
+    </section>
+  );
+}
+
+function ThisVaultSection() {
+  const { settings, updateSettings } = useVault();
+  const [draft, setDraft] = useState(settings);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(settings);
+  return (
+    <section aria-label="This vault">
+      <SectionTitle>This vault</SectionTitle>
+      <p className="mb-3 text-xs text-muted">Saved in the vault at .noted/settings.json, so they sync with it.</p>
+      <form
+        className="grid gap-3 sm:grid-cols-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void updateSettings(draft);
+        }}
+      >
+        <Field label="Attachment folder">
+          <input className="input" value={draft.attachmentFolder} onChange={(e) => setDraft({ ...draft, attachmentFolder: e.target.value })} />
+        </Field>
+        <Field label="Templates folder">
+          <input className="input" value={draft.templateFolder} onChange={(e) => setDraft({ ...draft, templateFolder: e.target.value })} />
+        </Field>
+        <Field label="Daily notes folder">
+          <input className="input" value={draft.dailyFolder} onChange={(e) => setDraft({ ...draft, dailyFolder: e.target.value })} />
+        </Field>
+        <Field label="Daily note name" hint={`Today: ${formatDate(new Date(), draft.dailyFormat || "YYYY-MM-DD")}`}>
+          <input className="input" value={draft.dailyFormat} onChange={(e) => setDraft({ ...draft, dailyFormat: e.target.value })} />
+        </Field>
+        <Field label="Daily note template" hint="A note path, e.g. Templates/Daily.md. Empty for none.">
+          <input className="input" value={draft.dailyTemplate} onChange={(e) => setDraft({ ...draft, dailyTemplate: e.target.value })} />
+        </Field>
+        <label className="flex items-start gap-2 self-end text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={draft.drawingSvgCopy}
+            onChange={(e) => setDraft({ ...draft, drawingSvgCopy: e.target.checked })}
+          />
+          <span>Save an SVG copy next to each drawing (so drawings show on github.com)</span>
+        </label>
+        <div className="flex justify-end sm:col-span-2">
+          <button type="submit" className="button-primary" disabled={!dirty}>
+            Save vault settings
+          </button>
+        </div>
+      </form>
+    </section>
+  );
 }
 
 function AccountSection() {

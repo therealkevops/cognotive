@@ -22,8 +22,8 @@ import { splitLinkText } from "../links/parse";
 export interface LinkHost {
   /** Resolves a link target from the current note; null if no such note. */
   resolve(target: string): string | null;
-  /** Opens a link target, creating the note if needed. */
-  open(target: string, heading?: string): void;
+  /** Opens a link target, creating the note if needed. `sub` is a heading, or "^id" for a block. */
+  open(target: string, sub?: string): void;
   /** Notes to offer when typing "[[". */
   notes(): Array<{ title: string; path: string; aliases: string[]; linkText: string }>;
   headings(path: string): string[];
@@ -35,6 +35,10 @@ export interface LinkHost {
   fileUrl?(path: string): Promise<string | null>;
   /** Saves pasted or dropped files as attachments; returns the link text for each. */
   saveFiles?(files: File[]): Promise<string[]>;
+  /** Renders markdown to sanitized HTML (tables and embeds in live preview). */
+  renderHtml?(markdown: string): Promise<string>;
+  /** If `inner` ("Note#Heading") embeds a note, the markdown to show and a title. */
+  noteEmbed?(inner: string): { markdown: string; title: string } | null;
 }
 
 export const linkHost = Facet.define<LinkHost, LinkHost | null>({
@@ -91,6 +95,7 @@ export interface WikiLinkAt {
   to: number;
   target: string;
   heading?: string;
+  block?: string;
   alias?: string;
   /** Where the visible text starts/ends (after "[[", before "]]"). */
   innerFrom: number;
@@ -171,7 +176,7 @@ const linkClicks = EditorView.domEventHandlers({
       const rendered = view.state.facet(livePreviewOn) && !touched;
       if (!isMod(event) && !rendered) return false;
       event.preventDefault();
-      host.open(wl.target, wl.heading);
+      host.open(wl.target, wl.heading ?? (wl.block ? `^${wl.block}` : undefined));
       return true;
     }
 
@@ -185,8 +190,8 @@ const linkClicks = EditorView.domEventHandlers({
       event.preventDefault();
       if (/^[a-z][a-z0-9+.-]*:/i.test(href)) window.open(href, "_blank", "noopener,noreferrer");
       else {
-        const { target, heading } = splitLinkText(decodeURIComponentSafe(href));
-        host.open(target, heading);
+        const { target, heading, block } = splitLinkText(decodeURIComponentSafe(href));
+        host.open(target, heading ?? (block ? `^${block}` : undefined));
       }
       return true;
     }

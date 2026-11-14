@@ -1,5 +1,6 @@
+import { drawingJson, isObsidianDrawing, replaceScene } from "../drawing/obsidian";
 import { parseDrawing, rewriteDrawingLinks } from "../drawing/parse";
-import { isDrawing, isMarkdown, noteTitle } from "../vault/paths";
+import { drawingName, isDrawing, isNote, noteTitle } from "../vault/paths";
 import { parseNote, splitLinkText, type ParsedLink, type ParsedNote } from "./parse";
 import { Resolver } from "./resolve";
 
@@ -58,14 +59,13 @@ export class LinkIndex {
 
   set(path: string, content: string): void {
     this.resolver.add(path);
-    if (isMarkdown(path)) this.notes.set(path, { content, parsed: parseNote(content) });
-    else if (isDrawing(path)) {
-      const { links } = parseDrawing(content);
+    if (isDrawing(path)) {
+      const { links } = parseDrawing(drawingJson(path, content));
       this.notes.set(path, {
         content,
         parsed: { links, tags: [], properties: {}, aliases: [], headings: [], propertiesError: false },
       });
-    }
+    } else if (isNote(path)) this.notes.set(path, { content, parsed: parseNote(content) });
   }
 
   remove(path: string): void {
@@ -199,7 +199,7 @@ export class LinkIndex {
     for (const [p, e] of this.notes) {
       nodes.set(p, {
         id: p,
-        title: noteTitle(p).replace(/\.excalidraw$/i, ""),
+        title: isDrawing(p) ? drawingName(p) : noteTitle(p),
         kind: isDrawing(p) ? "drawing" : "note",
         unresolved: false,
         tags: e.parsed.tags,
@@ -280,8 +280,8 @@ export class LinkIndex {
     const newText = this.linkText(newPath);
     for (const [source, e] of this.notes) {
       if (isDrawing(source)) {
-        const updated = rewriteDrawingLinks(e.content, (t) => resolveOld(t, source) === oldPath, newText);
-        if (updated) out.set(source, updated);
+        const updated = rewriteDrawingLinks(drawingJson(source, e.content), (t) => resolveOld(t, source) === oldPath, newText);
+        if (updated) out.set(source, isObsidianDrawing(source) ? replaceScene(e.content, updated) : updated);
         continue;
       }
       const edits: Array<{ from: number; to: number; insert: string }> = [];

@@ -13,7 +13,7 @@ interface Option {
 }
 
 /** Ctrl/Cmd+O: jump to a note by name, or create it if it doesn't exist. */
-export function QuickSwitcher({ onClose }: { onClose(): void }) {
+export function QuickSwitcher({ onClose, onOpenSide }: { onClose(): void; onOpenSide?(path: string): void }) {
   const vault = useVault();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
@@ -26,7 +26,7 @@ export function QuickSwitcher({ onClose }: { onClose(): void }) {
     if (!q) {
       // Most recently modified first.
       found = vault.entries
-        .filter((e) => e.kind === "file")
+        .filter((e) => e.kind === "file" && !e.path.split("/").some((seg) => seg.startsWith(".")))
         .sort((a, b) => b.mtime - a.mtime)
         .slice(0, 20)
         .map((e) => ({ key: e.path, title: isMarkdown(e.path) ? noteTitle(e.path) : basename(e.path), folder: dirname(e.path) }));
@@ -48,10 +48,12 @@ export function QuickSwitcher({ onClose }: { onClose(): void }) {
     listRef.current?.querySelector(`[data-index="${selected}"]`)?.scrollIntoView({ block: "nearest" });
   }, [selected]);
 
-  const choose = async (o: Option | undefined) => {
+  /** Shift+Enter opens the note in the side pane instead. */
+  const choose = async (o: Option | undefined, side = false) => {
     if (!o) return;
     onClose();
     if (o.create) await vault.createNote("", o.title);
+    else if (side && onOpenSide) onOpenSide(o.key);
     else await vault.open(o.key);
   };
 
@@ -90,7 +92,7 @@ export function QuickSwitcher({ onClose }: { onClose(): void }) {
               setSelected((s) => Math.max(s - 1, 0));
             } else if (e.key === "Enter") {
               e.preventDefault();
-              void choose(options[selected]);
+              void choose(options[selected], e.shiftKey);
             } else if (e.key === "Escape") {
               e.preventDefault();
               onClose();
@@ -125,6 +127,7 @@ export function QuickSwitcher({ onClose }: { onClose(): void }) {
         <div className="flex gap-4 border-t border-border px-4 py-2 text-xs text-muted">
           <span>↑↓ to move</span>
           <span>↵ to open</span>
+          {onOpenSide && <span>⇧↵ side pane</span>}
           <span>esc to close</span>
         </div>
       </div>

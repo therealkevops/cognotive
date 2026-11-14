@@ -64,7 +64,8 @@ const ITEMS: Item[] = [
 
 export function Toolbar({ view }: { view: EditorView | null }) {
   return (
-    <div role="toolbar" aria-label="Formatting" className="flex flex-wrap items-center gap-0.5">
+    // One scrollable row on phones instead of wrapping onto several lines.
+    <div role="toolbar" aria-label="Formatting" className="flex items-center gap-0.5 overflow-x-auto sm:flex-wrap">
       {ITEMS.map((item, i) =>
         item === "sep" ? (
           <span key={i} className="mx-1 h-5 w-px bg-border" aria-hidden />

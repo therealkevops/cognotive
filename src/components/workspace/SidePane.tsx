@@ -1,0 +1,84 @@
+"use client";
+
+import { ArrowLeftToLine, X } from "lucide-react";
+import dynamic from "next/dynamic";
+import { createContext, useEffect, useMemo, useState } from "react";
+import { isDark } from "@/lib/appearance";
+import { splitLinkText } from "@/lib/links/parse";
+import type { LinkContext } from "@/lib/markdown/remark-links";
+import { drawingName, isDrawing, isNote, noteTitle } from "@/lib/vault/paths";
+import { useVault } from "../vault/useVault";
+import { FileView } from "./FileView";
+
+const ReadingView = dynamic(() => import("./ReadingView"), { ssr: false });
+
+/** Opens a file in the side pane (provided by the workspace, used by the file tree). */
+export const SidePaneContext = createContext<((path: string) => void) | null>(null);
+
+/**
+ * A second note shown beside the open one, read-only: handy for referring to a
+ * note while writing another. Links clicked here open in the side pane too.
+ */
+export function SidePane({
+  path,
+  onNavigate,
+  onClose,
+  onOpenHere,
+}: {
+  path: string;
+  onNavigate(path: string): void;
+  onClose(): void;
+  onOpenHere(path: string): void;
+}) {
+  const vault = useVault();
+  const content = vault.links.content(path) ?? "";
+  const links = useMemo<LinkContext>(
+    () => ({ resolve: (t) => vault.links.resolve(t, path), read: (p) => vault.links.content(p) }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
+    [vault.links, path, vault.indexVersion],
+  );
+  const [drawingUrl, setDrawingUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isDrawing(path)) return;
+    let live = true;
+    void vault.fileUrl(path, { dark: isDark() }).then((u) => live && setDrawingUrl(u));
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path, vault.indexVersion]);
+
+  return (
+    <section aria-label="Side pane" className="hidden min-h-0 min-w-0 flex-1 flex-col border-l border-border lg:flex">
+      <div className="flex items-center gap-1 border-b border-border px-3 py-2">
+        <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{isDrawing(path) ? drawingName(path) : noteTitle(path)}</h2>
+        <button type="button" className="icon-button" aria-label="Open in main pane" title="Open in main pane" onClick={() => onOpenHere(path)}>
+          <ArrowLeftToLine size={15} aria-hidden />
+        </button>
+        <button type="button" className="icon-button" aria-label="Close side pane" onClick={onClose}>
+          <X size={15} aria-hidden />
+        </button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {isNote(path) ? (
+          <ReadingView
+            markdown={content}
+            links={links}
+            properties={vault.links.get(path)?.properties}
+            fileUrl={(p) => vault.fileUrl(p, { dark: isDark() })}
+            onOpenFile={onNavigate}
+            onOpenLink={(target) => {
+              const p = target ? vault.links.resolve(splitLinkText(target).target, path) : null;
+              if (p) onNavigate(p);
+            }}
+          />
+        ) : isDrawing(path) ? (
+          // eslint-disable-next-line @next/next/no-img-element -- SVG object URL from the vault
+          drawingUrl ? <img src={drawingUrl} alt="" className="mx-auto max-w-full p-4" /> : <p className="p-6 text-muted">Rendering…</p>
+        ) : (
+          <FileView path={path} />
+        )}
+      </div>
+    </section>
+  );
+}

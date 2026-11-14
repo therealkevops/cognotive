@@ -223,23 +223,17 @@ returned by section rather than whole.
 | **3. Linking** ✅ | Wikilinks, autocomplete, backlinks, unlinked mentions, tags, frontmatter, rename refactor, graph views | The graph matches what Obsidian shows for the same vault |
 | **4. Excalidraw** ✅ (with attachments) | Drawing files, embeds, SVG previews, links from drawings | Drawings round-trip through the repo and appear in the graph |
 | **5. LLM** | `/api/chat` proxy, browser-side tool loop, chat panel, citations, allowlist | You can ask "what have I written about X and how does it connect to Y?" |
-| **6. Polish** | Command palette, themes, mobile layout, templates, daily notes, write tools for the LLM | — |
+| **6. Polish** ✅ | Command palette, themes, mobile layout, templates, daily notes, tabs, side pane, version history, zip import/export, installable offline app | — |
 
 Each phase ends deployed to Vercel and usable.
 
-**Carried over from phase 4:** an optional SVG copy saved next to each drawing (so drawings
-show on github.com), reading the Obsidian Excalidraw plugin's `.excalidraw.md` format, and a
-configurable attachment folder (fixed to `attachments/` for now).
+**Phase 6 closed every item carried over from phases 1–4**, except:
 
-**Carried over from phase 3:** styling `#tags` inside the editor (they're styled in the
-reading view and indexed everywhere), showing note embeds inline in live preview (image and
-drawing embeds do show; note embeds render in the reading view), jumping to a `#^block` reference (it opens the note).
-
-**Carried over from phase 2:** per-vault settings in `.noted/settings.json`.
-
-**Carried over from phase 1:** tabs and split panes, rendering tables inside live preview (they show as source until
-then; the reading view renders them), and moving indexing into a Web Worker (only needed
-once vaults get large).
+- **Editing in the side pane.** The side pane is read-only (reading view), for referring to a
+  note while writing another; a second live editor is a larger change.
+- **Indexing in a Web Worker.** Not needed yet: indexing is fast for personal vaults, and first
+  syncs now download files in parallel. Revisit if a vault reaches thousands of notes.
+- **Phase 5 (LLM)** is postponed, as is giving the LLM write tools.
 
 ---
 

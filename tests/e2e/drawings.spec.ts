@@ -98,7 +98,7 @@ test("attachments sync to GitHub as binary files", async ({ page }) => {
   await page.getByRole("button", { name: "Settings" }).click();
   const dialog = page.getByRole("dialog", { name: "Settings" });
   await dialog.getByRole("button", { name: "Connect a GitHub repository" }).click();
-  await dialog.getByRole("combobox").first().selectOption("me/notes");
+  await dialog.getByRole("combobox", { name: /^Repository/ }).selectOption("me/notes");
   await dialog.getByRole("button", { name: "Connect and open" }).click();
   await expect(tree(page).getByRole("treeitem", { name: "Notes" })).toBeVisible();
 

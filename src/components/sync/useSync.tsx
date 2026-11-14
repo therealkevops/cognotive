@@ -10,12 +10,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { GitHubClient, GitHubError } from "@/lib/github/client";
+import { GitHubClient, GitHubError, type FileCommit } from "@/lib/github/client";
 import { SyncEngine } from "@/lib/sync/engine";
 import { GitHubRemote } from "@/lib/sync/remote";
 import { IdbSyncState } from "@/lib/sync/state";
 import type { LocalStore } from "@/lib/vault/local-store";
-import { noteTitle } from "@/lib/vault/paths";
+import { joinPath, noteTitle } from "@/lib/vault/paths";
 import type { GitHubVaultConfig } from "@/lib/vault/registry";
 import { AuthRequiredError, useAuth } from "../auth/useAuth";
 import { useVault } from "../vault/useVault";
@@ -35,6 +35,12 @@ interface SyncApi {
   /** Messages about conflicts from the last sync, until dismissed. */
   notices: string[];
   dismissNotices(): void;
+  /** Version history from GitHub, for synced vaults. */
+  history?: {
+    commits(path: string): Promise<FileCommit[]>;
+    contentAt(sha: string, path: string): Promise<Uint8Array | null>;
+    repoLabel: string;
+  };
 }
 
 const SyncContext = createContext<SyncApi>({
@@ -69,13 +75,11 @@ export function SyncProvider({
   const [status, setStatus] = useState<SyncStatus>({ kind: "idle", pending: 0, lastSyncedAt: null });
   const [notices, setNotices] = useState<string[]>([]);
 
+  const client = useMemo(() => new GitHubClient(auth.getToken), [auth.getToken]);
   const engine = useMemo(() => {
-    const client = new GitHubClient(auth.getToken);
     const remote = new GitHubRemote(client, config.owner, config.repo, config.branch);
     return new SyncEngine(store, new IdbSyncState(config.id), remote, config.folder);
-    // auth.getToken is stable; the engine only changes with the vault.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.id, config.owner, config.repo, config.branch, config.folder, store]);
+  }, [client, config.id, config.owner, config.repo, config.branch, config.folder, store]);
 
   const running = useRef(false);
   const again = useRef(false);
@@ -185,8 +189,13 @@ export function SyncProvider({
       syncNow: () => void run(),
       notices,
       dismissNotices: () => setNotices([]),
+      history: {
+        commits: (path) => client.fileHistory(config.owner, config.repo, config.branch, joinPath(config.folder, path)),
+        contentAt: (sha, path) => client.fileAt(config.owner, config.repo, sha, joinPath(config.folder, path)),
+        repoLabel: `${config.owner}/${config.repo}`,
+      },
     }),
-    [status, run, notices],
+    [status, run, notices, client, config.owner, config.repo, config.branch, config.folder],
   );
   return <SyncContext.Provider value={api}>{children}</SyncContext.Provider>;
 }

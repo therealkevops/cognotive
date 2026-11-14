@@ -12,6 +12,9 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}`,
     trace: "off",
+    // The service worker would serve some requests itself, out of reach of route mocks.
+    // Tests that need it opt back in with test.use({ serviceWorkers: "allow" }).
+    serviceWorkers: "block",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
