@@ -41,6 +41,11 @@ test("clicking a link to a missing note creates it", async ({ page }) => {
   const link = page.getByTestId("reading-view").locator("a.internal-link.unresolved");
   await expect(link).toHaveText("Garden ideas");
   await link.click();
+  // It asks first, with the name and folder filled in.
+  const dialog = page.getByRole("dialog", { name: "Create note" });
+  await expect(dialog.getByLabel("Name")).toHaveValue("Garden ideas");
+  await expect(dialog.getByLabel("Folder")).toHaveValue("");
+  await dialog.getByRole("button", { name: "Create" }).click();
   await expect(title(page)).toHaveValue("Garden ideas");
   await expect(tree(page).getByRole("treeitem", { name: "Garden ideas" })).toBeVisible();
 });

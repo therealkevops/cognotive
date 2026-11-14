@@ -6,6 +6,7 @@ import { readPref, writePref } from "@/lib/prefs";
 import { dirname, isDrawing, isImage, isMarkdown } from "@/lib/vault/paths";
 import { buildTree, type TreeNode } from "@/lib/vault/tree";
 import { ATTACHMENT_FOLDER, useVault } from "../vault/useVault";
+import { DeleteDialog } from "./DeleteDialog";
 import { SidePaneContext } from "./SidePane";
 
 const DRAG_TYPE = "application/x-noted-path";
@@ -198,10 +199,8 @@ function Node({
     else if (e.key === "ArrowLeft" && isFolder && open) setOpen(node.path, false);
   };
 
-  const remove = () => {
-    const what = isFolder ? `the folder "${node.name}" and everything in it` : `"${node.name}"`;
-    if (window.confirm(`Delete ${what}? This can't be undone.`)) void vault.remove(node.path);
-  };
+  const [deleting, setDeleting] = useState(false);
+  const remove = () => setDeleting(true);
 
   return (
     <div role="none">
@@ -328,6 +327,7 @@ function Node({
           ))}
         </div>
       )}
+      {deleting && <DeleteDialog path={node.path} isFolder={isFolder} onClose={() => setDeleting(false)} />}
     </div>
   );
 }

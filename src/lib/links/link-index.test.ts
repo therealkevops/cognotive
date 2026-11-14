@@ -24,6 +24,17 @@ describe("LinkIndex", () => {
     expect(bl[2].link.embed).toBe(true);
   });
 
+  it("turns links to deleted notes into plain text", () => {
+    const ix = vault();
+    ix.set("Notes.md", "[[Garden#Beds]], [the garden](Garden.md) and ![[Garden]].");
+    const out = ix.unlinkTo((p) => p === "Garden.md" || p === "Journal.md");
+    expect(Object.fromEntries(out)).toEqual({
+      "Home.md": "# Home\nSee Garden and [[Recipes/Pasta|pasta]].\nAlso [[Missing note]]. #index",
+      "Recipes/Pasta.md": "Needs tomatoes from the garden. #food/italian\n",
+      "Notes.md": "Garden › Beds, the garden and .",
+    });
+  });
+
   it("lists unresolved links by target", () => {
     expect([...vault().unresolved()]).toEqual([["Missing note", ["Home.md"]]]);
   });

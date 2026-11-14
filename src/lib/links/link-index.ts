@@ -300,6 +300,32 @@ export class LinkIndex {
     return out;
   }
 
+  /**
+   * Before deleting files, turns links to them into plain text: a wikilink
+   * becomes its alias or note name, a markdown link its label, and embeds are
+   * removed. Returns the new contents of each note that changes. Drawings and
+   * notes that are themselves being deleted are left alone.
+   */
+  unlinkTo(isGone: (path: string) => boolean): Map<string, string> {
+    const out = new Map<string, string>();
+    for (const [source, e] of this.notes) {
+      if (isDrawing(source) || isGone(source)) continue;
+      const edits: Array<{ from: number; to: number; insert: string }> = [];
+      for (const link of e.parsed.links) {
+        const p = link.target ? this.resolve(link.target, source) : null;
+        if (!p || !isGone(p)) continue;
+        edits.push({ from: link.from, to: link.to, insert: plainLinkText(e.content.slice(link.from, link.to), link) });
+      }
+      if (!edits.length) continue;
+      let text = e.content;
+      for (const ed of edits.sort((a, b) => b.from - a.from)) {
+        text = text.slice(0, ed.from) + ed.insert + text.slice(ed.to);
+      }
+      out.set(source, text);
+    }
+    return out;
+  }
+
   /** A resolver snapshot, for answering "where did this link point before?" during renames. */
   snapshotResolver(): (target: string, from: string) => string | null {
     const copy = new Resolver(this.resolver.list());
@@ -317,6 +343,15 @@ function retarget(raw: string, link: ParsedLink, newText: string, newPath: strin
   const label = raw.slice(raw.indexOf("[") + 1, raw.indexOf("]("));
   const href = newPath.split("/").map(encodeURIComponent).join("/") + (sub ? encodeURI(sub) : "");
   return `${link.embed ? "!" : ""}[${label}](${href})`;
+}
+
+/** What a link reads as without the link. */
+function plainLinkText(raw: string, link: ParsedLink): string {
+  if (link.embed) return "";
+  if (link.kind === "markdown") return raw.slice(raw.indexOf("[") + 1, raw.indexOf("]("));
+  if (link.alias) return link.alias;
+  const name = link.target.slice(link.target.lastIndexOf("/") + 1).replace(/\.md$/i, "");
+  return link.heading ? `${name} › ${link.heading}` : name;
 }
 
 function escapeRegExp(s: string): string {

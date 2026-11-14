@@ -107,9 +107,9 @@ test("folders hold notes, and deleting a folder removes them", async ({ page }) 
   await page.getByRole("button", { name: "New note in Work" }).click();
   await expect(tree(page).getByRole("treeitem", { name: "Untitled" })).toBeVisible();
 
-  page.once("dialog", (d) => void d.accept());
   await folder.hover();
   await page.getByRole("button", { name: "Delete Work" }).click();
+  await page.getByRole("dialog", { name: "Delete folder" }).getByRole("button", { name: "Delete", exact: true }).click();
   await expect(folder).toBeHidden();
   await expect(tree(page).getByRole("treeitem", { name: "Untitled" })).toBeHidden();
   await expect(page.getByText("No note is open.")).toBeVisible();

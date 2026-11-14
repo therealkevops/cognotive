@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, fillTemplate, formatDate, parseSettings, serializeSettings } from "./settings";
+import { DEFAULT_SETTINGS, fillTemplate, formatDate, newNoteFromLink, parseSettings, serializeSettings } from "./settings";
 
 const d = new Date(2026, 10, 4, 9, 5, 7); // Wed 4 Nov 2026, 09:05:07
 
@@ -32,5 +32,24 @@ describe("parseSettings", () => {
   it("round-trips", () => {
     const s = { ...DEFAULT_SETTINGS, attachmentFolder: "files" };
     expect(parseSettings(serializeSettings(s))).toEqual(s);
+  });
+});
+
+describe("newNoteFromLink", () => {
+  const at = (newNoteLocation: "current" | "root" | "folder", newNoteFolder = "") => ({ newNoteLocation, newNoteFolder });
+  it("puts the note in the linking note's folder by default", () => {
+    expect(newNoteFromLink("Ideas", "Projects/Plan.md", at("current"))).toEqual({ folder: "Projects", name: "Ideas" });
+    expect(newNoteFromLink("Ideas", "Plan.md", at("current"))).toEqual({ folder: "", name: "Ideas" });
+    expect(newNoteFromLink("Ideas", null, at("current"))).toEqual({ folder: "", name: "Ideas" });
+  });
+  it("can use the vault root or a set folder", () => {
+    expect(newNoteFromLink("Ideas.md", "Projects/Plan.md", at("root"))).toEqual({ folder: "", name: "Ideas" });
+    expect(newNoteFromLink("Ideas", "Projects/Plan.md", at("folder", "/Inbox/"))).toEqual({ folder: "Inbox", name: "Ideas" });
+  });
+  it("keeps a folder written in the link", () => {
+    expect(newNoteFromLink("Area/Sub/Ideas", "Projects/Plan.md", at("current"))).toEqual({ folder: "Area/Sub", name: "Ideas" });
+  });
+  it("defaults an unknown location to the current folder", () => {
+    expect(parseSettings(JSON.stringify({ newNoteLocation: "elsewhere" })).newNoteLocation).toBe("current");
   });
 });

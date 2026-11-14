@@ -45,7 +45,7 @@ import {
 import { drawingJson, isObsidianDrawing, replaceScene } from "@/lib/drawing/obsidian";
 import { drawingName } from "@/lib/vault/paths";
 import type { DrawingVault } from "./DrawingView";
-import { fillTemplate, formatDate } from "@/lib/vault/settings";
+import { fillTemplate, formatDate, newNoteFromLink } from "@/lib/vault/settings";
 import { GraphDialog, LocalGraph } from "../graph/GraphDialog";
 import { SettingsDialog } from "../settings/SettingsDialog";
 import { HistoryDialog } from "../sync/HistoryDialog";
@@ -54,6 +54,8 @@ import { useSync } from "../sync/useSync";
 import { useVault } from "../vault/useVault";
 import { useVaults } from "../vault/useVaults";
 import { VaultSwitcher } from "../vault/VaultSwitcher";
+import { CreateNoteDialog } from "./CreateNoteDialog";
+import { DeleteDialog } from "./DeleteDialog";
 import { FileTree } from "./FileTree";
 import { FileView } from "./FileView";
 import { LinksPanel } from "./LinksPanel";
@@ -110,6 +112,9 @@ export function Workspace() {
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [sidePath, setSidePath] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  /** A note about to be created from a link, waiting for the user to confirm its name and folder. */
+  const [creating, setCreating] = useState<{ name: string; folder: string } | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [importNote, setImportNote] = useState<string | null>(null);
   const zipInput = useRef<HTMLInputElement>(null);
   const chooseZip = useCallback(() => zipInput.current?.click(), []);
@@ -273,10 +278,16 @@ export function Workspace() {
         await vault.open(path);
         return;
       }
-      const clean = target.replace(/\.md$/i, "");
-      await vault.createNote(clean.includes("/") ? dirname(clean) : "", basename(clean));
+      // A note that doesn't exist yet: ask before creating it.
+      if (target.trim()) setCreating(newNoteFromLink(target, from, vault.settings));
     },
     [vault],
+  );
+
+  /** Offers to create a missing note `target`, as linked from `from`. */
+  const offerCreate = useCallback(
+    (target: string, from: string) => setCreating(newNoteFromLink(target, from, vault.settings)),
+    [vault.settings],
   );
 
   // Scroll to a linked heading ("Heading") or block ("^id") once its note is open.
@@ -625,11 +636,7 @@ export function Workspace() {
     side: () => activePathNow && setSidePath(activePathNow),
     "side-close": () => setSidePath(null),
     "tab-close": () => activePathNow && closeTab(activePathNow),
-    delete: () => {
-      if (activePathNow && window.confirm(`Delete “${basename(activePathNow)}”? This can't be undone.`)) {
-        void vault.remove(activePathNow);
-      }
-    },
+    delete: () => activePathNow && setDeleting(activePathNow),
     sync: sync.syncNow,
     history: () => setHistoryOpen(true),
     export: () => void exportZip(),
@@ -672,7 +679,7 @@ export function Workspace() {
                 {panelTab === "outline" ? (
                   <Outline markdown={vault.activeText} onJump={jumpTo} />
                 ) : panelTab === "links" ? (
-                  <LinksPanel onOpenLink={(t) => void openLink(t)} />
+                  <LinksPanel onOpenLink={(t) => void openLink(t)} onCreate={offerCreate} />
                 ) : (
                   <LocalGraph onOpenFull={() => setGraphOpen(true)} />
                 )}
@@ -870,6 +877,8 @@ export function Workspace() {
           onClose={() => setTemplatesOpen(false)}
         />
       )}
+      {creating && <CreateNoteDialog {...creating} onClose={() => setCreating(null)} />}
+      {deleting && <DeleteDialog path={deleting} isFolder={false} onClose={() => setDeleting(null)} />}
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
       {graphOpen && <GraphDialog onClose={() => setGraphOpen(false)} />}
       <Toasts />

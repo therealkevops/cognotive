@@ -13,6 +13,9 @@ export interface VaultSettings {
   templateFolder: string;
   /** Also save "Name.excalidraw.svg" next to each drawing, so it shows on github.com. */
   drawingSvgCopy: boolean;
+  /** Where a note created from a link goes: the linking note's folder, the vault root, or `newNoteFolder`. */
+  newNoteLocation: "current" | "root" | "folder";
+  newNoteFolder: string;
 }
 
 export const SETTINGS_PATH = ".noted/settings.json";
@@ -24,6 +27,8 @@ export const DEFAULT_SETTINGS: VaultSettings = {
   dailyTemplate: "",
   templateFolder: "Templates",
   drawingSvgCopy: false,
+  newNoteLocation: "current",
+  newNoteFolder: "",
 };
 
 export function parseSettings(text: string | undefined): VaultSettings {
@@ -35,6 +40,7 @@ export function parseSettings(text: string | undefined): VaultSettings {
       const v = raw[key];
       if (typeof v === typeof DEFAULT_SETTINGS[key]) (out as Record<string, unknown>)[key] = v;
     }
+    if (!["current", "root", "folder"].includes(out.newNoteLocation)) out.newNoteLocation = "current";
     return out;
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -85,4 +91,28 @@ export function fillTemplate(template: string, vars: { title: string; now: Date 
     if (name === "date") return formatDate(vars.now, fmt?.trim() || "YYYY-MM-DD");
     return formatDate(vars.now, fmt?.trim() || "HH:mm");
   });
+}
+
+/**
+ * Where to create the note a link points to: a folder written in the link
+ * ("Projects/Idea") wins; otherwise the vault's setting decides, relative to
+ * the note the link is in.
+ */
+export function newNoteFromLink(
+  target: string,
+  from: string | null | undefined,
+  s: Pick<VaultSettings, "newNoteLocation" | "newNoteFolder">,
+): { folder: string; name: string } {
+  const clean = target.trim().replace(/\.md$/i, "").replace(/^\/+/, "");
+  const slash = clean.lastIndexOf("/");
+  if (slash !== -1) return { folder: clean.slice(0, slash), name: clean.slice(slash + 1) };
+  const folder =
+    s.newNoteLocation === "root"
+      ? ""
+      : s.newNoteLocation === "folder"
+        ? s.newNoteFolder.trim().replace(/^\/+|\/+$/g, "")
+        : from && from.includes("/")
+          ? from.slice(0, from.lastIndexOf("/"))
+          : "";
+  return { folder, name: clean };
 }

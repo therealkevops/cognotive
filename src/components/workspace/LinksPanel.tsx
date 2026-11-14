@@ -42,9 +42,29 @@ function Section({
 }
 
 /** Backlinks, unlinked mentions and outgoing links of the open note. */
-export function LinksPanel({ onOpenLink }: { onOpenLink(target: string, heading?: string): void }) {
+export function LinksPanel({
+  onOpenLink,
+  onCreate,
+}: {
+  onOpenLink(target: string, heading?: string): void;
+  /** Offers to create the missing note `target`, as linked from `from`. */
+  onCreate(target: string, from: string): void;
+}) {
   const vault = useVault();
   const path = vault.active?.path;
+  // Every link in the vault to a note that doesn't exist yet, grouped case-insensitively.
+  const unresolved = useMemo(() => {
+    const groups = new Map<string, { target: string; sources: string[] }>();
+    for (const [target, sources] of vault.links.unresolved()) {
+      const key = target.toLowerCase();
+      const g = groups.get(key) ?? { target, sources: [] };
+      for (const s of sources) if (!g.sources.includes(s)) g.sources.push(s);
+      groups.set(key, g);
+    }
+    return [...groups.values()].sort((a, b) => b.sources.length - a.sources.length || a.target.localeCompare(b.target));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vault.links, vault.indexVersion]);
+
   const { backlinks, mentions, outgoing } = useMemo(() => {
     if (!path) return { backlinks: [] as Backlink[], mentions: [] as Mention[], outgoing: [] };
     return {
@@ -143,11 +163,47 @@ export function LinksPanel({ onOpenLink }: { onOpenLink(target: string, heading?
                 <button
                   type="button"
                   className={`text-left text-sm hover:underline ${o.resolved ? "text-accent" : "text-muted italic"}`}
-                  title={o.resolved ? o.resolved : "Not created yet. Click to create."}
+                  title={o.resolved ? o.resolved : "Not created yet. Click to create it."}
                   onClick={() => (o.resolved ? void vault.open(o.resolved) : onOpenLink(o.label))}
                 >
                   {o.label}
                 </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      <Section title="Unresolved links" count={unresolved.length} defaultOpen={false}>
+        {unresolved.length === 0 ? (
+          <p className="text-sm text-muted">Every link in the vault points to a note that exists.</p>
+        ) : (
+          <ul className="space-y-2">
+            {unresolved.map((u) => (
+              <li key={u.target} className="text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate text-muted italic">{u.target}</span>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded border border-border px-1.5 text-xs hover:border-accent hover:text-accent"
+                    aria-label={`Create ${u.target}`}
+                    onClick={() => onCreate(u.target, u.sources[0])}
+                  >
+                    Create
+                  </button>
+                </div>
+                <p className="mt-0.5 text-xs text-muted">
+                  Linked from{" "}
+                  {u.sources.slice(0, 3).map((src, i) => (
+                    <span key={src}>
+                      {i > 0 && ", "}
+                      <button type="button" className="hover:text-accent hover:underline" onClick={() => void vault.open(src)}>
+                        {noteTitle(src)}
+                      </button>
+                    </span>
+                  ))}
+                  {u.sources.length > 3 && ` and ${u.sources.length - 3} more`}
+                </p>
               </li>
             ))}
           </ul>

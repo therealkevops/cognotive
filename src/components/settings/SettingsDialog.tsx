@@ -164,6 +164,22 @@ function ThisVaultSection() {
         <Field label="Daily note template" hint="A note path, e.g. Templates/Daily.md. Empty for none.">
           <input className="input" value={draft.dailyTemplate} onChange={(e) => setDraft({ ...draft, dailyTemplate: e.target.value })} />
         </Field>
+        <Field label="New notes from links go in">
+          <select
+            className="input"
+            value={draft.newNoteLocation}
+            onChange={(e) => setDraft({ ...draft, newNoteLocation: e.target.value as typeof draft.newNoteLocation })}
+          >
+            <option value="current">The linking note&apos;s folder</option>
+            <option value="root">The vault root</option>
+            <option value="folder">A folder…</option>
+          </select>
+        </Field>
+        {draft.newNoteLocation === "folder" && (
+          <Field label="Folder for new notes from links">
+            <input className="input" value={draft.newNoteFolder} onChange={(e) => setDraft({ ...draft, newNoteFolder: e.target.value })} />
+          </Field>
+        )}
         <label className="flex items-start gap-2 self-end text-sm">
           <input
             type="checkbox"
