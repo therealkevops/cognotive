@@ -37,9 +37,11 @@ afterEach(() => {
 });
 
 describe("GET /api/auth/token", () => {
-  it("returns 503 when sign-in isn't configured", async () => {
+  it("says so when sign-in isn't configured", async () => {
     vi.stubEnv("SESSION_SECRET", "");
-    expect((await GET(request())).status).toBe(503);
+    const res = await GET(request());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ configured: false });
   });
 
   it("returns 401 without a session", async () => {

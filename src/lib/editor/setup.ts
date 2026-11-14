@@ -1,4 +1,4 @@
-import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
+import { closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, indentOnInput, syntaxHighlighting } from "@codemirror/language";
@@ -25,8 +25,10 @@ import {
   toggleStrikethrough,
   toggleTaskDone,
 } from "./formatting";
+import { FrontmatterSyntax } from "./frontmatter-syntax";
 import { highlightTag, HighlightSyntax } from "./highlight-syntax";
 import { livePreview } from "./live-preview";
+import { linkHost, livePreviewOn, WikiLinkSyntax, wikilinkExtensions, type LinkHost } from "./wikilinks";
 
 /** Formatting shortcuts. "Mod" is Cmd on macOS and Ctrl elsewhere. */
 export const formattingKeymap = [
@@ -59,7 +61,8 @@ const markdownHighlight = HighlightStyle.define([
   { tag: t.url, class: "cm-md-url" },
   { tag: t.monospace, class: "cm-md-code" },
   { tag: t.quote, class: "cm-md-quote" },
-  { tag: [t.processingInstruction, t.meta, t.contentSeparator], class: "cm-md-syntax" },
+  { tag: [t.processingInstruction, t.contentSeparator], class: "cm-md-syntax" },
+  { tag: t.meta, class: "cm-md-frontmatter" },
   // Code inside fenced blocks (via language-data).
   { tag: [t.keyword, t.modifier, t.operatorKeyword], class: "cm-tok-keyword" },
   { tag: [t.string, t.special(t.string), t.regexp], class: "cm-tok-string" },
@@ -104,10 +107,14 @@ const theme = EditorView.theme({
 export const livePreviewMode = new Compartment();
 
 export function livePreviewExtension(on: boolean): Extension {
-  return on ? [livePreview, EditorView.contentAttributes.of({ class: "cm-live-preview" })] : [];
+  return on ? [livePreview, livePreviewOn.of(true), EditorView.contentAttributes.of({ class: "cm-live-preview" })] : [];
 }
 
-export function editorExtensions(opts: { livePreview: boolean; onChange: (doc: string) => void }): Extension {
+export function editorExtensions(opts: {
+  livePreview: boolean;
+  onChange: (doc: string) => void;
+  links?: LinkHost;
+}): Extension {
   return [
     history(),
     drawSelection(),
@@ -119,9 +126,11 @@ export function editorExtensions(opts: { livePreview: boolean; onChange: (doc: s
     search({ top: false }),
     EditorView.lineWrapping,
     placeholder("Start writing…"),
-    markdown({ base: markdownLanguage, codeLanguages: languages, extensions: [HighlightSyntax] }),
+    markdown({ base: markdownLanguage, codeLanguages: languages, extensions: [FrontmatterSyntax, HighlightSyntax, WikiLinkSyntax] }),
     syntaxHighlighting(markdownHighlight),
+    ...(opts.links ? [linkHost.of(opts.links), wikilinkExtensions()] : []),
     keymap.of([
+      ...completionKeymap,
       ...formattingKeymap,
       ...closeBracketsKeymap,
       ...searchKeymap,

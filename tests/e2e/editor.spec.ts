@@ -15,6 +15,7 @@ test("a new vault opens on the welcome note", async ({ page }) => {
   await openApp(page);
   await expect(page.getByRole("textbox", { name: "Note title" })).toHaveValue("Welcome");
   await expect(tree(page).getByRole("treeitem", { name: "Welcome" })).toBeVisible();
+  await page.getByRole("tab", { name: "Outline" }).click();
   await expect(page.getByRole("region", { name: "Outline" })).toContainText("Formatting");
 });
 

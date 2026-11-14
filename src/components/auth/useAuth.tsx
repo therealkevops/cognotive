@@ -57,16 +57,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     inflight.current ??= (async () => {
       try {
         const res = await fetch("/api/auth/token", { cache: "no-store" });
-        if (res.status === 503) {
-          setState({ status: "not_configured" });
-          return null;
-        }
         if (!res.ok) {
           cached.current = null;
           setState({ status: "signed_out" });
           return null;
         }
-        const body = (await res.json()) as TokenResponse;
+        const body = (await res.json()) as TokenResponse | { configured: false };
+        if ("configured" in body) {
+          setState({ status: "not_configured" });
+          return null;
+        }
         cached.current = body;
         setState({ status: "signed_in", user: body.user, installUrl: body.installUrl });
         return body;

@@ -19,7 +19,8 @@ const noStore = { "Cache-Control": "no-store" };
  */
 export async function GET(request: NextRequest) {
   const config = authConfig();
-  if (!config) return NextResponse.json({ error: "not_configured" }, { status: 503, headers: noStore });
+  // 200, not an error status: an unconfigured deployment is a normal state (local vaults only).
+  if (!config) return NextResponse.json({ configured: false }, { headers: noStore });
 
   let session = await unseal<Session>(request.cookies.get(SESSION_COOKIE)?.value, config.sessionSecret);
   const signedOut = () => {

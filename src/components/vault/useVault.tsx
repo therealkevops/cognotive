@@ -11,7 +11,9 @@ import {
   type ReactNode,
 } from "react";
 import { readPref, writePref } from "@/lib/prefs";
-import { NoteIndex } from "@/lib/search/note-index";
+import type { LinkIndex } from "@/lib/links/link-index";
+import type { NoteIndex } from "@/lib/search/note-index";
+import { VaultIndexes } from "@/lib/vault/indexes";
 import { LocalStore } from "@/lib/vault/local-store";
 import {
   basename,
@@ -43,6 +45,8 @@ export interface VaultApi {
   vaultId: string;
   entries: VaultEntry[];
   index: NoteIndex;
+  /** Links, backlinks, tags and properties of every note. Changes with `indexVersion`. */
+  links: LinkIndex;
   /** Increments whenever the index changes, so search views can recompute. */
   indexVersion: number;
   active: ActiveNote | null;
@@ -68,6 +72,8 @@ export interface VaultApi {
   rename(path: string, newName: string): Promise<boolean>;
   move(path: string, toFolder: string): Promise<void>;
   remove(path: string): Promise<void>;
+  /** Replaces a note's text from outside the editor (e.g. linking a mention). Reloads it if open. */
+  writeNote(path: string, content: string): Promise<void>;
   /** Case-insensitive, like most file systems Obsidian vaults live on. */
   exists(path: string): boolean;
 }
@@ -97,7 +103,9 @@ export function VaultProvider({
     () => injectedStore ?? new LocalStore(vaultId),
     [injectedStore, vaultId],
   );
-  const index = useMemo(() => new NoteIndex(), []);
+  const indexes = useMemo(() => new VaultIndexes(), []);
+  const index = indexes.search;
+  const links = indexes.links;
   const [ready, setReady] = useState(false);
   const [entries, setEntries] = useState<VaultEntry[]>([]);
   const [indexVersion, setIndexVersion] = useState(0);
@@ -137,7 +145,7 @@ export function VaultProvider({
     pending.current = null;
     try {
       const file = await store.write(p.path, p.text);
-      index.set(p.path, p.text);
+      indexes.set(p.path, p.text);
       bumpIndex();
       if (!pending.current) setSaveState("saved");
       setEntries((prev) => prev.map((e) => (e.path === p.path ? { ...e, mtime: file.mtime } : e)));
@@ -146,7 +154,7 @@ export function VaultProvider({
       setSaveState("error");
       fail(e);
     }
-  }, [store, index, bumpIndex, fail, changed]);
+  }, [store, indexes, bumpIndex, fail, changed]);
 
   const open = useCallback(
     async (path: string | null) => {
@@ -181,12 +189,13 @@ export function VaultProvider({
         writePref(`vault:${vaultId}:seeded`, true);
         list = await store.list();
       }
-      index.clear();
+      indexes.clear();
       for (const e of list) {
-        if (e.kind === "file" && isMarkdown(e.path)) {
+        if (e.kind !== "file") continue;
+        if (isMarkdown(e.path)) {
           const f = await store.read(e.path);
-          if (f) index.set(f.path, f.content);
-        }
+          if (f) indexes.set(f.path, f.content);
+        } else indexes.addFile(e.path);
       }
       if (cancelled) return;
       setEntries(list);
@@ -203,7 +212,7 @@ export function VaultProvider({
     return () => {
       cancelled = true;
     };
-  }, [store, index, vaultId, open, bumpIndex, fail, seed]);
+  }, [store, indexes, vaultId, open, bumpIndex, fail, seed]);
 
   // Save when the tab is hidden or closed.
   useEffect(() => {
@@ -244,7 +253,7 @@ export function VaultProvider({
         if (err) throw new Error(err);
         const path = uniquePath(joinPath(folder, `${name.trim()}.md`), exists);
         await store.write(path, "");
-        index.set(path, "");
+        indexes.set(path, "");
         bumpIndex();
         await refresh();
         changed();
@@ -254,7 +263,7 @@ export function VaultProvider({
         fail(e);
       }
     },
-    [store, index, exists, refresh, open, bumpIndex, fail, changed],
+    [store, indexes, exists, refresh, open, bumpIndex, fail, changed],
   );
 
   const createFolder = useCallback(
@@ -271,15 +280,20 @@ export function VaultProvider({
     [store, exists, refresh, fail],
   );
 
-  /** Re-keys the index and the open note after `from` moved to `to`. */
+  /** Re-keys the indexes and the open note after `from` moved to `to`. Returns old → new file paths. */
   const afterMove = useCallback(
     async (from: string, to: string) => {
       const list = await store.list();
+      const moved: Array<[string, string]> = [];
       for (const e of list) {
-        if (e.kind !== "file" || !isMarkdown(e.path) || !isWithin(e.path, to)) continue;
-        index.remove(joinPath(from, e.path.slice(to.length)));
-        const f = await store.read(e.path);
-        if (f) index.set(f.path, f.content);
+        if (e.kind !== "file" || !isWithin(e.path, to)) continue;
+        const old = joinPath(from, e.path.slice(to.length));
+        moved.push([old, e.path]);
+        indexes.remove(old);
+        if (isMarkdown(e.path)) {
+          const f = await store.read(e.path);
+          if (f) indexes.set(f.path, f.content);
+        } else indexes.addFile(e.path);
       }
       setEntries(list);
       bumpIndex();
@@ -291,8 +305,9 @@ export function VaultProvider({
         setActive((a) => (a ? { ...a, path: moved } : a));
         writePref(`vault:${vaultId}:last`, moved);
       }
+      return moved;
     },
-    [store, index, vaultId, bumpIndex],
+    [store, indexes, vaultId, bumpIndex],
   );
 
   const renameOrMove = useCallback(
@@ -303,11 +318,28 @@ export function VaultProvider({
         throw new Error(`"${basename(to)}" already exists in that folder.`);
       }
       await flush();
+      const before = links.snapshotResolver();
       await store.rename(from, to);
-      await afterMove(from, to);
+      const moved = await afterMove(from, to);
+
+      // Update links in other notes so they follow the renamed files.
+      const rewritten = new Set<string>();
+      for (const [oldPath, newPath] of moved) {
+        for (const [notePath, text] of links.rewriteLinksTo(oldPath, newPath, before)) {
+          await store.write(notePath, text);
+          indexes.set(notePath, text);
+          rewritten.add(notePath);
+        }
+      }
+      if (rewritten.size) {
+        bumpIndex();
+        setEntries(await store.list());
+        const current = activePath.current;
+        if (current && rewritten.has(current)) await open(current);
+      }
       changed();
     },
-    [exists, flush, store, afterMove, changed],
+    [exists, flush, store, afterMove, changed, links, indexes, bumpIndex, open],
   );
 
   const rename = useCallback(
@@ -351,7 +383,7 @@ export function VaultProvider({
         }
         const removed = entriesRef.current.filter((e) => isWithin(e.path, path));
         await store.delete(path);
-        for (const e of removed) index.remove(e.path);
+        for (const e of removed) indexes.remove(e.path);
         bumpIndex();
         await refresh();
         changed();
@@ -359,20 +391,36 @@ export function VaultProvider({
         fail(e);
       }
     },
-    [store, index, refresh, open, bumpIndex, fail, changed],
+    [store, indexes, refresh, open, bumpIndex, fail, changed],
   );
 
   const clearError = useCallback(() => setError(null), []);
+
+  const writeNote = useCallback(
+    async (path: string, content: string) => {
+      try {
+        await flush();
+        await store.write(path, content);
+        indexes.set(path, content);
+        bumpIndex();
+        setEntries(await store.list());
+        if (activePath.current === path) await open(path);
+        changed();
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [flush, store, indexes, bumpIndex, open, changed, fail],
+  );
 
   const reload = useCallback(
     async (paths: string[]) => {
       if (paths.length === 0) return;
       const list = await store.list();
       for (const path of paths) {
-        if (!isMarkdown(path)) continue;
         const f = await store.read(path);
-        if (f) index.set(path, f.content);
-        else index.remove(path);
+        if (f) indexes.set(path, f.content);
+        else indexes.remove(path);
       }
       setEntries(list);
       bumpIndex();
@@ -393,7 +441,7 @@ export function VaultProvider({
         await open(current);
       }
     },
-    [store, index, bumpIndex, open],
+    [store, indexes, bumpIndex, open],
   );
 
   const api = useMemo<VaultApi>(
@@ -402,6 +450,7 @@ export function VaultProvider({
       vaultId,
       entries,
       index,
+      links,
       indexVersion,
       active,
       activeText,
@@ -418,6 +467,7 @@ export function VaultProvider({
       rename,
       move,
       remove,
+      writeNote,
       exists,
     }),
     [
@@ -425,6 +475,7 @@ export function VaultProvider({
       vaultId,
       entries,
       index,
+      links,
       indexVersion,
       active,
       activeText,
@@ -441,6 +492,7 @@ export function VaultProvider({
       rename,
       move,
       remove,
+      writeNote,
       exists,
     ],
   );

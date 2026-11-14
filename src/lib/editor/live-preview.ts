@@ -107,6 +107,20 @@ function build(view: EditorView): DecorationSet {
             decos.push(hidden.range(close.from, node.to));
             return false;
           }
+          case "WikiLink": {
+            if (touches(state, node.from, node.to)) return false;
+            const inner = node.getChild("WikiLinkTarget");
+            if (!inner) return false;
+            // Hide "[[" / "![[" and "]]"; with an alias, show only the alias.
+            decos.push(hidden.range(node.from, inner.from));
+            const pipe = state.sliceDoc(inner.from, inner.to).search(/\\?\|/);
+            if (pipe > 0) {
+              const aliasStart = state.sliceDoc(inner.from + pipe, inner.from + pipe + 1) === "\\" ? pipe + 2 : pipe + 1;
+              decos.push(hidden.range(inner.from, inner.from + aliasStart));
+            }
+            decos.push(hidden.range(inner.to, node.to));
+            return false;
+          }
           case "TaskMarker": {
             if (touches(state, node.from, node.to)) return;
             const checked = /x/i.test(state.sliceDoc(node.from + 1, node.from + 2));
