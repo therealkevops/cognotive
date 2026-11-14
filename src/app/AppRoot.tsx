@@ -1,10 +1,15 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useMemo } from "react";
+import { AuthProvider } from "@/components/auth/useAuth";
+import { SyncProvider } from "@/components/sync/useSync";
 import { VaultProvider } from "@/components/vault/useVault";
+import { VaultsProvider, useVaults } from "@/components/vault/useVaults";
+import { LocalStore } from "@/lib/vault/local-store";
 
 // The workspace depends on browser-only APIs (IndexedDB, localStorage), so it
-// renders on the client only. Phase 2 replaces the fixed vault with a vault switcher.
+// renders on the client only.
 const Workspace = dynamic(
   () => import("@/components/workspace/Workspace").then((m) => m.Workspace),
   {
@@ -13,10 +18,36 @@ const Workspace = dynamic(
   },
 );
 
+/** One vault's providers. Keyed by vault id, so switching vaults starts fresh. */
+function ActiveVault() {
+  const { active } = useVaults();
+  const store = useMemo(() => new LocalStore(active.id), [active.id]);
+  return (
+    <VaultProvider vaultId={active.id} store={store} seed={active.kind === "local"}>
+      {active.kind === "github" ? (
+        <SyncProvider config={active} store={store}>
+          <Workspace />
+        </SyncProvider>
+      ) : (
+        <Workspace />
+      )}
+    </VaultProvider>
+  );
+}
+
+function Vaults() {
+  const { active } = useVaults();
+  return <ActiveVault key={active.id} />;
+}
+
+const ClientOnlyVaults = dynamic(async () => Vaults, { ssr: false });
+
 export function AppRoot() {
   return (
-    <VaultProvider vaultId="default">
-      <Workspace />
-    </VaultProvider>
+    <AuthProvider>
+      <VaultsProvider>
+        <ClientOnlyVaults />
+      </VaultsProvider>
+    </AuthProvider>
   );
 }

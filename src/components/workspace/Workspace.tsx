@@ -1,14 +1,18 @@
 "use client";
 
 import type { EditorView } from "@codemirror/view";
-import { BookOpen, CodeXml, Files, PanelLeft, Pencil, Search, X } from "lucide-react";
+import { BookOpen, CodeXml, Files, PanelLeft, Pencil, Search, Settings, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { readPref, writePref } from "@/lib/prefs";
 import { extractHeadings } from "@/lib/markdown/outline";
 import { noteTitle } from "@/lib/vault/paths";
+import { SettingsDialog } from "../settings/SettingsDialog";
+import { SyncButton } from "../sync/SyncButton";
+import { useSync } from "../sync/useSync";
 import { useVault } from "../vault/useVault";
+import { VaultSwitcher } from "../vault/VaultSwitcher";
 import { FileTree } from "./FileTree";
 import { Outline } from "./Outline";
 import { QuickSwitcher } from "./QuickSwitcher";
@@ -38,6 +42,7 @@ export function Workspace() {
   );
   const [tab, setTab] = useState<SidebarTab>("files");
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [view, setView] = useState<EditorView | null>(null);
   const readingRef = useRef<HTMLDivElement>(null);
@@ -98,6 +103,7 @@ export function Workspace() {
 
   const sidebar = (
     <>
+      <VaultSwitcher onManage={() => setSettingsOpen(true)} />
       <div role="tablist" aria-label="Sidebar" className="mb-3 flex gap-1">
         {(
           [
@@ -129,6 +135,16 @@ export function Workspace() {
         </button>
       </div>
       <div className="min-h-0 flex-1">{tab === "files" ? <FileTree /> : <SearchPanel autoFocus />}</div>
+      <div className="-mx-1 mt-2 border-t border-border pt-2">
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-muted hover:bg-foreground/5 hover:text-foreground"
+          onClick={() => setSettingsOpen(true)}
+        >
+          <Settings size={15} aria-hidden />
+          Settings
+        </button>
+      </div>
     </>
   );
 
@@ -155,6 +171,7 @@ export function Workspace() {
             <span className="flex-1" />
           )}
           <SaveIndicator />
+          <SyncButton />
           {vault.active && (
             <div role="radiogroup" aria-label="View mode" className="flex rounded-md border border-border p-0.5">
               {MODES.map(({ id, label, icon: Icon }) => (
@@ -202,7 +219,8 @@ export function Workspace() {
         </div>
       </AppShell>
       {switcherOpen && <QuickSwitcher onClose={() => setSwitcherOpen(false)} />}
-      <ErrorToast />
+      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      <Toasts />
     </>
   );
 }
@@ -264,23 +282,61 @@ function EmptyState({ onCreate, onFind }: { onCreate(): void; onFind(): void }) 
   );
 }
 
-function ErrorToast() {
+const AUTH_ERRORS: Record<string, string> = {
+  not_configured: "GitHub sign-in isn't set up on this deployment yet.",
+  denied: "GitHub sign-in was cancelled.",
+  bad_state: "Sign-in expired or came from another tab. Please try again.",
+  not_allowed: "This GitHub account isn't allowed to use this app.",
+  failed: "GitHub sign-in failed. Please try again.",
+};
+
+/** Reads ?auth_error=... left by the sign-in callback, then removes it from the URL. */
+function useAuthError(): [string | null, () => void] {
+  const [message, setMessage] = useState<string | null>(() => {
+    const code = new URLSearchParams(window.location.search).get("auth_error");
+    return code ? (AUTH_ERRORS[code] ?? AUTH_ERRORS.failed) : null;
+  });
+  useEffect(() => {
+    if (!message) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("auth_error");
+    window.history.replaceState(null, "", url);
+  }, [message]);
+  return [message, () => setMessage(null)];
+}
+
+function Toasts() {
   const { error, clearError } = useVault();
+  const { notices, dismissNotices } = useSync();
+  const [authError, clearAuthError] = useAuthError();
   useEffect(() => {
     if (!error) return;
     const t = setTimeout(clearError, 6000);
     return () => clearTimeout(t);
   }, [error, clearError]);
-  if (!error) return null;
+
+  const toasts = [
+    ...(error ? [{ key: "error", text: error, tone: "error", dismiss: clearError }] : []),
+    ...(authError ? [{ key: "auth", text: authError, tone: "error", dismiss: clearAuthError }] : []),
+    ...notices.map((n, i) => ({ key: `n${i}`, text: n, tone: "info", dismiss: dismissNotices })),
+  ];
+  if (!toasts.length) return null;
   return (
-    <div
-      role="alert"
-      className="fixed right-4 bottom-4 z-50 flex max-w-sm items-start gap-3 rounded-lg border border-red-300 bg-background px-4 py-3 text-sm shadow-lg dark:border-red-800"
-    >
-      <span className="flex-1">{error}</span>
-      <button type="button" className="icon-button h-6 w-6" aria-label="Dismiss" onClick={clearError}>
-        <X size={14} aria-hidden />
-      </button>
+    <div className="fixed right-4 bottom-4 z-50 flex max-w-sm flex-col gap-2">
+      {toasts.map((t) => (
+        <div
+          key={t.key}
+          role={t.tone === "error" ? "alert" : "status"}
+          className={`flex items-start gap-3 rounded-lg border bg-background px-4 py-3 text-sm shadow-lg ${
+            t.tone === "error" ? "border-red-300 dark:border-red-800" : "border-border"
+          }`}
+        >
+          <span className="flex-1">{t.text}</span>
+          <button type="button" className="icon-button h-6 w-6" aria-label="Dismiss" onClick={t.dismiss}>
+            <X size={14} aria-hidden />
+          </button>
+        </div>
+      ))}
     </div>
   );
 }

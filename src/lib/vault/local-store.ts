@@ -47,6 +47,26 @@ export class LocalStore implements VaultStore {
     return file;
   }
 
+  /**
+   * Compare-and-set for sync: writes `content` (or deletes, if null) only if the
+   * file still holds `expected` (undefined = must not exist). Returns false, and
+   * changes nothing, if the user edited the file in the meantime.
+   */
+  async writeIf(path: string, expected: string | undefined, content: string | null): Promise<boolean> {
+    const p = normalizePath(path);
+    const db = await this.db;
+    const tx = db.transaction("files", "readwrite");
+    const current = await tx.store.get(p);
+    if (current?.content !== expected) {
+      await tx.done;
+      return false;
+    }
+    if (content === null) await tx.store.delete(p);
+    else await tx.store.put({ path: p, content, mtime: this.now() });
+    await tx.done;
+    return true;
+  }
+
   async createFolder(path: string): Promise<void> {
     const p = normalizePath(path);
     if (!p) return;
