@@ -1,4 +1,4 @@
-import { basename, dirname, extname, isMarkdown, normalizePath } from "../vault/paths";
+import { basename, dirname, extname, isMarkdown, joinRelative, normalizePath } from "../vault/paths";
 
 /**
  * Resolves link targets to vault paths the way Obsidian does:
@@ -32,6 +32,14 @@ export class Resolver {
     else this.byName.delete(key);
   }
 
+  /** The file at exactly `path` (case-insensitive), if any. */
+  private exact(path: string): string | null {
+    if (this.paths.has(path)) return path;
+    const lower = path.toLowerCase();
+    for (const p of this.byName.get(Resolver.key(basename(path))) ?? []) if (p.toLowerCase() === lower) return p;
+    return null;
+  }
+
   list(): string[] {
     return [...this.paths];
   }
@@ -41,6 +49,12 @@ export class Resolver {
   }
 
   resolve(target: string, from?: string): string | null {
+    // "./x" and "../x" are relative to the linking note, as on GitHub.
+    if (/^\.\.?\//.test(target.trim())) {
+      const joined = joinRelative(from ? dirname(from) : "", target.trim());
+      if (joined === null) return null;
+      return this.exact(joined) ?? this.exact(`${joined}.md`);
+    }
     let t: string;
     try {
       t = normalizePath(target);
@@ -65,6 +79,13 @@ export class Resolver {
     }
     if (matches.length <= 1) return matches[0] ?? null;
     const folder = from ? dirname(from) : null;
+    // A path that matches relative to the linking note's folder (markdown links) wins.
+    if (t.includes("/") && folder !== null) {
+      const rel = joinRelative(folder, t);
+      const r = rel?.toLowerCase();
+      const hit = r && matches.find((p) => p.toLowerCase() === r || p.toLowerCase() === `${r}.md`);
+      if (hit) return hit;
+    }
     return (
       matches.find((p) => dirname(p) === folder) ??
       [...matches].sort((a, b) => a.split("/").length - b.split("/").length || a.length - b.length)[0]

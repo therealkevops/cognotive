@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { formatLink } from "@/lib/links/format";
 import type { Backlink, Mention } from "@/lib/links/link-index";
 import { noteTitle } from "@/lib/vault/paths";
 import { useVault } from "../vault/useVault";
@@ -82,7 +83,7 @@ export function LinksPanel({
     const content = vault.links.content(m.source);
     if (content === undefined || content.slice(m.from, m.from + m.text.length) !== m.text) return;
     const target = vault.links.linkText(path);
-    const link = target.toLowerCase() === m.text.toLowerCase() && target === m.text ? `[[${target}]]` : `[[${target}|${m.text}]]`;
+    const link = formatLink(vault.settings.linkFormat, m.source, { path, target, alias: target === m.text ? undefined : m.text }, target);
     await vault.writeNote(m.source, content.slice(0, m.from) + link + content.slice(m.from + m.text.length));
   };
 

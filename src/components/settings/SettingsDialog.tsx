@@ -174,6 +174,19 @@ function ThisVaultSection() {
         <Field label="Daily note template" hint="A note path, e.g. Templates/Daily.md. Empty for none.">
           <input className="input" value={draft.dailyTemplate} onChange={(e) => setDraft({ ...draft, dailyTemplate: e.target.value })} />
         </Field>
+        <Field
+          label="New links use"
+          hint="Markdown links also work on github.com. Existing links stay as they are; the command palette can convert a note."
+        >
+          <select
+            className="input"
+            value={draft.linkFormat}
+            onChange={(e) => setDraft({ ...draft, linkFormat: e.target.value as typeof draft.linkFormat })}
+          >
+            <option value="wikilink">Wikilinks: [[Note]]</option>
+            <option value="markdown">Markdown links: [Note](Note.md)</option>
+          </select>
+        </Field>
         <Field label="New notes from links go in">
           <select
             className="input"

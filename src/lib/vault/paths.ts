@@ -16,6 +16,31 @@ export function normalizePath(path: string): string {
   return parts.join("/");
 }
 
+/**
+ * Joins a relative path ("../Other/Note.md", "./Sub/Note.md") onto `folder`;
+ * null if it climbs above the vault root.
+ */
+export function joinRelative(folder: string, rel: string): string | null {
+  const out = folder ? folder.split("/") : [];
+  for (const part of rel.split("/")) {
+    if (part === "" || part === ".") continue;
+    if (part === "..") {
+      if (!out.length) return null;
+      out.pop();
+    } else out.push(part);
+  }
+  return out.join("/");
+}
+
+/** The relative path from `fromFolder` to `to`, like "../Other/Note.md". */
+export function relativePath(fromFolder: string, to: string): string {
+  const a = fromFolder ? fromFolder.split("/") : [];
+  const b = to.split("/");
+  let i = 0;
+  while (i < a.length && i < b.length - 1 && a[i] === b[i]) i++;
+  return [...a.slice(i).map(() => ".."), ...b.slice(i)].join("/");
+}
+
 export function basename(path: string): string {
   const i = path.lastIndexOf("/");
   return i === -1 ? path : path.slice(i + 1);

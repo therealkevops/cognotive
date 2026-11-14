@@ -16,6 +16,8 @@ export interface VaultSettings {
   /** Where a note created from a link goes: the linking note's folder, the vault root, or `newNoteFolder`. */
   newNoteLocation: "current" | "root" | "folder";
   newNoteFolder: string;
+  /** How new links are written: [[wikilinks]], or [markdown](links.md) that also work on github.com. */
+  linkFormat: "wikilink" | "markdown";
 }
 
 export const SETTINGS_PATH = ".noted/settings.json";
@@ -29,6 +31,7 @@ export const DEFAULT_SETTINGS: VaultSettings = {
   drawingSvgCopy: false,
   newNoteLocation: "current",
   newNoteFolder: "",
+  linkFormat: "wikilink",
 };
 
 export function parseSettings(text: string | undefined): VaultSettings {
@@ -41,6 +44,7 @@ export function parseSettings(text: string | undefined): VaultSettings {
       if (typeof v === typeof DEFAULT_SETTINGS[key]) (out as Record<string, unknown>)[key] = v;
     }
     if (!["current", "root", "folder"].includes(out.newNoteLocation)) out.newNoteLocation = "current";
+    if (out.linkFormat !== "wikilink" && out.linkFormat !== "markdown") out.linkFormat = "wikilink";
     return out;
   } catch {
     return { ...DEFAULT_SETTINGS };

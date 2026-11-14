@@ -26,6 +26,7 @@ import { EMPTY_HISTORY, goBack, goForward, renameInHistory, visit, type NavHisto
 import { readPref, writePref } from "@/lib/prefs";
 import type { LinkHost } from "@/lib/editor/wikilinks";
 import type { LinkContext } from "@/lib/markdown/remark-links";
+import { convertLinks, formatLink, markdownLink } from "@/lib/links/format";
 import { splitLinkText } from "@/lib/links/parse";
 import { splitFrontmatter } from "@/lib/markdown/frontmatter";
 import { extractHeadings } from "@/lib/markdown/outline";
@@ -396,6 +397,14 @@ export function Workspace() {
       linkText: (p) => (vault.entries.some((e) => e.path === p && e.kind === "file") ? vault.links.linkText(p) : null),
       linkSelection: () => setLinkPickerOpen(true),
       currentPath: () => vault.active?.path ?? null,
+      formatLink: (inner, embed) => {
+        const from = vault.active?.path;
+        if (vault.settings.linkFormat !== "markdown" || !from) return null;
+        const { target, heading, block, alias } = splitLinkText(inner);
+        if (!target) return null; // "[[#Heading]]" within the note stays a wikilink
+        const path = vault.links.resolve(target, from);
+        return markdownLink(from, { path, target, sub: heading ?? (block ? `^${block}` : undefined), alias, embed });
+      },
       noteContent: (p) => (isNote(p) ? vault.links.content(p) : undefined),
       addBlockId: (p, block, id) => {
         const content = vault.links.content(p);
@@ -448,13 +457,17 @@ export function Workspace() {
     [vault, openLink, recent, inbound],
   );
 
-  /** Links the editor's selection to `path`: "[[Note|selection]]", or "[[Note]]" if nothing (or the link text) is selected. */
+  /**
+   * Links the editor's selection to `path`, in the vault's link format:
+   * "[[Note|selection]]", or "[[Note]]" if nothing (or the link text) is selected.
+   */
   const linkSelectionTo = (path: string) => {
     if (!view) return;
     const target = vault.links.linkText(path);
     const { from, to } = view.state.selection.main;
     const selected = view.state.sliceDoc(from, to).trim();
-    const insert = !selected || selected === target ? `[[${target}]]` : `[[${target}|${selected}]]`;
+    const alias = !selected || selected === target ? undefined : selected;
+    const insert = formatLink(vault.settings.linkFormat, activePathNow ?? "", { path, target, alias }, target);
     view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length }, userEvent: "input" });
     view.focus();
   };
@@ -626,6 +639,17 @@ export function Workspace() {
     );
   };
 
+  /** Rewrites every link in the open note in one format (one undoable edit in the editor). */
+  const convertActiveLinks = (to: "markdown" | "wikilink") => {
+    if (!activePathNow) return;
+    const from = activePathNow;
+    const text = view && mode !== "reading" ? view.state.doc.toString() : vault.activeText;
+    const next = convertLinks(text, from, to, (t) => vault.links.resolve(t, from), (p) => vault.links.linkText(p));
+    if (next === text) return;
+    if (view && mode !== "reading") view.dispatch({ changes: { from: 0, to: text.length, insert: next }, userEvent: "input" });
+    else void vault.writeNote(from, next);
+  };
+
   /** Command palette entries (data only) and what each does. */
   const commands: Array<PickerItem & { when?: boolean }> = [
     { id: "new-note", label: "New note", hint: "Ctrl/Cmd+Alt+N" },
@@ -637,6 +661,8 @@ export function Workspace() {
     },
     { id: "template", label: "Insert template…", when: editing },
     { id: "link-selection", label: "Link selection to a note…", hint: "Ctrl/Cmd+Shift+K", when: editing },
+    { id: "links-to-markdown", label: "Convert links in this note to markdown links", when: kind === "note" },
+    { id: "links-to-wikilinks", label: "Convert links in this note to wikilinks", when: kind === "note" },
     { id: "switcher", label: "Open a note…", hint: "Ctrl/Cmd+O" },
     {
       id: "search",
@@ -676,6 +702,8 @@ export function Workspace() {
     "daily-yesterday": () => void openDaily(new Date(Date.now() - 86_400_000)),
     template: () => setTemplatesOpen(true),
     "link-selection": () => setLinkPickerOpen(true),
+    "links-to-markdown": () => convertActiveLinks("markdown"),
+    "links-to-wikilinks": () => convertActiveLinks("wikilink"),
     switcher: () => setSwitcherOpen(true),
     search: () => {
       setTab("search");

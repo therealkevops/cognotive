@@ -49,6 +49,7 @@ export default function MarkdownEditor({
       linkText: (p) => (linksRef.current?.linkText ? linksRef.current.linkText(p) : p.replace(/\.md$/i, "")),
       linkSelection: () => linksRef.current?.linkSelection?.(),
       currentPath: () => linksRef.current?.currentPath?.() ?? null,
+      formatLink: (inner, embed) => linksRef.current?.formatLink?.(inner, embed) ?? null,
       noteContent: (p) => linksRef.current?.noteContent?.(p),
       addBlockId: (p, b, id) => linksRef.current?.addBlockId?.(p, b, id),
       notes: () => linksRef.current?.notes() ?? [],

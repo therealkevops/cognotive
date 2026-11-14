@@ -1,6 +1,6 @@
 import { drawingJson, isObsidianDrawing, replaceScene } from "../drawing/obsidian";
 import { parseDrawing, rewriteDrawingLinks } from "../drawing/parse";
-import { drawingName, isDrawing, isNote, noteTitle } from "../vault/paths";
+import { dirname, drawingName, isDrawing, isNote, noteTitle, relativePath } from "../vault/paths";
 import { parseNote, splitLinkText, type ParsedLink, type ParsedNote } from "./parse";
 import { Resolver } from "./resolve";
 
@@ -304,7 +304,7 @@ export class LinkIndex {
       for (const link of e.parsed.links) {
         if (!link.target || resolveOld(link.target, source) !== oldPath) continue;
         const raw = e.content.slice(link.from, link.to);
-        edits.push({ from: link.from, to: link.to, insert: retarget(raw, link, newText, newPath) });
+        edits.push({ from: link.from, to: link.to, insert: retarget(raw, link, newText, newPath, source) });
       }
       if (!edits.length) continue;
       let text = e.content;
@@ -349,15 +349,16 @@ export class LinkIndex {
   }
 }
 
-function retarget(raw: string, link: ParsedLink, newText: string, newPath: string): string {
+function retarget(raw: string, link: ParsedLink, newText: string, newPath: string, source: string): string {
   const sub = link.block ? `#^${link.block}` : link.heading ? `#${link.heading}` : "";
   if (link.kind === "wikilink") {
     const alias = link.alias ? `|${link.alias}` : "";
     return `${link.embed ? "!" : ""}[[${newText}${sub}${alias}]]`;
   }
-  // Markdown link: keep the label, point at the new path (URL-encoded spaces).
+  // Markdown link: keep the label, point at the new path, relative to the
+  // linking note (as github.com reads it), with spaces URL-encoded.
   const label = raw.slice(raw.indexOf("[") + 1, raw.indexOf("]("));
-  const href = newPath.split("/").map(encodeURIComponent).join("/") + (sub ? encodeURI(sub) : "");
+  const href = relativePath(dirname(source), newPath).split("/").map(encodeURIComponent).join("/") + (sub ? encodeURI(sub) : "");
   return `${link.embed ? "!" : ""}[${label}](${href})`;
 }
 

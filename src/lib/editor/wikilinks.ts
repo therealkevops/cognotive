@@ -43,6 +43,11 @@ export interface LinkHost {
   notes(): Array<{ title: string; path: string; aliases: string[]; linkText: string; recentRank?: number; inbound?: number }>;
   /** The shortest unambiguous link text for a file dragged in from the file tree; null for a folder. */
   linkText?(path: string): string | null;
+  /**
+   * The vault's link format applied to a wikilink: given "Note#Heading|alias",
+   * the link to insert instead (a markdown link), or null to keep the wikilink.
+   */
+  formatLink?(inner: string, embed: boolean): string | null;
   /** The path of the note being edited. */
   currentPath?(): string | null;
   /** The saved text of another note, for listing its blocks. */
@@ -369,6 +374,7 @@ function completeLinks(ctx: CompletionContext): CompletionResult | null {
         view.dispatch({
           changes: { from: f, to: t, insert },
           selection: { anchor: f + insert.length + (closing ? 0 : 2) },
+          userEvent: "input.complete",
         });
       },
     }));
@@ -380,6 +386,7 @@ function completeLinks(ctx: CompletionContext): CompletionResult | null {
     view.dispatch({
       changes: { from: f, to: t, insert },
       selection: { anchor: f + insert.length + (closing ? 0 : 2) },
+      userEvent: "input.complete",
     });
   };
   const options: Completion[] = [];
@@ -582,7 +589,8 @@ const fileDrops = EditorView.domEventHandlers({
       const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? view.state.selection.main.head;
       const text = host.linkText ? host.linkText(dragged) : dragged.replace(/\.md$/i, "");
       if (!text) return true; // a folder: nothing to link
-      const insert = `${/\.(png|jpe?g|gif|webp|svg|avif|bmp|excalidraw)$/i.test(dragged) || /\.excalidraw\.md$/i.test(dragged) ? "!" : ""}[[${text}]]`;
+      const embed = /\.(png|jpe?g|gif|webp|svg|avif|bmp|excalidraw)$/i.test(dragged) || /\.excalidraw\.md$/i.test(dragged);
+      const insert = host.formatLink?.(text, embed) ?? `${embed ? "!" : ""}[[${text}]]`;
       view.dispatch({ changes: { from: pos, insert }, selection: { anchor: pos + insert.length }, userEvent: "input.drop" });
       view.focus();
       return true;
@@ -602,7 +610,7 @@ async function insertFiles(view: EditorView, host: LinkHost, files: File[], from
   // Keep embeds on their own line when dropped in front of existing text.
   const line = view.state.doc.lineAt(to);
   const tail = to < line.to ? "\n" : "";
-  const insert = links.map((l) => `![[${l}]]`).join("\n") + tail;
+  const insert = links.map((l) => host.formatLink?.(l, true) ?? `![[${l}]]`).join("\n") + tail;
   view.dispatch({
     changes: { from, to, insert },
     selection: { anchor: from + insert.length - tail.length },
@@ -647,10 +655,41 @@ const linkSelectionKey = Prec.high(
   ]),
 );
 
+/**
+ * With markdown links chosen for the vault, a link picked from the [[
+ * suggestions is turned into a markdown link as soon as it's complete.
+ */
+const markdownAfterComplete = ViewPlugin.fromClass(
+  class {
+    update(u: ViewUpdate) {
+      if (!u.transactions.some((tr) => tr.isUserEvent("input.complete"))) return;
+      const host = u.state.facet(linkHost);
+      if (!host?.formatLink) return;
+      const head = u.state.selection.main.head;
+      const wl = head > 0 ? wikiLinkAt(u.state, head - 1, -1) : null;
+      if (!wl || wl.to !== head) return;
+      const embed = u.state.sliceDoc(wl.from, wl.from + 1) === "!";
+      const replacement = host.formatLink(u.state.sliceDoc(wl.innerFrom, wl.innerTo), embed);
+      if (!replacement) return;
+      const view = u.view;
+      // Can't dispatch during an update; do it right after.
+      queueMicrotask(() => {
+        if (view.state.sliceDoc(wl.from, wl.to) !== u.state.sliceDoc(wl.from, wl.to)) return;
+        view.dispatch({
+          changes: { from: wl.from, to: wl.to, insert: replacement },
+          selection: { anchor: wl.from + replacement.length },
+          userEvent: "input.complete.format",
+        });
+      });
+    }
+  },
+);
+
 export function wikilinkExtensions(): Extension {
   return [
     wrapSelection,
     linkSelectionKey,
+    markdownAfterComplete,
     linkMarks,
     linkClicks,
     followKeys,
