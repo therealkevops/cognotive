@@ -457,3 +457,19 @@ mark {
     width: 2.25rem;
   }
 }
+
+/* Our buttons in Excalidraw's top-right corner, styled like its own controls. */
+.excalidraw .drawing-tool {
+  display: inline-flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--border-radius-lg, 0.5rem);
+  background: var(--island-bg-color, var(--surface));
+  box-shadow: var(--shadow-island, 0 1px 3px rgb(0 0 0 / 0.15));
+  color: var(--icon-fill-color, var(--foreground));
+}
+.excalidraw .drawing-tool:hover {
+  background: var(--button-hover-bg, var(--surface));
+}

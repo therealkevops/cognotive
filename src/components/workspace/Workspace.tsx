@@ -39,6 +39,8 @@ import {
   noteTitle,
 } from "@/lib/vault/paths";
 import { drawingJson, isObsidianDrawing, replaceScene } from "@/lib/drawing/obsidian";
+import { drawingName } from "@/lib/vault/paths";
+import type { DrawingVault } from "./DrawingView";
 import { fillTemplate, formatDate } from "@/lib/vault/settings";
 import { GraphDialog, LocalGraph } from "../graph/GraphDialog";
 import { SettingsDialog } from "../settings/SettingsDialog";
@@ -312,6 +314,48 @@ export function Workspace() {
     }),
     [vault, openLink],
   );
+
+  // What a drawing needs to link to notes and place vault pictures, as in Obsidian.
+  const drawingVault = useMemo<DrawingVault>(() => {
+    const describe = (p: string) => ({
+      path: p,
+      title: isDrawing(p) ? drawingName(p) : isNote(p) ? noteTitle(p) : basename(p),
+      linkText: vault.links.linkText(p),
+      folder: dirname(p),
+    });
+    return {
+      notes: () =>
+        vault.links
+          .paths()
+          .filter((p) => p !== vault.active?.path)
+          .sort()
+          .map(describe),
+      pictures: () =>
+        vault.entries
+          .filter(
+            (e) =>
+              e.kind === "file" &&
+              e.path !== vault.active?.path &&
+              (isImage(e.path) || isDrawing(e.path)) &&
+              !e.path.split("/").some((seg) => seg.startsWith(".")),
+          )
+          .map((e) => describe(e.path))
+          .sort((a, b) => a.title.localeCompare(b.title)),
+      pictureData: async (p) => {
+        // Drawings come back as an SVG rendering; embed the light version, like an exported image.
+        const url = await vault.fileUrl(p, { dark: false });
+        if (!url) return null;
+        const blob = await (await fetch(url)).blob();
+        const dataURL = await new Promise<string>((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result as string);
+          r.onerror = () => reject(r.error);
+          r.readAsDataURL(blob);
+        });
+        return { dataURL, mimeType: blob.type || "image/png" };
+      },
+    };
+  }, [vault]);
 
   const linkContext = useMemo<LinkContext>(
     () => ({
@@ -624,6 +668,7 @@ export function Workspace() {
                     vault.edit(isObsidianDrawing(activePathNow!) ? replaceScene(vault.activeText, json) : json)
                   }
                   onOpenLink={(t, h) => void openLink(t, h)}
+                  vault={drawingVault}
                 />
               ) : kind === "file" ? (
                 <FileView path={vault.active.path} />
