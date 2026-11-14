@@ -17,6 +17,8 @@ Select text and use the toolbar, or the shortcuts:
 | Heading 1–3 | Ctrl/Cmd + Alt + 1–3 |
 | Bullet / numbered / task list | Ctrl/Cmd + Shift + 8 / 7 / 9 |
 | Tick a task | Ctrl/Cmd + Enter |
+| Follow the link at the cursor | Alt + Enter |
+| Back / forward | Ctrl/Cmd + Alt + ← / → |
 | Reading view | Ctrl/Cmd + E |
 | Quick switcher | Ctrl/Cmd + O |
 | Search all notes | Ctrl/Cmd + Shift + F |
@@ -52,10 +54,13 @@ aliases: [Links]
 # Linking notes
 
 Type \`[[\` to link another note, such as [[Welcome]]. Links to notes that don't exist yet,
-like [[Ideas]], are shown dashed: click one to create the note.
+like [[Ideas]], are shown dashed: open one to create the note.
 
 - [[Welcome#Formatting|Link to a heading]] with \`#\`, and change the text with \`|\`.
-- Ctrl/Cmd-click a link in the editor to follow it, or click it in live preview.
+- Click a link in live preview to edit it; click the ↗ after it, or press Alt+Enter, to follow it.
+  (Settings can make a click follow the link instead.)
+- Ctrl/Cmd-click opens a link in a new tab, Ctrl/Cmd+Alt-click in the side pane.
+- Back and forward (the arrows by the title) retrace the notes you've followed.
 - Tag notes with #guide or nested tags like #area/home.
 - The **Links** panel on the right lists backlinks, unlinked mentions and outgoing links.
 - Renaming a note updates every link to it.

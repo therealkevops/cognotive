@@ -2,6 +2,8 @@
 
 import type { EditorView } from "@codemirror/view";
 import {
+  ArrowLeft,
+  ArrowRight,
   BookOpen,
   CalendarDays,
   CodeXml,
@@ -18,7 +20,9 @@ import {
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { isDark } from "@/lib/appearance";
+import { isDark, loadAppearance } from "@/lib/appearance";
+import type { OpenHow } from "@/lib/links/open";
+import { EMPTY_HISTORY, goBack, goForward, renameInHistory, visit, type NavHistory } from "@/lib/nav/history";
 import { readPref, writePref } from "@/lib/prefs";
 import type { LinkHost } from "@/lib/editor/wikilinks";
 import type { LinkContext } from "@/lib/markdown/remark-links";
@@ -116,6 +120,18 @@ export function Workspace() {
   const vaults = useVaults();
   /** Latest openDaily, for the keyboard shortcut handler. */
   const openDailyRef = useRef<() => Promise<void>>(async () => {});
+  /** Back/Forward through visited notes. */
+  const [nav, setNav] = useState<NavHistory>(EMPTY_HISTORY);
+  /**
+   * Why the next note is being opened, if not the default (a new tab): following
+   * a link in this tab, or stepping Back/Forward. Applies only once `path` opens.
+   */
+  const [navIntent, setNavIntent] = useState<{ path: string; kind: "replace" | "history" } | null>(null);
+  /** Where each note was scrolled to, so Back and Forward return there. */
+  const scrollPositions = useRef(new Map<string, number>());
+  const [pendingScroll, setPendingScroll] = useState<{ path: string; top: number } | null>(null);
+  /** Latest Back/Forward, for the keyboard and mouse-button handlers. */
+  const navigateRef = useRef<(dir: "back" | "forward") => void>(() => {});
 
   const setMode = useCallback((m: Mode) => {
     setModeState(m);
@@ -154,10 +170,23 @@ export function Workspace() {
       } else if (e.code === "KeyN" && e.altKey) {
         e.preventDefault();
         void vault.createNote();
+      } else if ((key === "arrowleft" || key === "arrowright") && e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        navigateRef.current(key === "arrowleft" ? "back" : "forward");
       }
     };
+    // The mouse's own Back and Forward buttons.
+    const onMouse = (e: MouseEvent) => {
+      if (e.button !== 3 && e.button !== 4) return;
+      e.preventDefault();
+      navigateRef.current(e.button === 3 ? "back" : "forward");
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("mouseup", onMouse);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mouseup", onMouse);
+    };
   }, [mode, lastEditMode, setMode, vault]);
 
   // Close the mobile sidebar after opening a note from it.
@@ -166,11 +195,17 @@ export function Workspace() {
   if (seenPath !== activePath) {
     setSeenPath(activePath);
     setSidebarOpen(false);
-    // Keep a tab for every opened file; a rename replaces its tab in place.
+    const renamed = !!seenPath && !!activePath && !vault.exists(seenPath);
+    const intent = navIntent && navIntent.path === activePath ? navIntent.kind : null;
+    if (navIntent) setNavIntent(null);
+    if (renamed) setNav((h) => renameInHistory(h, seenPath, activePath));
+    else if (intent !== "history") setNav((h) => visit(h, seenPath ?? null));
+    // Keep a tab for every opened file. A rename, a link followed in this tab, and
+    // Back/Forward replace the current tab; anything else opens a new one.
     if (activePath) {
       setTabs((t) => {
         if (t.includes(activePath)) return t;
-        if (seenPath && t.includes(seenPath) && !vault.exists(seenPath))
+        if (seenPath && t.includes(seenPath) && (renamed || intent))
           return t.map((x) => (x === seenPath ? activePath : x));
         const at = seenPath ? t.indexOf(seenPath) : -1;
         return at === -1 ? [...t, activePath] : [...t.slice(0, at + 1), activePath, ...t.slice(at + 1)];
@@ -219,16 +254,23 @@ export function Workspace() {
     [mode, vault.activeText, view],
   );
 
-  /** Follows a link: opens the note it resolves to, or creates it. Then scrolls to `heading`. */
+  /**
+   * Follows a link: opens the note it resolves to, or creates it, then scrolls
+   * to `heading`. `how`: in this tab (default), a new tab, or the side pane.
+   */
   const openLink = useCallback(
-    async (target: string, heading?: string) => {
+    async (target: string, heading?: string, how: OpenHow = "here") => {
       const from = vault.active?.path;
       const path = target ? vault.links.resolve(target, from) : (from ?? null);
       if (path) {
+        if (how === "side" && path !== from) {
+          setSidePath(path);
+          return;
+        }
         if (heading && isNote(path)) setPendingHeading(heading);
-        if (path === from && heading) return;
-        if (path !== from) await vault.open(path);
-        else if (heading) setPendingHeading(heading);
+        if (path === from) return;
+        if (how === "here") setNavIntent({ path, kind: "replace" });
+        await vault.open(path);
         return;
       }
       const clean = target.replace(/\.md$/i, "");
@@ -263,6 +305,46 @@ export function Workspace() {
     return () => cancelAnimationFrame(id);
   }, [pendingHeading, vault.active, vault.activeText, jumpTo, mode, view]);
 
+  /** Back or Forward to the previous or next visited note, at the scroll position you left it. */
+  const navigate = (dir: "back" | "forward") => {
+    const step = (dir === "back" ? goBack : goForward)(nav, activePath ?? null, (p) => vault.exists(p));
+    if (!step) return;
+    setNav(step.history);
+    setNavIntent({ path: step.path, kind: "history" });
+    setPendingScroll({ path: step.path, top: scrollPositions.current.get(step.path) ?? 0 });
+    void vault.open(step.path);
+  };
+  useEffect(() => {
+    navigateRef.current = navigate;
+  });
+
+  /** The element that scrolls the open note: the editor's scroller, or the page area. */
+  const scroller = useCallback((): HTMLElement | null => {
+    const cm = view?.scrollDOM;
+    if (mode !== "reading" && cm && cm.isConnected && cm.scrollHeight > cm.clientHeight) return cm;
+    return readingRef.current;
+  }, [mode, view]);
+
+  // After Back/Forward, restore the scroll position once the note has rendered.
+  useEffect(() => {
+    if (!pendingScroll || pendingScroll.path !== activePath) return;
+    let tries = 0;
+    let id: ReturnType<typeof setTimeout>;
+    const apply = () => {
+      const el = scroller();
+      if (el && (el.scrollHeight - el.clientHeight >= pendingScroll.top || tries >= 20)) {
+        el.scrollTop = pendingScroll.top;
+        setPendingScroll(null);
+      } else {
+        tries++;
+        id = setTimeout(apply, 50);
+      }
+    };
+    // Wait for the editor to finish loading the note (it scrolls new notes to the top).
+    id = setTimeout(apply, 50);
+    return () => clearTimeout(id);
+  }, [pendingScroll, activePath, scroller]);
+
   const showTag = useCallback((tag: string) => {
     setSearchQuery(`tag:${tag}`);
     setTab("search");
@@ -273,7 +355,8 @@ export function Workspace() {
   const linkHost = useMemo<LinkHost>(
     () => ({
       resolve: (t) => vault.links.resolve(t, vault.active?.path),
-      open: (t, h) => void openLink(t, h),
+      open: (t, h, how) => void openLink(t, h, how),
+      clickFollows: () => loadAppearance().linkClick === "follow",
       notes: () =>
         vault.links
           .paths()
@@ -606,6 +689,28 @@ export function Workspace() {
             >
               <PanelLeft size={18} aria-hidden />
             </button>
+            <div className="flex items-center">
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Back"
+                title="Back (Ctrl/Cmd+Alt+←)"
+                disabled={!nav.back.some((p) => p !== activePath && vault.exists(p))}
+                onClick={() => navigate("back")}
+              >
+                <ArrowLeft size={16} aria-hidden />
+              </button>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Forward"
+                title="Forward (Ctrl/Cmd+Alt+→)"
+                disabled={!nav.forward.some((p) => p !== activePath && vault.exists(p))}
+                onClick={() => navigate("forward")}
+              >
+                <ArrowRight size={16} aria-hidden />
+              </button>
+            </div>
             {vault.active ? (
               <TitleInput key={vault.active.path} path={vault.active.path} />
             ) : (
@@ -655,6 +760,12 @@ export function Workspace() {
             <div
               className={`min-h-0 min-w-0 flex-1 ${kind === "drawing" ? "overflow-hidden" : "overflow-y-auto"}`}
               ref={readingRef}
+              onScrollCapture={(e) => {
+                const el = e.target as HTMLElement;
+                if (activePathNow && (el === readingRef.current || el.classList.contains("cm-scroller"))) {
+                  scrollPositions.current.set(activePathNow, el.scrollTop);
+                }
+              }}
             >
               {!vault.ready ? (
                 <p className="p-8 text-muted">Loading vault…</p>
@@ -678,7 +789,7 @@ export function Workspace() {
                   markdown={vault.activeText}
                   links={linkContext}
                   properties={vault.links.get(vault.active.path)?.properties}
-                  onOpenLink={(t, h) => void openLink(t, h)}
+                  onOpenLink={(t, h, how) => void openLink(t, h, how)}
                   onTag={showTag}
                   fileUrl={(p) => vault.fileUrl(p, { dark: prefersDark() })}
                   onOpenFile={(p) => void vault.open(p)}

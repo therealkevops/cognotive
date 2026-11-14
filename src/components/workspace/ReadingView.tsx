@@ -2,6 +2,7 @@
 
 import "katex/dist/katex.min.css";
 import { useEffect, useMemo, useRef, type MouseEvent } from "react";
+import { openHow, type OpenHow } from "@/lib/links/open";
 import { splitLinkText } from "@/lib/links/parse";
 import { isDark } from "@/lib/appearance";
 import { renderMarkdown } from "@/lib/markdown/render";
@@ -45,7 +46,8 @@ export interface ReadingViewProps {
   markdown: string;
   links?: LinkContext;
   properties?: Record<string, unknown>;
-  onOpenLink?(target: string, heading?: string): void;
+  /** `how`: this tab, a new tab (Ctrl/Cmd or middle click), or the side pane (Ctrl/Cmd+Alt). */
+  onOpenLink?(target: string, heading?: string, how?: OpenHow): void;
   onTag?(tag: string): void;
   /** Loads embedded images and drawings (rendered with only a vault path). */
   fileUrl?(path: string): Promise<string | null>;
@@ -95,7 +97,7 @@ export default function ReadingView({
     if (a.classList.contains("internal-link")) {
       e.preventDefault();
       const { target, heading, block } = splitLinkText(a.dataset.href ?? "");
-      onOpenLink?.(target, heading ?? (block ? `^${block}` : undefined));
+      onOpenLink?.(target, heading ?? (block ? `^${block}` : undefined), openHow(e));
     } else if (a.classList.contains("tag")) {
       e.preventDefault();
       onTag?.(a.dataset.tag ?? "");
@@ -120,6 +122,8 @@ export default function ReadingView({
         className="prose-note"
         data-testid="reading-view"
         onClick={onClick}
+        // Middle click: open the link in a new tab.
+        onAuxClick={(e) => e.button === 1 && onClick(e)}
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </div>

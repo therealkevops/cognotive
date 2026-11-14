@@ -11,19 +11,27 @@ import {
   type DecorationSet,
   EditorView,
   hoverTooltip,
+  keymap,
   ViewPlugin,
   type ViewUpdate,
+  WidgetType,
 } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import type { MarkdownConfig } from "@lezer/markdown";
+import { hasModKey, openHow, type OpenHow } from "../links/open";
 import { splitLinkText } from "../links/parse";
 
 /** What the editor needs from the app to work with links. */
 export interface LinkHost {
   /** Resolves a link target from the current note; null if no such note. */
   resolve(target: string): string | null;
-  /** Opens a link target, creating the note if needed. `sub` is a heading, or "^id" for a block. */
-  open(target: string, sub?: string): void;
+  /**
+   * Opens a link target, creating the note if needed. `sub` is a heading, or
+   * "^id" for a block. `how`: this tab (default), a new tab, or the side pane.
+   */
+  open(target: string, sub?: string, how?: OpenHow): void;
+  /** Whether a plain click on a link in live preview follows it (true) or edits it. */
+  clickFollows?(): boolean;
   /** Notes to offer when typing "[[". */
   notes(): Array<{ title: string; path: string; aliases: string[]; linkText: string }>;
   headings(path: string): string[];
@@ -115,20 +123,75 @@ export function wikiLinkAt(state: EditorState, pos: number, side: -1 | 1 = 1): W
   return null;
 }
 
+/** Event a page sends when settings that change how links behave are saved. */
+const SETTINGS_EVENT = "noted-appearance";
+
+/** The ↗ button after a link in live preview, when a plain click edits links. */
+class FollowWidget extends WidgetType {
+  constructor(
+    readonly target: string,
+    readonly sub: string | undefined,
+  ) {
+    super();
+  }
+  eq(other: FollowWidget) {
+    return other.target === this.target && other.sub === this.sub;
+  }
+  toDOM(view: EditorView) {
+    const el = document.createElement("span");
+    el.className = "cm-link-follow";
+    el.textContent = "↗";
+    el.setAttribute("role", "button");
+    el.setAttribute("aria-label", `Open ${this.target || "link"}`);
+    el.title = "Open link (Ctrl/Cmd-click: new tab, Ctrl/Cmd+Alt-click: side pane)";
+    el.addEventListener("mousedown", (e) => {
+      if (e.button !== 0 && e.button !== 1) return;
+      e.preventDefault();
+      e.stopPropagation();
+      view.state.facet(linkHost)?.open(this.target, this.sub, openHow(e));
+    });
+    return el;
+  }
+  ignoreEvent() {
+    return true;
+  }
+}
+
 /** Styles every wikilink, marks unresolved ones, and tags them for clicks. */
 const linkMarks = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
-    constructor(view: EditorView) {
+    follows: boolean;
+    onSettings: () => void;
+    constructor(readonly view: EditorView) {
+      this.follows = this.clickFollows(view);
       this.decorations = this.build(view);
+      // Rebuild when the click setting changes, so the ↗ buttons appear or go.
+      this.onSettings = () => view.dispatch({});
+      window.addEventListener(SETTINGS_EVENT, this.onSettings);
+    }
+    destroy() {
+      window.removeEventListener(SETTINGS_EVENT, this.onSettings);
+    }
+    clickFollows(view: EditorView) {
+      return view.state.facet(linkHost)?.clickFollows?.() ?? true;
     }
     update(u: ViewUpdate) {
-      if (u.docChanged || u.viewportChanged || syntaxTree(u.startState) !== syntaxTree(u.state)) {
+      const follows = this.clickFollows(u.view);
+      if (
+        u.docChanged ||
+        u.viewportChanged ||
+        follows !== this.follows ||
+        u.startState.facet(livePreviewOn) !== u.state.facet(livePreviewOn) ||
+        syntaxTree(u.startState) !== syntaxTree(u.state)
+      ) {
+        this.follows = follows;
         this.decorations = this.build(u.view);
       }
     }
     build(view: EditorView): DecorationSet {
       const host = view.state.facet(linkHost);
+      const followButtons = view.state.facet(livePreviewOn) && !this.follows;
       const out: Range<Decoration>[] = [];
       for (const { from, to } of view.visibleRanges) {
         syntaxTree(view.state).iterate({
@@ -138,14 +201,26 @@ const linkMarks = ViewPlugin.fromClass(
             if (n.name !== "WikiLink") return;
             const inner = n.node.getChild("WikiLinkTarget");
             if (!inner) return false;
-            const { target } = splitLinkText(view.state.sliceDoc(inner.from, inner.to));
+            const { target, heading, block } = splitLinkText(view.state.sliceDoc(inner.from, inner.to));
             const resolved = !target || !host || host.resolve(target) !== null;
             out.push(
               Decoration.mark({
                 class: resolved ? "cm-wikilink" : "cm-wikilink cm-wikilink-unresolved",
-                attributes: { "data-wikilink": "", title: resolved ? "" : "Not created yet. Click to create." },
+                attributes: {
+                  "data-wikilink": "",
+                  title: resolved ? "" : this.follows ? "Not created yet. Click to create." : "Not created yet. Open it to create.",
+                },
               }).range(inner.from, inner.to),
             );
+            const embed = view.state.sliceDoc(n.from, n.from + 1) === "!";
+            if (followButtons && !embed) {
+              out.push(
+                Decoration.widget({
+                  widget: new FollowWidget(target, heading ?? (block ? `^${block}` : undefined)),
+                  side: 1,
+                }).range(n.to),
+              );
+            }
             return false;
           },
         });
@@ -156,48 +231,81 @@ const linkMarks = ViewPlugin.fromClass(
   { decorations: (v) => v.decorations },
 );
 
-const isMod = (e: MouseEvent) => (/Mac|iPhone|iPad/.test(navigator.platform) ? e.metaKey : e.ctrlKey);
+/** A followable link at `pos`: a wikilink, or a markdown link to a note or a web page. */
+function followableAt(state: EditorState, pos: number): { target: string; sub?: string; url?: string; from: number; to: number } | null {
+  const wl = wikiLinkAt(state, pos);
+  if (wl) return { target: wl.target, sub: wl.heading ?? (wl.block ? `^${wl.block}` : undefined), from: wl.from, to: wl.to };
+  for (let n: ReturnType<ReturnType<typeof syntaxTree>["resolveInner"]> | null = syntaxTree(state).resolveInner(pos, 1); n; n = n.parent) {
+    if (n.name !== "Link") continue;
+    const url = n.getChild("URL");
+    if (!url) return null;
+    const href = state.sliceDoc(url.from, url.to);
+    if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return { target: "", url: href, from: n.from, to: n.to };
+    const { target, heading, block } = splitLinkText(decodeURIComponentSafe(href));
+    return { target, sub: heading ?? (block ? `^${block}` : undefined), from: n.from, to: n.to };
+  }
+  return null;
+}
+
+function follow(host: LinkHost, link: { target: string; sub?: string; url?: string }, how: OpenHow) {
+  if (link.url) window.open(link.url, "_blank", "noopener,noreferrer");
+  else host.open(link.target, link.sub, how);
+}
 
 /**
- * Ctrl/Cmd-click opens a link anywhere. In live preview, a plain click on a
- * rendered link (syntax hidden) opens it too, as in Obsidian.
+ * Following links with the mouse:
+ * - Ctrl/Cmd-click opens a new tab, Ctrl/Cmd+Alt-click the side pane, and a
+ *   middle click a new tab, anywhere.
+ * - In live preview, a plain click on a rendered wikilink follows it if the
+ *   "click a link to follow it" setting is on; otherwise it places the cursor
+ *   to edit, and the ↗ button after the link follows it.
  */
 const linkClicks = EditorView.domEventHandlers({
   mousedown(event, view) {
-    if (event.button !== 0) return false;
+    if (event.button !== 0 && event.button !== 1) return false;
     const host = view.state.facet(linkHost);
     if (!host) return false;
     const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
     if (pos === null) return false;
+    const link = followableAt(view.state, pos);
+    if (!link) return false;
 
-    const wl = wikiLinkAt(view.state, pos);
-    if (wl) {
-      const touched = view.state.selection.ranges.some((r) => r.from <= wl.to && r.to >= wl.from);
-      const rendered = view.state.facet(livePreviewOn) && !touched;
-      if (!isMod(event) && !rendered) return false;
+    if (hasModKey(event) || event.button === 1) {
       event.preventDefault();
-      host.open(wl.target, wl.heading ?? (wl.block ? `^${wl.block}` : undefined));
+      follow(host, link, openHow(event));
       return true;
     }
-
-    // Markdown links to local notes: [text](Note.md)
-    if (!isMod(event)) return false;
-    for (let n: ReturnType<ReturnType<typeof syntaxTree>["resolveInner"]> | null = syntaxTree(view.state).resolveInner(pos, 1); n; n = n.parent) {
-      if (n.name !== "Link") continue;
-      const url = n.getChild("URL");
-      if (!url) return false;
-      const href = view.state.sliceDoc(url.from, url.to);
-      event.preventDefault();
-      if (/^[a-z][a-z0-9+.-]*:/i.test(href)) window.open(href, "_blank", "noopener,noreferrer");
-      else {
-        const { target, heading, block } = splitLinkText(decodeURIComponentSafe(href));
-        host.open(target, heading ?? (block ? `^${block}` : undefined));
-      }
-      return true;
-    }
-    return false;
+    if (link.url || !wikiLinkAt(view.state, pos)) return false;
+    const touched = view.state.selection.ranges.some((r) => r.from <= link.to && r.to >= link.from);
+    const rendered = view.state.facet(livePreviewOn) && !touched;
+    if (!rendered || !(host.clickFollows?.() ?? true)) return false;
+    event.preventDefault();
+    follow(host, link, "here");
+    return true;
   },
 });
+
+/** Alt+Enter follows the link at the cursor (with Ctrl/Cmd too: in a new tab). */
+const followKeys = keymap.of([
+  {
+    key: "Alt-Enter",
+    run: (view) => followAtCursor(view, "here"),
+  },
+  {
+    key: "Mod-Alt-Enter",
+    run: (view) => followAtCursor(view, "tab"),
+  },
+]);
+
+function followAtCursor(view: EditorView, how: OpenHow): boolean {
+  const host = view.state.facet(linkHost);
+  if (!host) return false;
+  const head = view.state.selection.main.head;
+  const link = followableAt(view.state, head) ?? (head > 0 ? followableAt(view.state, head - 1) : null);
+  if (!link) return false;
+  follow(host, link, how);
+  return true;
+}
 
 function decodeURIComponentSafe(s: string) {
   try {
@@ -275,7 +383,7 @@ const linkPreview = hoverTooltip(
         title.textContent = path ? path.replace(/\.md$/, "") : wl.target;
         const body = document.createElement("div");
         body.className = "cm-link-preview-body";
-        body.textContent = path ? host.preview(path) || "(empty note)" : "This note doesn't exist yet. Click the link to create it.";
+        body.textContent = path ? host.preview(path) || "(empty note)" : "This note doesn't exist yet. Open the link to create it.";
         dom.append(title, body);
         return { dom };
       },
@@ -320,5 +428,12 @@ async function insertFiles(view: EditorView, host: LinkHost, files: File[], from
 }
 
 export function wikilinkExtensions(): Extension {
-  return [linkMarks, linkClicks, linkPreview, fileDrops, autocompletion({ override: [completeLinks], icons: false })];
+  return [
+    linkMarks,
+    linkClicks,
+    followKeys,
+    linkPreview,
+    fileDrops,
+    autocompletion({ override: [completeLinks], icons: false }),
+  ];
 }

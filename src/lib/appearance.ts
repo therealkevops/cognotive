@@ -7,6 +7,8 @@ export interface Appearance {
   /** Editor and reading text size, px. */
   fontSize: number;
   lineWidth: "narrow" | "normal" | "wide" | "full";
+  /** What a plain click on a link does in live preview: edit it (↗ follows) or follow it. */
+  linkClick: "edit" | "follow";
 }
 
 export const ACCENTS = {
@@ -25,11 +27,18 @@ export const LINE_WIDTHS: Record<Appearance["lineWidth"], string> = {
   full: "100%",
 };
 
-export const DEFAULT_APPEARANCE: Appearance = { theme: "system", accent: "violet", fontSize: 16, lineWidth: "normal" };
+export const DEFAULT_APPEARANCE: Appearance = {
+  theme: "system",
+  accent: "violet",
+  fontSize: 16,
+  lineWidth: "normal",
+  linkClick: "edit",
+};
 
 export function loadAppearance(): Appearance {
   const a = { ...DEFAULT_APPEARANCE, ...readPref<Partial<Appearance>>("appearance", {}) };
   if (!(a.accent in ACCENTS)) a.accent = "violet";
+  if (a.linkClick !== "edit" && a.linkClick !== "follow") a.linkClick = "edit";
   return a;
 }
 

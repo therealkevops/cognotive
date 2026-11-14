@@ -93,6 +93,16 @@ function AppearanceSection() {
             <option value="full">Full width</option>
           </select>
         </Field>
+        <Field label="Clicking a link in live preview">
+          <select
+            className="input"
+            value={a.linkClick}
+            onChange={(e) => set({ linkClick: e.target.value as Appearance["linkClick"] })}
+          >
+            <option value="edit">Edits it (↗ or Ctrl/Cmd-click opens it)</option>
+            <option value="follow">Opens it</option>
+          </select>
+        </Field>
         <Field label={`Text size: ${a.fontSize}px`}>
           <input
             type="range"

@@ -473,3 +473,24 @@ mark {
 .excalidraw .drawing-tool:hover {
   background: var(--button-hover-bg, var(--surface));
 }
+
+/* The ↗ after a link in live preview, when a click edits links instead of following them. */
+.cm-link-follow {
+  display: inline-block;
+  margin-left: 0.15em;
+  padding: 0 0.15em;
+  border-radius: 0.25rem;
+  color: var(--accent);
+  font-size: 0.8em;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.35;
+  user-select: none;
+}
+.cm-line:hover .cm-link-follow,
+.cm-link-follow:hover {
+  opacity: 1;
+}
+.cm-link-follow:hover {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}

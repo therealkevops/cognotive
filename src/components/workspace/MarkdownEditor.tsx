@@ -44,7 +44,8 @@ export default function MarkdownEditor({
   const linkHostProxy = useMemo<LinkHost>(
     () => ({
       resolve: (t) => linksRef.current?.resolve(t) ?? null,
-      open: (t, h) => linksRef.current?.open(t, h),
+      open: (t, h, how) => linksRef.current?.open(t, h, how),
+      clickFollows: () => linksRef.current?.clickFollows?.() ?? true,
       notes: () => linksRef.current?.notes() ?? [],
       headings: (p) => linksRef.current?.headings(p) ?? [],
       preview: (p) => linksRef.current?.preview(p) ?? "",
