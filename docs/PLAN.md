@@ -217,8 +217,8 @@ returned by section rather than whole.
 
 | Phase | Scope | Done when |
 |---|---|---|
-| **0. Scaffold** | Next.js + TS, Tailwind, ESLint, Vitest, Playwright, GitHub Actions CI, Vercel project linked | A hello-world deploys from `main` and CI is green |
-| **1. Local editor** | `VaultStore` interface + `LocalStore`; file tree; CodeMirror with live preview and all formatting; quick switcher; keyword search | You can write and organise notes entirely in the browser |
+| **0. Scaffold** ✅ | Next.js + TS, Tailwind, ESLint, Vitest, Playwright, GitHub Actions CI, Vercel project linked | A hello-world deploys from `main` and CI is green |
+| **1. Local editor** ✅ | `VaultStore` interface + `LocalStore`; file tree; CodeMirror with live preview and all formatting; quick switcher; keyword search | You can write and organise notes entirely in the browser |
 | **2. GitHub store** | GitHub App, login, Settings → Vaults (multiple vaults, switcher), `GitHubStore`, sync engine with batching, pull, conflicts, offline; attachments | Edits made in the app show up as commits; edits pushed from Obsidian show up in the app |
 | **3. Linking** | Wikilinks, autocomplete, backlinks, unlinked mentions, tags, frontmatter, rename refactor, graph views | The graph matches what Obsidian shows for the same vault |
 | **4. Excalidraw** | Drawing files, embeds, SVG previews, links from drawings | Drawings round-trip through the repo and appear in the graph |
@@ -226,6 +226,11 @@ returned by section rather than whole.
 | **6. Polish** | Command palette, themes, mobile layout, templates, daily notes, write tools for the LLM | — |
 
 Each phase ends deployed to Vercel and usable.
+
+**Carried over from phase 1:** tabs and split panes, pasting/dropping images (lands with
+attachments in phase 2), rendering tables inside live preview (they show as source until
+then; the reading view renders them), and moving indexing into a Web Worker (only needed
+once vaults get large).
 
 ---
 

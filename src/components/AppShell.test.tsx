@@ -5,12 +5,12 @@ import { AppShell } from "./AppShell";
 describe("AppShell", () => {
   it("renders the sidebar, main content and context panel", () => {
     render(
-      <AppShell sidebar={<p>files</p>} panel={<p>backlinks</p>}>
+      <AppShell sidebar={<p>files</p>} panel={<p>outline</p>}>
         <p>editor</p>
       </AppShell>,
     );
     expect(screen.getByRole("complementary", { name: "Vault" })).toHaveTextContent("files");
     expect(screen.getByRole("main")).toHaveTextContent("editor");
-    expect(screen.getByRole("complementary", { name: "Context" })).toHaveTextContent("backlinks");
+    expect(screen.getByRole("complementary", { name: "Context" })).toHaveTextContent("outline");
   });
 });
