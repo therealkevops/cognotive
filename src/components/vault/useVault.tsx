@@ -53,6 +53,15 @@ export interface VaultApi {
   clearError(): void;
   open(path: string | null): Promise<void>;
   edit(text: string): void;
+  /** Writes any pending edit to the store now. */
+  flush(): Promise<void>;
+  /** Increments after every local change that reached the store (for sync scheduling). */
+  changeCounter: number;
+  /**
+   * Re-reads the store after something else (sync) changed it. Reloads the open
+   * note if it was among `changed` and has no unsaved edits.
+   */
+  reload(changed: string[]): Promise<void>;
   createNote(folder?: string, name?: string): Promise<string | undefined>;
   createFolder(parent?: string): Promise<string | undefined>;
   /** Renames within the same folder. For notes, `newName` excludes ".md". */
@@ -74,11 +83,14 @@ export function useVault(): VaultApi {
 export function VaultProvider({
   vaultId,
   store: injectedStore,
+  seed = true,
   children,
 }: {
   vaultId: string;
-  /** Defaults to a LocalStore for `vaultId`. Tests pass their own. */
+  /** Defaults to a LocalStore for `vaultId`. */
   store?: VaultStore;
+  /** Create the welcome note in a brand-new vault. Off for vaults filled by sync. */
+  seed?: boolean;
   children: ReactNode;
 }) {
   const store = useMemo<VaultStore>(
@@ -93,6 +105,8 @@ export function VaultProvider({
   const [activeText, setActiveText] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [error, setError] = useState<string | null>(null);
+  const [changeCounter, setChangeCounter] = useState(0);
+  const changed = useCallback(() => setChangeCounter((c) => c + 1), []);
 
   const pending = useRef<{ path: string; text: string } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -127,11 +141,12 @@ export function VaultProvider({
       bumpIndex();
       if (!pending.current) setSaveState("saved");
       setEntries((prev) => prev.map((e) => (e.path === p.path ? { ...e, mtime: file.mtime } : e)));
+      changed();
     } catch (e) {
       setSaveState("error");
       fail(e);
     }
-  }, [store, index, bumpIndex, fail]);
+  }, [store, index, bumpIndex, fail, changed]);
 
   const open = useCallback(
     async (path: string | null) => {
@@ -159,7 +174,7 @@ export function VaultProvider({
     let cancelled = false;
     (async () => {
       let list = await store.list();
-      if (list.length === 0 && !readPref(`vault:${vaultId}:seeded`, false)) {
+      if (seed && list.length === 0 && !readPref(`vault:${vaultId}:seeded`, false)) {
         for (const [path, content] of Object.entries(WELCOME_NOTES)) {
           await store.write(path, content);
         }
@@ -188,7 +203,7 @@ export function VaultProvider({
     return () => {
       cancelled = true;
     };
-  }, [store, index, vaultId, open, bumpIndex, fail]);
+  }, [store, index, vaultId, open, bumpIndex, fail, seed]);
 
   // Save when the tab is hidden or closed.
   useEffect(() => {
@@ -232,13 +247,14 @@ export function VaultProvider({
         index.set(path, "");
         bumpIndex();
         await refresh();
+        changed();
         await open(path);
         return path;
       } catch (e) {
         fail(e);
       }
     },
-    [store, index, exists, refresh, open, bumpIndex, fail],
+    [store, index, exists, refresh, open, bumpIndex, fail, changed],
   );
 
   const createFolder = useCallback(
@@ -289,8 +305,9 @@ export function VaultProvider({
       await flush();
       await store.rename(from, to);
       await afterMove(from, to);
+      changed();
     },
-    [exists, flush, store, afterMove],
+    [exists, flush, store, afterMove, changed],
   );
 
   const rename = useCallback(
@@ -337,14 +354,47 @@ export function VaultProvider({
         for (const e of removed) index.remove(e.path);
         bumpIndex();
         await refresh();
+        changed();
       } catch (e) {
         fail(e);
       }
     },
-    [store, index, refresh, open, bumpIndex, fail],
+    [store, index, refresh, open, bumpIndex, fail, changed],
   );
 
   const clearError = useCallback(() => setError(null), []);
+
+  const reload = useCallback(
+    async (paths: string[]) => {
+      if (paths.length === 0) return;
+      const list = await store.list();
+      for (const path of paths) {
+        if (!isMarkdown(path)) continue;
+        const f = await store.read(path);
+        if (f) index.set(path, f.content);
+        else index.remove(path);
+      }
+      setEntries(list);
+      bumpIndex();
+      const current = activePath.current;
+      if (!current) {
+        // An empty vault just received its first notes: open one.
+        const first = list.find((e) => e.kind === "file" && isMarkdown(e.path));
+        if (first) await open(first.path);
+        return;
+      }
+      if (!paths.includes(current)) return;
+      if (!list.some((e) => e.path === current)) {
+        pending.current = null;
+        await open(null);
+      } else if (!pending.current) {
+        // Reopen to show the new content. With unsaved edits we leave it: sync
+        // deferred this file and will merge on its next pass.
+        await open(current);
+      }
+    },
+    [store, index, bumpIndex, open],
+  );
 
   const api = useMemo<VaultApi>(
     () => ({
@@ -360,6 +410,9 @@ export function VaultProvider({
       clearError,
       open,
       edit,
+      flush,
+      changeCounter,
+      reload,
       createNote,
       createFolder,
       rename,
@@ -380,6 +433,9 @@ export function VaultProvider({
       clearError,
       open,
       edit,
+      flush,
+      changeCounter,
+      reload,
       createNote,
       createFolder,
       rename,

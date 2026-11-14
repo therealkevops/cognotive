@@ -84,4 +84,17 @@ describe("LocalStore", () => {
     await s.write("A/x.md", "");
     await expect(s.rename("A", "A/B")).rejects.toThrow(/into itself/);
   });
+
+  it("writeIf only writes when the file still has the expected content", async () => {
+    const s = makeStore();
+    await s.write("a.md", "v1");
+    expect(await s.writeIf("a.md", "stale", "v2")).toBe(false);
+    expect((await s.read("a.md"))?.content).toBe("v1");
+    expect(await s.writeIf("a.md", "v1", "v2")).toBe(true);
+    expect((await s.read("a.md"))?.content).toBe("v2");
+    expect(await s.writeIf("new.md", undefined, "n")).toBe(true);
+    expect(await s.writeIf("new.md", undefined, "again")).toBe(false);
+    expect(await s.writeIf("a.md", "v2", null)).toBe(true);
+    expect(await s.read("a.md")).toBeUndefined();
+  });
 });
