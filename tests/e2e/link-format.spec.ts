@@ -20,10 +20,11 @@ async function palette(page: Page, command: string) {
 
 async function useMarkdownLinks(page: Page) {
   await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "This vault" }).click();
   const section = page.getByRole("region", { name: "This vault" });
+  // Settings save as soon as they change.
   await section.getByLabel("New links use").selectOption("markdown");
-  await section.getByRole("button", { name: "Save vault settings" }).click();
-  await expect(section.getByRole("button", { name: "Save vault settings" })).toBeDisabled();
+  await expect(section.getByLabel("New links use")).toHaveValue("markdown");
   await page.keyboard.press("Escape");
 }
 

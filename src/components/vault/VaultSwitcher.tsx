@@ -32,7 +32,7 @@ export function VaultSwitcher({ onManage }: { onManage(): void }) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Vault: ${active.name}. Switch vault`}
-        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-semibold hover:bg-foreground/5"
+        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left font-serif text-[1.0625rem] hover:bg-foreground/[0.05]"
         onClick={() => setOpen((o) => !o)}
       >
         <Icon size={16} className="shrink-0 text-muted" aria-hidden />
@@ -43,7 +43,7 @@ export function VaultSwitcher({ onManage }: { onManage(): void }) {
         <div
           role="menu"
           aria-label="Vaults"
-          className="absolute inset-x-0 top-full z-20 mt-1 overflow-hidden rounded-md border border-border bg-background py-1 shadow-lg"
+          className="menu-panel absolute inset-x-0 top-full z-20 mt-1 overflow-hidden p-1"
         >
           {vaults.map((v) => (
             <button
@@ -51,7 +51,7 @@ export function VaultSwitcher({ onManage }: { onManage(): void }) {
               type="button"
               role="menuitemradio"
               aria-checked={v.id === active.id}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-foreground/5"
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-foreground/[0.06]"
               onClick={() => {
                 setOpen(false);
                 switchTo(v.id);
@@ -62,11 +62,11 @@ export function VaultSwitcher({ onManage }: { onManage(): void }) {
               {v.kind === "github" && <FolderGit2 size={13} className="shrink-0 text-muted" aria-hidden />}
             </button>
           ))}
-          <div className="my-1 border-t border-border" />
+          <div className="mx-1 my-1 border-t border-border" />
           <button
             type="button"
             role="menuitem"
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-foreground/5"
+            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-foreground/[0.06]"
             onClick={() => {
               setOpen(false);
               onManage();

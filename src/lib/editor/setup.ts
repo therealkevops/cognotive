@@ -83,7 +83,7 @@ const theme = EditorView.theme({
   },
   "&.cm-focused": { outline: "none" },
   ".cm-scroller": {
-    fontFamily: "var(--font-sans), system-ui, sans-serif",
+    fontFamily: "var(--note-font)",
     lineHeight: "1.65",
   },
   ".cm-content": {

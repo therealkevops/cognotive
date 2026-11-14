@@ -33,7 +33,7 @@ export function TagsPanel({ onTag }: { onTag(tag: string): void }) {
   );
   return (
     <section aria-label="Tags" className="flex h-full flex-col">
-      <h2 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Tags</h2>
+      <h2 className="mb-2 text-xs font-medium text-muted">Tags</h2>
       {tree.length === 0 ? (
         <p className="text-sm text-muted">No tags yet. Add one with #tag in a note, or tags: in its properties.</p>
       ) : (

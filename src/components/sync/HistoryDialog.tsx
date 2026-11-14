@@ -82,16 +82,16 @@ export function HistoryDialog({ path, onClose }: { path: string; onClose(): void
   useEffect(() => () => void (imageUrl && URL.revokeObjectURL(imageUrl)), [imageUrl]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 px-4 py-[5vh]" onMouseDown={onClose}>
+    <div className="dialog-backdrop py-[5vh]" onMouseDown={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Version history"
-        className="flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-border bg-background shadow-2xl"
+        className="dialog-panel flex h-[85vh] max-w-5xl flex-col overflow-hidden"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 border-b border-border px-5 py-3">
-          <h2 className="min-w-0 flex-1 truncate text-base font-semibold">History of {basename(path)}</h2>
+          <h2 className="min-w-0 flex-1 truncate font-serif text-xl">History of {basename(path)}</h2>
           <button type="button" className="icon-button" aria-label="Close history" onClick={onClose}>
             <X size={16} aria-hidden />
           </button>

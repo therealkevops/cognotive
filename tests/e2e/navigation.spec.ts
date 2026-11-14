@@ -57,8 +57,9 @@ test("Alt+Enter follows the link at the cursor, and a setting makes clicks follo
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(title(page)).toHaveValue("Welcome");
   await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Editor" }).click();
   await page
-    .getByRole("region", { name: "Appearance" })
+    .getByRole("region", { name: "Editor" })
     .getByLabel("Clicking a link in live preview")
     .selectOption("follow");
   await page.keyboard.press("Escape");

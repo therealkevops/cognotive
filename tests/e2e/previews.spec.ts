@@ -47,7 +47,8 @@ test("an image link previews the image", async ({ page }) => {
 test("previews can be limited to Ctrl/Cmd hovers", async ({ page }) => {
   await openApp(page);
   await page.getByRole("button", { name: "Settings" }).click();
-  await page.getByRole("region", { name: "Appearance" }).getByLabel("Link previews on hover").selectOption("mod");
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Editor" }).click();
+  await page.getByRole("region", { name: "Editor" }).getByLabel("Link previews on hover").selectOption("mod");
   await page.keyboard.press("Escape");
 
   const link = editor(page).locator(".cm-wikilink", { hasText: "Linking notes" });

@@ -87,13 +87,13 @@ test("appearance settings apply and persist", async ({ page }) => {
   await openApp(page);
   await page.getByRole("button", { name: "Settings" }).click();
   const appearance = page.getByRole("region", { name: "Appearance" });
-  await appearance.getByLabel("Theme").selectOption("dark");
+  await appearance.getByRole("radio", { name: "Dark" }).click();
   await appearance.getByRole("button", { name: "teal" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  expect(bg).toBe("rgb(15, 17, 21)");
+  expect(bg).toBe("rgb(38, 38, 36)");
 });
 
 test("live preview renders tables and highlights tags", async ({ page }) => {
@@ -114,6 +114,7 @@ test("version history shows past versions and restores one", async ({ page }) =>
   await page.goto("/");
   await page.getByRole("button", { name: "Settings" }).click();
   const dialog = page.getByRole("dialog", { name: "Settings" });
+  await dialog.getByRole("button", { name: "Vaults & sync" }).click();
   await dialog.getByRole("button", { name: "Connect a GitHub repository" }).click();
   await dialog.getByRole("combobox", { name: /^Repository/ }).selectOption("me/notes");
   await dialog.getByRole("button", { name: "Connect and open" }).click();

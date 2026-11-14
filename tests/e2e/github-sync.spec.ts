@@ -6,7 +6,9 @@ async function connectRepo(page: Page) {
   await expect(page.locator(".cm-content")).toBeVisible();
   await page.getByRole("button", { name: "Settings" }).click();
   const dialog = page.getByRole("dialog", { name: "Settings" });
+  await dialog.getByRole("button", { name: "GitHub account" }).click();
   await expect(dialog.getByText("Signed in as @tester")).toBeVisible();
+  await dialog.getByRole("button", { name: "Vaults & sync" }).click();
   await dialog.getByRole("button", { name: "Connect a GitHub repository" }).click();
   await dialog.getByRole("combobox", { name: /^Repository/ }).selectOption("me/notes");
   await dialog.getByRole("button", { name: "Connect and open" }).click();

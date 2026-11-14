@@ -59,14 +59,14 @@ export function QuickSwitcher({ onClose, onOpenSide }: { onClose(): void; onOpen
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 px-4 pt-[12vh]"
+      className="dialog-backdrop pt-[12vh]"
       onMouseDown={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Quick switcher"
-        className="w-full max-w-lg overflow-hidden rounded-lg border border-border bg-background shadow-2xl"
+        className="dialog-panel max-w-xl overflow-hidden"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <input
@@ -77,7 +77,7 @@ export function QuickSwitcher({ onClose, onOpenSide }: { onClose(): void; onOpen
           aria-activedescendant={options[selected] ? `${listId}-${selected}` : undefined}
           aria-label="Find or create a note"
           placeholder="Find or create a note…"
-          className="w-full border-b border-border bg-transparent px-4 py-3 text-base outline-none"
+          className="w-full border-b border-border bg-transparent px-5 py-4 text-base outline-none placeholder:text-muted"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -99,7 +99,7 @@ export function QuickSwitcher({ onClose, onOpenSide }: { onClose(): void; onOpen
             }
           }}
         />
-        <ul ref={listRef} id={listId} role="listbox" className="max-h-80 overflow-y-auto py-1">
+        <ul ref={listRef} id={listId} role="listbox" className="max-h-80 overflow-y-auto p-1.5">
           {options.length === 0 && <li className="px-4 py-2 text-sm text-muted">No notes found.</li>}
           {options.map((o, i) => (
             <li
@@ -108,8 +108,8 @@ export function QuickSwitcher({ onClose, onOpenSide }: { onClose(): void; onOpen
               role="option"
               aria-selected={i === selected}
               data-index={i}
-              className={`flex cursor-pointer items-center gap-2 px-4 py-2 text-sm ${
-                i === selected ? "bg-accent/15" : ""
+              className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm ${
+                i === selected ? "bg-foreground/[0.07]" : ""
               }`}
               onMouseMove={() => setSelected(i)}
               onClick={() => void choose(o)}
@@ -124,7 +124,7 @@ export function QuickSwitcher({ onClose, onOpenSide }: { onClose(): void; onOpen
             </li>
           ))}
         </ul>
-        <div className="flex gap-4 border-t border-border px-4 py-2 text-xs text-muted">
+        <div className="flex gap-4 border-t border-border px-5 py-2.5 text-xs text-muted">
           <span>↑↓ to move</span>
           <span>↵ to open</span>
           {onOpenSide && <span>⇧↵ side pane</span>}

@@ -115,7 +115,7 @@ export function LocalGraph({ onOpenFull }: { onOpenFull(): void }) {
   return (
     <section aria-label="Local graph">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-xs font-semibold tracking-wide text-muted uppercase">Local graph</h2>
+        <h2 className="text-xs font-medium text-muted">Local graph</h2>
         <button type="button" className="text-xs text-accent hover:underline" onClick={onOpenFull}>
           Open full graph
         </button>

@@ -1,11 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Source_Serif_4 } from "next/font/google";
 import { APPEARANCE_BOOT_SCRIPT } from "@/lib/appearance";
 import "./globals.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+});
+
+// Notes read in a book-like serif by default (Settings → Appearance can switch to sans).
+const serif = Source_Serif_4({
+  variable: "--font-serif-face",
+  subsets: ["latin"],
+  style: ["normal", "italic"],
 });
 
 const geistMono = Geist_Mono({
@@ -22,15 +29,15 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f1115" },
+    { media: "(prefers-color-scheme: light)", color: "#faf9f5" },
+    { media: "(prefers-color-scheme: dark)", color: "#262624" },
   ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     // The boot script may set data-theme and CSS variables before React hydrates.
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} antialiased`} suppressHydrationWarning>
+    <html lang="en" className={`${geistSans.variable} ${serif.variable} ${geistMono.variable} antialiased`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: APPEARANCE_BOOT_SCRIPT }} />
       </head>

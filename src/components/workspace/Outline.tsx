@@ -9,7 +9,7 @@ export function Outline({ markdown, onJump }: { markdown: string; onJump(offset:
   const min = Math.min(...headings.map((h) => h.level));
   return (
     <section aria-label="Outline">
-      <h2 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Outline</h2>
+      <h2 className="mb-2 text-xs font-medium text-muted">Outline</h2>
       {headings.length === 0 ? (
         <p className="text-sm text-muted">No headings in this note.</p>
       ) : (

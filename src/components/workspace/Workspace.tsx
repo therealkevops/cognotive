@@ -49,7 +49,7 @@ import { drawingName } from "@/lib/vault/paths";
 import type { DrawingVault } from "./DrawingView";
 import { fillTemplate, formatDate, newNoteFromLink } from "@/lib/vault/settings";
 import { GraphDialog, LocalGraph } from "../graph/GraphDialog";
-import { SettingsDialog } from "../settings/SettingsDialog";
+import { SettingsDialog, type SettingsSection } from "../settings/SettingsDialog";
 import { HistoryDialog } from "../sync/HistoryDialog";
 import { SyncButton } from "../sync/SyncButton";
 import { useSync } from "../sync/useSync";
@@ -97,7 +97,8 @@ export function Workspace() {
   const [lastEditMode, setLastEditMode] = useState<Exclude<Mode, "reading">>(() => readPref("editMode", "live"));
   const [tab, setTab] = useState<SidebarTab>("files");
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  /** Which settings section is open, or false. */
+  const [settingsOpen, setSettingsOpen] = useState<false | SettingsSection>(false);
   const [graphOpen, setGraphOpen] = useState(false);
   const [panelTab, setPanelTabState] = useState<PanelTab>(() => readPref<PanelTab>("panelTab", "links"));
   const setPanelTab = (t: PanelTab) => {
@@ -527,8 +528,9 @@ export function Workspace() {
 
   const sidebar = (
     <>
-      <VaultSwitcher onManage={() => setSettingsOpen(true)} />
-      <div role="tablist" aria-label="Sidebar" className="mb-3 flex gap-1">
+      <VaultSwitcher onManage={() => setSettingsOpen("vaults")} />
+      <div className="mb-3 flex items-center gap-1 px-0.5">
+      <div role="tablist" aria-label="Sidebar" className="segmented flex-1">
         {(
           [
             ["files", "Files", Files],
@@ -541,15 +543,13 @@ export function Workspace() {
             role="tab"
             type="button"
             aria-selected={tab === id}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded px-2 py-1 text-sm ${
-              tab === id ? "bg-background font-medium shadow-sm" : "text-muted hover:text-foreground"
-            }`}
             onClick={() => setTab(id)}
           >
-            <Icon size={15} aria-hidden />
+            <Icon size={14} aria-hidden />
             {label}
           </button>
         ))}
+      </div>
         <button
           type="button"
           className="icon-button md:hidden"
@@ -568,10 +568,10 @@ export function Workspace() {
           <TagsPanel onTag={showTag} />
         )}
       </div>
-      <div className="-mx-1 mt-2 flex gap-1">
+      <div className="mt-2 flex flex-col gap-0.5 border-t border-border pt-2">
         <button
           type="button"
-          className="flex flex-1 items-center gap-2 rounded px-2 py-1.5 text-sm text-muted hover:bg-foreground/5 hover:text-foreground"
+          className="nav-item text-foreground/80"
           onClick={() => void openDaily()}
           title="Today's daily note (Ctrl/Cmd+Shift+D)"
         >
@@ -580,7 +580,7 @@ export function Workspace() {
         </button>
         <button
           type="button"
-          className="flex flex-1 items-center gap-2 rounded px-2 py-1.5 text-sm text-muted hover:bg-foreground/5 hover:text-foreground"
+          className="nav-item text-foreground/80"
           onClick={() => setGraphOpen(true)}
           title="Graph view (Ctrl/Cmd+G)"
         >
@@ -588,11 +588,11 @@ export function Workspace() {
           Graph view
         </button>
       </div>
-      <div className="-mx-1 mt-1 border-t border-border pt-2">
+      <div>
         <button
           type="button"
-          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-muted hover:bg-foreground/5 hover:text-foreground"
-          onClick={() => setSettingsOpen(true)}
+          className="nav-item w-full text-foreground/80"
+          onClick={() => setSettingsOpen("appearance")}
         >
           <Settings size={15} aria-hidden />
           Settings
@@ -721,7 +721,7 @@ export function Workspace() {
     history: () => setHistoryOpen(true),
     export: () => void exportZip(),
     import: chooseZip,
-    settings: () => setSettingsOpen(true),
+    settings: () => setSettingsOpen("appearance"),
   };
 
   return (
@@ -734,7 +734,7 @@ export function Workspace() {
           panel={
             vault.active ? (
               <>
-                <div role="tablist" aria-label="Note panels" className="mb-4 flex gap-1">
+                <div role="tablist" aria-label="Note panels" className="segmented mb-4 flex w-full">
                   {(
                     [
                       ["links", "Links"],
@@ -747,9 +747,6 @@ export function Workspace() {
                       type="button"
                       role="tab"
                       aria-selected={panelTab === id}
-                      className={`flex-1 rounded px-2 py-1 text-sm ${
-                        panelTab === id ? "bg-background font-medium shadow-sm" : "text-muted hover:text-foreground"
-                      }`}
                       onClick={() => setPanelTab(id)}
                     >
                       {label}
@@ -767,7 +764,7 @@ export function Workspace() {
             ) : null
           }
         >
-          <header className="flex items-center gap-2 border-b border-border px-3 py-2">
+          <header className="flex items-center gap-2 px-3 py-2">
             <button
               type="button"
               className="icon-button md:hidden"
@@ -817,7 +814,7 @@ export function Workspace() {
               </button>
             )}
             {kind === "note" && (
-              <div role="radiogroup" aria-label="View mode" className="flex rounded-md border border-border p-0.5">
+              <div role="radiogroup" aria-label="View mode" className="segmented">
                 {MODES.map(({ id, label, icon: Icon }) => (
                   <button
                     key={id}
@@ -826,9 +823,6 @@ export function Workspace() {
                     aria-checked={mode === id}
                     aria-label={label}
                     title={id === "reading" ? `${label} (Ctrl/Cmd+E)` : label}
-                    className={`rounded px-2 py-1 ${
-                      mode === id ? "bg-accent/15 text-accent" : "text-muted hover:text-foreground"
-                    }`}
                     onClick={() => setMode(id)}
                   >
                     <Icon size={15} aria-hidden />
@@ -839,7 +833,7 @@ export function Workspace() {
           </header>
           <TabBar tabs={visibleTabs} active={activePathNow} onSelect={(p) => void vault.open(p)} onClose={closeTab} />
           {kind === "note" && mode !== "reading" && (
-            <div className="border-b border-border px-3 py-1">
+            <div className="border-y border-border px-3 py-1">
               <Toolbar view={view} />
             </div>
           )}
@@ -934,7 +928,7 @@ export function Workspace() {
       {importNote && (
         <div
           role="status"
-          className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-sm shadow-lg"
+          className="menu-panel fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 px-4 py-3 text-sm"
         >
           {importNote}
           <button
@@ -975,7 +969,7 @@ export function Workspace() {
       )}
       {creating && <CreateNoteDialog {...creating} onClose={() => setCreating(null)} />}
       {deleting && <DeleteDialog path={deleting} isFolder={false} onClose={() => setDeleting(null)} />}
-      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <SettingsDialog initial={settingsOpen} onClose={() => setSettingsOpen(false)} />}
       {graphOpen && <GraphDialog onClose={() => setGraphOpen(false)} />}
       <Toasts />
     </>
@@ -1003,7 +997,7 @@ function TitleInput({ path }: { path: string }) {
   return (
     <input
       aria-label="Note title"
-      className="min-w-0 flex-1 truncate bg-transparent text-base font-semibold outline-none focus:underline focus:decoration-accent focus:underline-offset-4"
+      className="min-w-0 flex-1 truncate rounded-md bg-transparent px-1.5 py-0.5 font-serif text-lg outline-none hover:bg-foreground/[0.04] focus:bg-foreground/[0.04]"
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onBlur={() => void commit()}
@@ -1090,8 +1084,8 @@ function Toasts() {
         <div
           key={t.key}
           role={t.tone === "error" ? "alert" : "status"}
-          className={`flex items-start gap-3 rounded-lg border bg-background px-4 py-3 text-sm shadow-lg ${
-            t.tone === "error" ? "border-red-300 dark:border-red-800" : "border-border"
+          className={`menu-panel flex items-start gap-3 px-4 py-3 text-sm ${
+            t.tone === "error" ? "border-red-300 dark:border-red-800" : ""
           }`}
         >
           <span className="flex-1">{t.text}</span>

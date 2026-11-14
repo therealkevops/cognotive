@@ -1,10 +1,10 @@
 "use client";
 
-import { FolderGit2, HardDrive, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Check, FolderGit2, HardDrive, Monitor, Moon, Sun, X } from "lucide-react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { ACCENTS, loadAppearance, saveAppearance, type Appearance } from "@/lib/appearance";
 import { GitHubClient, type RepoSummary } from "@/lib/github/client";
-import { formatDate } from "@/lib/vault/settings";
+import { formatDate, type VaultSettings } from "@/lib/vault/settings";
 import { normalizePath } from "@/lib/vault/paths";
 import {
   DEFAULT_IDLE_SECONDS,
@@ -18,9 +18,22 @@ import { useAuth } from "../auth/useAuth";
 import { useVault } from "../vault/useVault";
 import { useVaults } from "../vault/useVaults";
 
-/** Settings: GitHub account, the vault list, and connecting a repository. */
-export function SettingsDialog({ onClose }: { onClose(): void }) {
-  const [adding, setAdding] = useState<null | "github">(null);
+export type SettingsSection = "appearance" | "editor" | "vault" | "vaults" | "account";
+
+const SECTIONS: Array<{ id: SettingsSection; label: string }> = [
+  { id: "appearance", label: "Appearance" },
+  { id: "editor", label: "Editor" },
+  { id: "vault", label: "This vault" },
+  { id: "vaults", label: "Vaults & sync" },
+  { id: "account", label: "GitHub account" },
+];
+
+/**
+ * Settings, in sections: a list on the left, labelled rows on the right.
+ * Changes apply as they're made; text fields save when you leave them.
+ */
+export function SettingsDialog({ onClose, initial = "appearance" }: { onClose(): void; initial?: SettingsSection }) {
+  const [section, setSection] = useState<SettingsSection>(initial);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -29,82 +42,336 @@ export function SettingsDialog({ onClose }: { onClose(): void }) {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 px-4 py-[6vh]" onMouseDown={onClose}>
+    <div className="dialog-backdrop items-center" onMouseDown={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Settings"
-        className="w-full max-w-xl rounded-lg border border-border bg-background shadow-2xl"
+        className="dialog-panel relative flex h-[min(44rem,88vh)] max-w-4xl flex-col overflow-hidden md:flex-row"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-border px-5 py-3">
-          <h2 className="text-base font-semibold">Settings</h2>
-          <button type="button" className="icon-button" aria-label="Close settings" onClick={onClose}>
-            <X size={16} aria-hidden />
-          </button>
+        <nav
+          aria-label="Settings sections"
+          className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-sidebar p-3 pr-14 md:w-56 md:flex-col md:overflow-visible md:border-r md:border-b-0 md:p-4"
+        >
+          <h2 className="mb-3 hidden px-2.5 font-serif text-2xl md:block">Settings</h2>
+          {SECTIONS.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className="nav-item shrink-0 text-left"
+              aria-current={section === s.id ? "page" : undefined}
+              onClick={() => setSection(s.id)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </nav>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 md:px-10 md:py-8">
+          <div className="mx-auto max-w-2xl">
+            {section === "appearance" && <AppearanceSection />}
+            {section === "editor" && <EditorSection />}
+            {section === "vault" && <ThisVaultSection />}
+            {section === "vaults" && <VaultsSection />}
+            {section === "account" && <AccountSection />}
+          </div>
         </div>
-        <div className="space-y-6 px-5 py-4">
-          <AppearanceSection />
-          <ThisVaultSection />
-          <AccountSection />
-          <VaultList />
-          {adding === "github" ? (
-            <ConnectRepoForm onDone={() => setAdding(null)} />
-          ) : (
-            <AddButtons onGitHub={() => setAdding("github")} />
-          )}
-        </div>
+        <button
+          type="button"
+          className="icon-button absolute top-3 right-3"
+          aria-label="Close settings"
+          onClick={onClose}
+        >
+          <X size={18} aria-hidden />
+        </button>
       </div>
     </div>
   );
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">{children}</h3>;
+/* ---------- Layout pieces ---------- */
+
+function SectionHeader({ title, description }: { title: string; description?: ReactNode }) {
+  return (
+    <header className="mb-6">
+      <h3 className="font-serif text-2xl">{title}</h3>
+      {description && <p className="mt-1 text-sm text-muted">{description}</p>}
+    </header>
+  );
 }
 
-function AppearanceSection() {
+function Group({ title, children }: { title?: string; children: ReactNode }) {
+  return (
+    <div className="mb-6">
+      {title && <h4 className="mb-1 text-sm font-semibold">{title}</h4>}
+      <div className="divide-y divide-border">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * One setting: its label and description on the left, the control on the
+ * right (or underneath on narrow screens). `id` ties the label to the control.
+ */
+function Row({
+  label,
+  description,
+  id,
+  children,
+  stack = false,
+}: {
+  label: string;
+  description?: ReactNode;
+  id?: string;
+  children: ReactNode;
+  stack?: boolean;
+}) {
+  return (
+    <div className={`flex gap-x-8 gap-y-2 py-4 ${stack ? "flex-col" : "flex-col sm:flex-row sm:items-center sm:justify-between"}`}>
+      <div className="min-w-0">
+        {id ? (
+          <label htmlFor={id} className="block text-sm font-medium">
+            {label}
+          </label>
+        ) : (
+          <p className="text-sm font-medium">{label}</p>
+        )}
+        {description && <p className="mt-0.5 text-[0.8125rem] leading-snug text-muted">{description}</p>}
+      </div>
+      <div className={stack ? "" : "shrink-0 sm:w-64"}>{children}</div>
+    </div>
+  );
+}
+
+/** An on/off switch. */
+function Switch({ checked, onChange, label }: { checked: boolean; onChange(v: boolean): void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors ${
+        checked ? "bg-accent" : "bg-foreground/15"
+      }`}
+    >
+      <span
+        className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-[1.125rem]" : "translate-x-0.5"}`}
+      />
+    </button>
+  );
+}
+
+/** A text box that saves when you leave it or press Enter. */
+function TextSetting({
+  id,
+  value,
+  onSave,
+  placeholder,
+}: {
+  id: string;
+  value: string;
+  onSave(v: string): void;
+  placeholder?: string;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [seen, setSeen] = useState(value);
+  if (seen !== value) {
+    // The saved value changed elsewhere (e.g. a sync): show it.
+    setSeen(value);
+    setDraft(value);
+  }
+  return (
+    <input
+      id={id}
+      className="input"
+      value={draft}
+      placeholder={placeholder}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => draft !== value && onSave(draft)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          setDraft(value);
+        }
+      }}
+    />
+  );
+}
+
+/* ---------- Appearance ---------- */
+
+function useAppearance(): [Appearance, (patch: Partial<Appearance>) => void] {
   const [a, setA] = useState<Appearance>(loadAppearance);
   const set = (patch: Partial<Appearance>) => {
     const next = { ...a, ...patch };
     setA(next);
     saveAppearance(next);
   };
+  return [a, set];
+}
+
+const THEMES: Array<{ id: Appearance["theme"]; label: string; icon: typeof Sun }> = [
+  { id: "light", label: "Light", icon: Sun },
+  { id: "system", label: "Match system", icon: Monitor },
+  { id: "dark", label: "Dark", icon: Moon },
+];
+
+/** A small picture of the app in a theme, for the theme picker. */
+function ThemePreview({ theme }: { theme: Appearance["theme"] }) {
+  const light = { bg: "#faf9f5", side: "#f3f1ea", line: "#d8d4c8" };
+  const dark = { bg: "#262624", side: "#1f1e1d", line: "#4a4843" };
+  const half = (c: typeof light) => (
+    <div className="flex h-full flex-1" style={{ background: c.bg }}>
+      <div className="w-1/4" style={{ background: c.side }} />
+      <div className="flex flex-1 flex-col gap-1.5 p-2">
+        <div className="h-1.5 w-3/4 rounded-full" style={{ background: c.line }} />
+        <div className="h-1.5 w-1/2 rounded-full" style={{ background: c.line }} />
+        <div className="h-1.5 w-2/3 rounded-full" style={{ background: c.line }} />
+      </div>
+    </div>
+  );
+  return (
+    <div className="flex h-16 w-full overflow-hidden rounded-lg">
+      {theme === "dark" ? half(dark) : theme === "light" ? half(light) : (
+        <>
+          {half(light)}
+          {half(dark)}
+        </>
+      )}
+    </div>
+  );
+}
+
+function AppearanceSection() {
+  const [a, set] = useAppearance();
+  const sizeId = useId();
   return (
     <section aria-label="Appearance">
-      <SectionTitle>Appearance (this browser)</SectionTitle>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Theme">
-          <select className="input" value={a.theme} onChange={(e) => set({ theme: e.target.value as Appearance["theme"] })}>
-            <option value="system">Match the system</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </Field>
-        <Field label="Line width">
+      <SectionHeader title="Appearance" description="These apply to this browser only." />
+      <Group>
+        <Row label="Theme" stack>
+          <div role="radiogroup" aria-label="Theme" className="grid grid-cols-3 gap-3">
+            {THEMES.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={a.theme === id}
+                aria-label={label}
+                onClick={() => set({ theme: id })}
+                className={`rounded-xl border p-1.5 text-left transition-colors ${
+                  a.theme === id ? "border-accent ring-2 ring-accent/25" : "border-border hover:border-border-strong"
+                }`}
+              >
+                <ThemePreview theme={id} />
+                <span className="mt-1.5 flex items-center gap-1.5 px-1 pb-0.5 text-sm">
+                  <Icon size={14} aria-hidden className="text-muted" />
+                  {label}
+                </span>
+              </button>
+            ))}
+          </div>
+        </Row>
+        <Row label="Accent colour" description="Links, highlights and switches.">
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            {(Object.keys(ACCENTS) as Array<Appearance["accent"]>).map((name) => (
+              <button
+                key={name}
+                type="button"
+                aria-label={name}
+                aria-pressed={a.accent === name}
+                title={name[0].toUpperCase() + name.slice(1)}
+                className={`flex h-7 w-7 items-center justify-center rounded-full ring-offset-2 ring-offset-raised transition-shadow ${
+                  a.accent === name ? "ring-2 ring-foreground/60" : "hover:ring-2 hover:ring-border-strong"
+                }`}
+                style={{ background: ACCENTS[name].light }}
+                onClick={() => set({ accent: name })}
+              >
+                {a.accent === name && <Check size={14} className="text-white" aria-hidden />}
+              </button>
+            ))}
+          </div>
+        </Row>
+      </Group>
+      <Group title="Notes">
+        <Row label="Font" description="The typeface notes are written and read in.">
+          <div role="radiogroup" aria-label="Note font" className="segmented w-full">
+            {(
+              [
+                ["serif", "Serif", "var(--font-serif-face), Georgia, serif"],
+                ["sans", "Sans", "var(--font-geist-sans), sans-serif"],
+                ["system", "System", "system-ui, sans-serif"],
+              ] as const
+            ).map(([id, label, family]) => (
+              <button key={id} type="button" role="radio" aria-checked={a.noteFont === id} onClick={() => set({ noteFont: id })}>
+                <span style={{ fontFamily: family }}>{label}</span>
+              </button>
+            ))}
+          </div>
+        </Row>
+        <Row label="Text size" description={`${a.fontSize}px`} id={sizeId}>
+          <input
+            id={sizeId}
+            type="range"
+            min={13}
+            max={22}
+            value={a.fontSize}
+            onChange={(e) => set({ fontSize: Number(e.target.value) })}
+            className="w-full accent-[var(--accent)]"
+          />
+        </Row>
+        <Row label="Line width" description="How wide a line of text can get.">
+          <div role="radiogroup" aria-label="Line width" className="segmented w-full">
+            {(
+              [
+                ["narrow", "Narrow"],
+                ["normal", "Normal"],
+                ["wide", "Wide"],
+                ["full", "Full"],
+              ] as const
+            ).map(([id, label]) => (
+              <button key={id} type="button" role="radio" aria-checked={a.lineWidth === id} onClick={() => set({ lineWidth: id })}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </Row>
+      </Group>
+    </section>
+  );
+}
+
+/* ---------- Editor ---------- */
+
+function EditorSection() {
+  const [a, set] = useAppearance();
+  const clickId = useId();
+  const hoverId = useId();
+  return (
+    <section aria-label="Editor">
+      <SectionHeader title="Editor" description="How links behave while you write. These apply to this browser only." />
+      <Group>
+        <Row
+          label="Clicking a link in live preview"
+          description="When it edits, the ↗ after a link (or Ctrl/Cmd-click, or Alt+Enter) opens it."
+          id={clickId}
+        >
           <select
-            className="input"
-            value={a.lineWidth}
-            onChange={(e) => set({ lineWidth: e.target.value as Appearance["lineWidth"] })}
-          >
-            <option value="narrow">Narrow</option>
-            <option value="normal">Normal</option>
-            <option value="wide">Wide</option>
-            <option value="full">Full width</option>
-          </select>
-        </Field>
-        <Field label="Clicking a link in live preview">
-          <select
+            id={clickId}
             className="input"
             value={a.linkClick}
             onChange={(e) => set({ linkClick: e.target.value as Appearance["linkClick"] })}
           >
-            <option value="edit">Edits it (↗ or Ctrl/Cmd-click opens it)</option>
-            <option value="follow">Opens it</option>
+            <option value="edit">Edits the link</option>
+            <option value="follow">Opens the link</option>
           </select>
-        </Field>
-        <Field label="Link previews on hover">
+        </Row>
+        <Row label="Link previews on hover" description="A card showing the linked note." id={hoverId}>
           <select
+            id={hoverId}
             className="input"
             value={a.hoverPreview}
             onChange={(e) => set({ hoverPreview: e.target.value as Appearance["hoverPreview"] })}
@@ -112,148 +379,165 @@ function AppearanceSection() {
             <option value="always">Show</option>
             <option value="mod">Only while holding Ctrl/Cmd</option>
           </select>
-        </Field>
-        <Field label={`Text size: ${a.fontSize}px`}>
-          <input
-            type="range"
-            min={13}
-            max={22}
-            value={a.fontSize}
-            onChange={(e) => set({ fontSize: Number(e.target.value) })}
-            className="w-full"
-          />
-        </Field>
-        <fieldset>
-          <legend className="mb-1 text-sm font-medium">Accent colour</legend>
-          <div className="flex gap-2">
-            {(Object.keys(ACCENTS) as Array<Appearance["accent"]>).map((name) => (
-              <button
-                key={name}
-                type="button"
-                aria-label={name}
-                aria-pressed={a.accent === name}
-                className={`h-7 w-7 rounded-full border-2 ${a.accent === name ? "border-foreground" : "border-transparent"}`}
-                style={{ background: ACCENTS[name].light }}
-                onClick={() => set({ accent: name })}
-              />
-            ))}
-          </div>
-        </fieldset>
-      </div>
+        </Row>
+      </Group>
     </section>
   );
 }
 
+/* ---------- This vault ---------- */
+
 function ThisVaultSection() {
   const { settings, updateSettings } = useVault();
-  const [draft, setDraft] = useState(settings);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(settings);
+  const save = (patch: Partial<VaultSettings>) => void updateSettings(patch);
+  const ids = {
+    attachments: useId(),
+    templates: useId(),
+    dailyFolder: useId(),
+    dailyFormat: useId(),
+    dailyTemplate: useId(),
+    linkFormat: useId(),
+    newNotes: useId(),
+    newNoteFolder: useId(),
+  };
   return (
     <section aria-label="This vault">
-      <SectionTitle>This vault</SectionTitle>
-      <p className="mb-3 text-xs text-muted">Saved in the vault at .noted/settings.json, so they sync with it.</p>
-      <form
-        className="grid gap-3 sm:grid-cols-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void updateSettings(draft);
-        }}
-      >
-        <Field label="Attachment folder">
-          <input className="input" value={draft.attachmentFolder} onChange={(e) => setDraft({ ...draft, attachmentFolder: e.target.value })} />
-        </Field>
-        <Field label="Templates folder">
-          <input className="input" value={draft.templateFolder} onChange={(e) => setDraft({ ...draft, templateFolder: e.target.value })} />
-        </Field>
-        <Field label="Daily notes folder">
-          <input className="input" value={draft.dailyFolder} onChange={(e) => setDraft({ ...draft, dailyFolder: e.target.value })} />
-        </Field>
-        <Field label="Daily note name" hint={`Today: ${formatDate(new Date(), draft.dailyFormat || "YYYY-MM-DD")}`}>
-          <input className="input" value={draft.dailyFormat} onChange={(e) => setDraft({ ...draft, dailyFormat: e.target.value })} />
-        </Field>
-        <Field label="Daily note template" hint="A note path, e.g. Templates/Daily.md. Empty for none.">
-          <input className="input" value={draft.dailyTemplate} onChange={(e) => setDraft({ ...draft, dailyTemplate: e.target.value })} />
-        </Field>
-        <Field
+      <SectionHeader
+        title="This vault"
+        description={
+          <>
+            Saved in the vault at <code className="text-[0.8em]">.noted/settings.json</code>, so they sync with it.
+          </>
+        }
+      />
+      <Group title="Links">
+        <Row
           label="New links use"
-          hint="Markdown links also work on github.com. Existing links stay as they are; the command palette can convert a note."
+          description="Markdown links also work on github.com. Existing links stay as they are; the command palette converts a note."
+          id={ids.linkFormat}
         >
           <select
+            id={ids.linkFormat}
             className="input"
-            value={draft.linkFormat}
-            onChange={(e) => setDraft({ ...draft, linkFormat: e.target.value as typeof draft.linkFormat })}
+            value={settings.linkFormat}
+            onChange={(e) => save({ linkFormat: e.target.value as VaultSettings["linkFormat"] })}
           >
             <option value="wikilink">Wikilinks: [[Note]]</option>
-            <option value="markdown">Markdown links: [Note](Note.md)</option>
+            <option value="markdown">Markdown: [Note](Note.md)</option>
           </select>
-        </Field>
-        <Field label="New notes from links go in">
+        </Row>
+        <Row label="New notes from links go in" description="Where a note is created when you open a link to it." id={ids.newNotes}>
           <select
+            id={ids.newNotes}
             className="input"
-            value={draft.newNoteLocation}
-            onChange={(e) => setDraft({ ...draft, newNoteLocation: e.target.value as typeof draft.newNoteLocation })}
+            value={settings.newNoteLocation}
+            onChange={(e) => save({ newNoteLocation: e.target.value as VaultSettings["newNoteLocation"] })}
           >
             <option value="current">The linking note&apos;s folder</option>
             <option value="root">The vault root</option>
             <option value="folder">A folder…</option>
           </select>
-        </Field>
-        {draft.newNoteLocation === "folder" && (
-          <Field label="Folder for new notes from links">
-            <input className="input" value={draft.newNoteFolder} onChange={(e) => setDraft({ ...draft, newNoteFolder: e.target.value })} />
-          </Field>
+        </Row>
+        {settings.newNoteLocation === "folder" && (
+          <Row label="Folder for new notes from links" id={ids.newNoteFolder}>
+            <TextSetting id={ids.newNoteFolder} value={settings.newNoteFolder} onSave={(v) => save({ newNoteFolder: v })} />
+          </Row>
         )}
-        <label className="flex items-start gap-2 self-end text-sm">
-          <input
-            type="checkbox"
-            className="mt-1"
-            checked={draft.drawingSvgCopy}
-            onChange={(e) => setDraft({ ...draft, drawingSvgCopy: e.target.checked })}
+      </Group>
+      <Group title="Files">
+        <Row label="Attachment folder" description="Where pasted, dropped and uploaded files go." id={ids.attachments}>
+          <TextSetting id={ids.attachments} value={settings.attachmentFolder} onSave={(v) => save({ attachmentFolder: v })} />
+        </Row>
+        <Row label="Templates folder" description="Notes here are offered by Insert template." id={ids.templates}>
+          <TextSetting id={ids.templates} value={settings.templateFolder} onSave={(v) => save({ templateFolder: v })} />
+        </Row>
+      </Group>
+      <Group title="Daily notes">
+        <Row label="Daily notes folder" id={ids.dailyFolder}>
+          <TextSetting id={ids.dailyFolder} value={settings.dailyFolder} onSave={(v) => save({ dailyFolder: v })} />
+        </Row>
+        <Row
+          label="Daily note name"
+          description={`Today: ${formatDate(new Date(), settings.dailyFormat || "YYYY-MM-DD")}`}
+          id={ids.dailyFormat}
+        >
+          <TextSetting id={ids.dailyFormat} value={settings.dailyFormat} onSave={(v) => save({ dailyFormat: v })} />
+        </Row>
+        <Row label="Daily note template" description="A note path, such as Templates/Daily.md. Empty for none." id={ids.dailyTemplate}>
+          <TextSetting
+            id={ids.dailyTemplate}
+            value={settings.dailyTemplate}
+            placeholder="None"
+            onSave={(v) => save({ dailyTemplate: v })}
           />
-          <span>Save an SVG copy next to each drawing (so drawings show on github.com)</span>
-        </label>
-        <div className="flex justify-end sm:col-span-2">
-          <button type="submit" className="button-primary" disabled={!dirty}>
-            Save vault settings
-          </button>
-        </div>
-      </form>
+        </Row>
+      </Group>
+      <Group title="Drawings">
+        <Row label="Save an SVG copy of each drawing" description="So drawings show as pictures on github.com.">
+          <div className="flex sm:justify-end">
+            <Switch
+              label="Save an SVG copy of each drawing"
+              checked={settings.drawingSvgCopy}
+              onChange={(v) => save({ drawingSvgCopy: v })}
+            />
+          </div>
+        </Row>
+      </Group>
     </section>
   );
 }
+
+/* ---------- Account ---------- */
 
 function AccountSection() {
   const { state, signIn, signOut } = useAuth();
   return (
     <section aria-label="GitHub account">
-      <SectionTitle>GitHub account</SectionTitle>
-      {state.status === "loading" && <p className="text-sm text-muted">Checking…</p>}
-      {state.status === "signed_in" && (
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm">
-            Signed in as <strong>@{state.user.login}</strong>
+      <SectionHeader title="GitHub account" description="Signing in lets vaults live in GitHub repositories." />
+      <Group>
+        {state.status === "loading" && <p className="py-4 text-sm text-muted">Checking…</p>}
+        {state.status === "signed_in" && (
+          <Row label={`Signed in as @${state.user.login}`}>
+            <div className="flex sm:justify-end">
+              <button type="button" className="button-secondary" onClick={() => void signOut()}>
+                Sign out
+              </button>
+            </div>
+          </Row>
+        )}
+        {state.status === "signed_out" && (
+          <Row label="Not signed in" description="Sign in to keep vaults in GitHub repositories.">
+            <div className="flex sm:justify-end">
+              <button type="button" className="button-primary" onClick={signIn}>
+                Sign in with GitHub
+              </button>
+            </div>
+          </Row>
+        )}
+        {state.status === "not_configured" && (
+          <p className="py-4 text-sm text-muted">
+            GitHub sign-in isn&apos;t set up on this deployment yet. Add the GitHub App settings described in the README,
+            then redeploy.
           </p>
-          <button type="button" className="button-secondary" onClick={() => void signOut()}>
-            Sign out
-          </button>
-        </div>
-      )}
-      {state.status === "signed_out" && (
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-muted">Sign in to keep vaults in GitHub repositories.</p>
-          <button type="button" className="button-primary" onClick={signIn}>
-            Sign in with GitHub
-          </button>
-        </div>
-      )}
-      {state.status === "not_configured" && (
-        <p className="text-sm text-muted">
-          GitHub sign-in isn&apos;t set up on this deployment yet. Add the GitHub App settings described in the
-          README, then redeploy.
-        </p>
-      )}
-      {state.status === "offline" && <p className="text-sm text-muted">Offline. Can&apos;t reach the sign-in service.</p>}
+        )}
+        {state.status === "offline" && <p className="py-4 text-sm text-muted">Offline. Can&apos;t reach the sign-in service.</p>}
+      </Group>
     </section>
+  );
+}
+
+/* ---------- Vaults ---------- */
+
+function VaultsSection() {
+  const [adding, setAdding] = useState(false);
+  return (
+    <>
+      <SectionHeader title="Vaults & sync" description="Each vault is a separate set of notes, in this browser or a GitHub repository." />
+      <VaultList />
+      <div className="mt-4">
+        {adding ? <ConnectRepoForm onDone={() => setAdding(false)} /> : <AddButtons onGitHub={() => setAdding(true)} />}
+      </div>
+    </>
   );
 }
 
@@ -262,20 +546,19 @@ function VaultList() {
   const [editing, setEditing] = useState<string | null>(null);
   return (
     <section aria-label="Vaults">
-      <SectionTitle>Vaults</SectionTitle>
-      <ul className="divide-y divide-border rounded-md border border-border">
+      <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
         {vaults.map((v) => (
-          <li key={v.id} className="px-3 py-2.5">
+          <li key={v.id} className="px-4 py-3">
             <div className="flex items-center gap-3">
-              {v.kind === "github" ? (
-                <FolderGit2 size={18} className="shrink-0 text-muted" aria-hidden />
-              ) : (
-                <HardDrive size={18} className="shrink-0 text-muted" aria-hidden />
-              )}
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface text-muted">
+                {v.kind === "github" ? <FolderGit2 size={18} aria-hidden /> : <HardDrive size={18} aria-hidden />}
+              </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">
+                <p className="flex items-center gap-2 truncate text-sm font-medium">
                   {v.name}
-                  {v.id === active.id && <span className="ml-2 text-xs font-normal text-accent">Open</span>}
+                  {v.id === active.id && (
+                    <span className="rounded-full bg-accent/12 px-2 py-px text-[0.6875rem] font-medium text-accent">Open</span>
+                  )}
                 </p>
                 <p className="truncate text-xs text-muted">{describeVault(v)}</p>
               </div>
@@ -335,7 +618,7 @@ function EditVault({
   const [idle, setIdle] = useState(vault.kind === "github" ? vault.idleSeconds : DEFAULT_IDLE_SECONDS);
   return (
     <form
-      className="mt-3 space-y-3 rounded-md bg-surface p-3"
+      className="mt-3 space-y-3 rounded-lg bg-surface p-4"
       onSubmit={(e) => {
         e.preventDefault();
         onSave(
@@ -352,7 +635,7 @@ function EditVault({
       <div className="flex justify-between gap-2">
         <button
           type="button"
-          className="text-sm text-red-600 hover:underline disabled:opacity-40 dark:text-red-400"
+          className="rounded-lg px-2 text-sm text-red-700 hover:bg-red-500/10 disabled:opacity-40 dark:text-red-400"
           disabled={!canRemove}
           title={canRemove ? undefined : "Keep at least one vault"}
           onClick={onRemove}
@@ -409,9 +692,9 @@ function SyncFields({
 function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: React.ReactNode }) {
   return (
     <label className="block text-sm">
-      <span className="mb-1 block font-medium">{label}</span>
+      <span className="mb-1.5 block font-medium">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-xs text-muted">{hint}</span>}
+      {hint && <span className="mt-1.5 block text-xs leading-snug text-muted">{hint}</span>}
     </label>
   );
 }
@@ -476,7 +759,7 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
 
   if (!signedIn) {
     return (
-      <section aria-label="Connect a GitHub repository" className="rounded-md border border-border p-3 text-sm">
+      <section aria-label="Connect a GitHub repository" className="rounded-xl border border-border p-4 text-sm">
         <p className="mb-2">Sign in with GitHub first.</p>
         <div className="flex gap-2">
           {auth.state.status === "signed_out" && (
@@ -504,7 +787,7 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
   return (
     <form
       aria-label="Connect a GitHub repository"
-      className="space-y-3 rounded-md border border-border p-3"
+      className="space-y-4 rounded-xl border border-border p-5"
       onSubmit={(e) => {
         e.preventDefault();
         if (!repo || !branch || folderError) return;
@@ -523,7 +806,7 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
         onDone();
       }}
     >
-      <h3 className="text-sm font-semibold">Connect a GitHub repository</h3>
+      <h4 className="font-serif text-lg">Connect a GitHub repository</h4>
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       <Field
         label="Repository"

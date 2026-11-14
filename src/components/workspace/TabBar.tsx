@@ -24,7 +24,7 @@ export function TabBar({
 }) {
   if (tabs.length < 2) return null;
   return (
-    <div role="tablist" aria-label="Open notes" className="flex gap-0.5 overflow-x-auto border-b border-border bg-surface px-2 pt-1">
+    <div role="tablist" aria-label="Open notes" className="flex gap-1 overflow-x-auto px-3 pt-1.5 pb-1">
       {tabs.map((path) => {
         const Icon = isDrawing(path) ? PenTool : isImage(path) ? ImageIcon : FileText;
         const selected = path === active;
@@ -33,8 +33,10 @@ export function TabBar({
           <div
             key={path}
             title={path}
-            className={`group flex max-w-48 shrink-0 items-center rounded-t-md border border-b-0 pr-1 text-sm ${
-              selected ? "border-border bg-background" : "border-transparent text-muted hover:text-foreground"
+            className={`group flex max-w-52 shrink-0 items-center rounded-lg pr-1 text-sm transition-colors ${
+              selected
+                ? "bg-raised text-foreground shadow-[0_0_0_1px_var(--border),0_1px_2px_rgb(0_0_0/0.05)]"
+                : "text-muted hover:bg-foreground/[0.05] hover:text-foreground"
             }`}
             onAuxClick={(e) => e.button === 1 && onClose(path)}
           >
@@ -42,7 +44,7 @@ export function TabBar({
               type="button"
               role="tab"
               aria-selected={selected}
-              className="flex min-w-0 items-center gap-1.5 py-1 pl-2.5 pr-1"
+              className="flex min-w-0 items-center gap-1.5 py-1.5 pl-2.5 pr-1"
               onClick={() => onSelect(path)}
             >
               <Icon size={13} aria-hidden className="shrink-0" />

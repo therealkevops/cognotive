@@ -275,7 +275,7 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
           key={notice.key}
           aria-live="polite"
           data-testid="drawing-notice"
-          className="pointer-events-none absolute bottom-16 left-1/2 z-10 -translate-x-1/2 rounded-md bg-foreground px-3 py-1.5 text-sm text-background shadow-lg"
+          className="pointer-events-none absolute bottom-16 left-1/2 z-10 -translate-x-1/2 rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-lg"
         >
           {notice.text}
         </div>
@@ -393,7 +393,7 @@ function TextLinkSuggestions({ vault }: { vault: DrawingVault }) {
     <ul
       role="listbox"
       aria-label="Link suggestions"
-      className="fixed z-50 max-h-64 w-64 overflow-y-auto rounded-md border border-border bg-background py-1 text-sm shadow-lg"
+      className="menu-panel fixed z-50 max-h-64 w-64 overflow-y-auto p-1 text-sm"
       style={{ left: state.left, top: state.top }}
     >
       {options.map((n, i) => (

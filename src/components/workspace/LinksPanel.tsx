@@ -31,7 +31,7 @@ function Section({
       <button
         type="button"
         aria-expanded={open}
-        className="mb-2 flex w-full items-center justify-between text-xs font-semibold tracking-wide text-muted uppercase"
+        className="mb-2 flex w-full items-center justify-between text-xs font-medium text-muted"
         onClick={() => setToggled(!open)}
       >
         <span>{title}</span>

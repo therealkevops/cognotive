@@ -75,7 +75,7 @@ export function FileTree() {
   return (
     <nav aria-label="Files" className="flex h-full flex-col">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-xs font-semibold tracking-wide text-muted uppercase">Files</h2>
+        <h2 className="px-2 text-xs font-medium text-muted">Files</h2>
         <div className="flex gap-0.5">
           <button
             type="button"
@@ -221,8 +221,8 @@ function Node({
         onKeyDown={onKeyDown}
         onDoubleClick={() => setRenaming(node.path)}
         {...(isFolder ? dropProps(node.path) : {})}
-        className={`group flex cursor-pointer items-center gap-1 rounded py-1 pr-1 text-sm select-none ${
-          isActive ? "bg-accent/15 text-foreground" : "text-foreground/85 hover:bg-foreground/5"
+        className={`group flex cursor-pointer items-center gap-1.5 rounded-lg py-[0.3125rem] pr-1 text-sm select-none ${
+          isActive ? "bg-foreground/[0.08] font-medium text-foreground" : "text-foreground/80 hover:bg-foreground/[0.05] hover:text-foreground"
         } ${dropTarget === node.path ? "ring-1 ring-accent" : ""} ${canOpen || isFolder ? "" : "opacity-60"}`}
         style={{ paddingLeft: `${depth * 0.9 + 0.25}rem` }}
         data-path={node.path}
@@ -339,7 +339,7 @@ function RenameInput({ initial, onDone }: { initial: string; onDone(name: string
   return (
     <input
       aria-label="New name"
-      className="min-w-0 flex-1 rounded border border-accent bg-background px-1 text-sm outline-none"
+      className="min-w-0 flex-1 rounded-md border border-border-strong bg-raised px-1.5 text-sm outline-none"
       value={value}
       autoFocus
       onFocus={(e) => e.currentTarget.select()}
