@@ -28,11 +28,31 @@ test("typing [[ in a drawing's text box suggests notes and links the box", async
   await page.keyboard.press("Enter");
   await expect(editor).toHaveValue("See [[Welcome]]");
   await page.keyboard.press("Escape"); // finish editing the text
+  await expect(page.getByTestId("drawing-notice")).toHaveText("Linked to Welcome");
+  await expect(page.locator('[data-link-marker="note"]')).toHaveCount(1);
   await expect(page.getByRole("status")).toHaveText("Saved");
 
   // The drawing now links to Welcome: it shows up in Welcome's backlinks.
   await tree(page).getByRole("treeitem", { name: "Welcome" }).click();
   await expect(page.getByRole("region", { name: "Backlinks" }).getByRole("button", { name: "Drawing" })).toBeVisible();
+});
+
+test("linking a drawing to a note that doesn't exist yet says so", async ({ page }) => {
+  const box = await newDrawing(page);
+  await page.mouse.click(box.x + box.width / 2 - 80, box.y + box.height / 2 - 80);
+  await page.keyboard.press("t");
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  const editor = page.locator("textarea.excalidraw-wysiwyg");
+  await expect(editor).toBeVisible();
+  await page.keyboard.type("[[Ideas");
+
+  const create = page.getByRole("listbox", { name: "Link suggestions" }).getByRole("option", { name: /New note “Ideas”/ });
+  await expect(create).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(editor).toHaveValue("[[Ideas]]");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("drawing-notice")).toContainText("a new note");
+  await expect(page.locator('[data-link-marker="new"]')).toHaveCount(1);
 });
 
 test("the drawing toolbar links to notes and inserts vault images", async ({ page }) => {

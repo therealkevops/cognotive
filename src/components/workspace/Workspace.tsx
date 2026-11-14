@@ -354,6 +354,7 @@ export function Workspace() {
         });
         return { dataURL, mimeType: blob.type || "image/png" };
       },
+      resolve: (t) => vault.links.resolve(t, vault.active?.path),
     };
   }, [vault]);
 

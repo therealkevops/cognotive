@@ -10,10 +10,10 @@ import {
   serializeAsJSON,
 } from "@excalidraw/excalidraw";
 import type { BinaryFileData, ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from "@excalidraw/excalidraw/types";
-import { ImagePlus, Link2 } from "lucide-react";
+import { FilePlus2, ImagePlus, Link2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isDark } from "@/lib/appearance";
-import { completeWikilink, openWikilink, textLinkUpdates } from "@/lib/drawing/links";
+import { completeWikilink, linkedBoxes, newNoteName, openWikilink, textLinkUpdates, type LinkedBox } from "@/lib/drawing/links";
 import { elementLinkTarget } from "@/lib/drawing/parse";
 import { splitLinkText } from "@/lib/links/parse";
 import { matches, Picker } from "./Picker";
@@ -50,6 +50,16 @@ export interface DrawingVault {
   pictures(): DrawingNote[];
   /** A data URL for an image, or an SVG rendering of a drawing. */
   pictureData(path: string): Promise<{ dataURL: string; mimeType: string } | null>;
+  /** The note a link target resolves to, or null if there's no such note yet. */
+  resolve(target: string): string | null;
+}
+
+/** Where linked elements are, and the scroll and zoom, for drawing link markers. */
+interface MarkerView {
+  boxes: LinkedBox[];
+  scrollX: number;
+  scrollY: number;
+  zoom: number;
 }
 
 export interface DrawingViewProps {
@@ -97,6 +107,40 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
   }, [onChange, onOpenLink]);
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   const [picker, setPicker] = useState<null | "link" | "picture">(null);
+  const [markerView, setMarkerView] = useState<MarkerView | null>(null);
+  const [notice, setNotice] = useState<{ text: string; key: number } | null>(null);
+
+  // Say what a new link points to, and whether that note exists yet.
+  const announce = useCallback(
+    (links: string[]) => {
+      if (!vault || !links.length) return;
+      const target = linkedBoxes([{ id: "", x: 0, y: 0, width: 0, height: 0, link: links[0] }])[0]?.target;
+      if (!target) return;
+      const text = vault.resolve(target)
+        ? `Linked to ${target}`
+        : `Linked to “${target}”, a new note. Open the link to create it.`;
+      setNotice({ text, key: Date.now() });
+    },
+    [vault],
+  );
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  // Underline every element that links to a note: solid if it exists, dashed if not yet.
+  const markers = useMemo(() => {
+    if (!markerView || !vault) return [];
+    const { boxes, scrollX, scrollY, zoom } = markerView;
+    return boxes.map((b) => ({
+      id: b.id,
+      left: (b.x + scrollX) * zoom,
+      top: (b.y + b.height + scrollY) * zoom + 2,
+      width: Math.max(b.width * zoom, 8),
+      exists: vault.resolve(b.target) !== null,
+    }));
+  }, [markerView, vault]);
 
   // Parsed once per drawing; Excalidraw owns the scene afterwards.
   const { initialData, error } = useMemo(() => {
@@ -137,6 +181,7 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
           elements: elements.map((e) => (selected[e.id] ? newElementWith(e, { link }) : e)),
           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
         });
+        announce([link]);
         return;
       }
       const { x, y } = viewCenter();
@@ -145,8 +190,9 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
         elements: [...elements, newElementWith(label, { link })],
         captureUpdate: CaptureUpdateAction.IMMEDIATELY,
       });
+      announce([link]);
     },
-    [api, viewCenter],
+    [api, viewCenter, announce],
   );
 
   /** Places an image (or another drawing, as a picture) linked back to its file. */
@@ -224,8 +270,16 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
               elements: elements.map((e) => (links.has(e.id) ? newElementWith(e, { link: links.get(e.id)! }) : e)),
               captureUpdate: CaptureUpdateAction.EVENTUALLY,
             });
+            if (lastFingerprint.current !== null) announce([...links.values()]);
             return; // the update triggers another onChange, which saves
           }
+          const next: MarkerView = {
+            boxes: linkedBoxes(elements),
+            scrollX: appState.scrollX,
+            scrollY: appState.scrollY,
+            zoom: appState.zoom.value,
+          };
+          setMarkerView((prev) => (prev && JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
           // Element versions change on every real edit; selection and scrolling don't.
           const fingerprint = `${elements.map((e) => `${e.id}:${e.version}`).join(",")}|${Object.keys(files).join(",")}|${appState.viewBackgroundColor}`;
           if (lastFingerprint.current === null) {
@@ -244,6 +298,30 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
           onOpenLinkRef.current(parts.target, parts.heading ?? (parts.block ? `^${parts.block}` : undefined));
         }}
       />
+      {markers.length > 0 && (
+        <div aria-hidden className="pointer-events-none absolute inset-0 z-[1] overflow-hidden" data-testid="link-markers">
+          {markers.map((m) => (
+            <div
+              key={m.id}
+              data-link-marker={m.exists ? "note" : "new"}
+              className={`absolute border-t-2 border-accent ${m.exists ? "" : "border-dashed opacity-70"}`}
+              style={{ left: m.left, top: m.top, width: m.width }}
+            >
+              {!m.exists && <span className="absolute top-0.5 left-0 text-[10px] whitespace-nowrap text-accent">new note</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      {notice && (
+        <div
+          key={notice.key}
+          aria-live="polite"
+          data-testid="drawing-notice"
+          className="pointer-events-none absolute bottom-16 left-1/2 z-10 -translate-x-1/2 rounded-md bg-foreground px-3 py-1.5 text-sm text-background shadow-lg"
+        >
+          {notice.text}
+        </div>
+      )}
       {vault && <TextLinkSuggestions vault={vault} />}
       {picker === "link" && vault && (
         <Picker
@@ -268,6 +346,9 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
   );
 }
 
+/** A note to link to, or (isNew) a note that doesn't exist yet. */
+type Suggestion = DrawingNote & { isNew?: boolean };
+
 /**
  * Note suggestions while typing "[[" in an Excalidraw text box. Excalidraw edits
  * text in a <textarea class="excalidraw-wysiwyg">; this listens to it and writes
@@ -282,22 +363,19 @@ function TextLinkSuggestions({ vault }: { vault: DrawingVault }) {
     top: number;
   } | null>(null);
   const [selected, setSelected] = useState(0);
-  const options = useMemo(
-    () =>
-      state
-        ? vault
-            .notes()
-            .filter((n) => matches(n.title, state.query))
-            .slice(0, 8)
-        : [],
-    [state, vault],
-  );
+  const options = useMemo<Suggestion[]>(() => {
+    if (!state) return [];
+    const notes = vault.notes();
+    const found: Suggestion[] = notes.filter((n) => matches(n.title, state.query)).slice(0, 8);
+    const name = newNoteName(state.query, notes);
+    return name ? [...found, { path: "", title: name, linkText: name, folder: "", isNew: true }] : found;
+  }, [state, vault]);
   const live = useRef({ state, options, selected });
   useEffect(() => {
     live.current = { state, options, selected };
   });
 
-  const choose = useCallback((note: DrawingNote) => {
+  const choose = useCallback((note: Suggestion) => {
     const s = live.current.state;
     if (!s) return;
     const ta = s.textarea;
@@ -362,7 +440,7 @@ function TextLinkSuggestions({ vault }: { vault: DrawingVault }) {
     >
       {options.map((n, i) => (
         <li
-          key={n.path}
+          key={n.isNew ? "\u0000new" : n.path}
           role="option"
           aria-selected={i === selected}
           className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 ${i === selected ? "bg-accent/15" : ""}`}
@@ -372,8 +450,19 @@ function TextLinkSuggestions({ vault }: { vault: DrawingVault }) {
             choose(n);
           }}
         >
-          <span className="truncate">{n.title}</span>
-          {n.folder && <span className="ml-auto truncate text-xs text-muted">{n.folder}</span>}
+          {n.isNew ? (
+            <>
+              <FilePlus2 size={14} aria-hidden className="shrink-0 text-accent" />
+              <span className="truncate">
+                New note <span className="font-medium">“{n.title}”</span>
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="truncate">{n.title}</span>
+              {n.folder && <span className="ml-auto truncate text-xs text-muted">{n.folder}</span>}
+            </>
+          )}
         </li>
       ))}
     </ul>

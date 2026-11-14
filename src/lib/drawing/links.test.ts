@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { completeWikilink, openWikilink, textLinkUpdates } from "./links";
+import { completeWikilink, linkedBoxes, newNoteName, openWikilink, textLinkUpdates } from "./links";
 
 describe("textLinkUpdates", () => {
   it("links text elements to the first note they mention", () => {
@@ -35,5 +35,32 @@ describe("completeWikilink", () => {
   });
   it("doesn't double existing closing brackets", () => {
     expect(completeWikilink("See [[Gar]] x", 6, 9, "Garden")).toEqual({ text: "See [[Garden]] x", caret: 14 });
+  });
+});
+
+describe("linkedBoxes", () => {
+  it("lists elements that link to notes, with normalised bounds", () => {
+    expect(
+      linkedBoxes([
+        { id: "a", x: 0, y: 0, width: 10, height: 5, link: "[[Garden#Beds|beds]]" },
+        { id: "b", x: 10, y: 10, width: -4, height: -6, link: "[[Shed]]" },
+        { id: "c", x: 0, y: 0, width: 1, height: 1, link: "https://example.com" },
+        { id: "d", x: 0, y: 0, width: 1, height: 1, link: null },
+        { id: "e", x: 0, y: 0, width: 1, height: 1, link: "[[Gone]]", isDeleted: true },
+      ]),
+    ).toEqual([
+      { id: "a", x: 0, y: 0, width: 10, height: 5, target: "Garden" },
+      { id: "b", x: 6, y: 4, width: 4, height: 6, target: "Shed" },
+    ]);
+  });
+});
+
+describe("newNoteName", () => {
+  const notes = [{ title: "Welcome", linkText: "Welcome" }, { title: "Plan", linkText: "work/Plan" }];
+  it("offers the query when no note has that name", () => {
+    expect(newNoteName(" Ideas ", notes)).toBe("Ideas");
+    expect(newNoteName("welcome", notes)).toBeNull();
+    expect(newNoteName("work/plan", notes)).toBeNull();
+    expect(newNoteName("  ", notes)).toBeNull();
   });
 });
