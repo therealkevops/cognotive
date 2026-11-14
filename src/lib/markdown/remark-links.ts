@@ -1,10 +1,11 @@
-import type { Parent, PhrasingContent, Root, RootContent, Text } from "mdast";
+import type { Image, Parent, PhrasingContent, Root, RootContent, Text } from "mdast";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
 import { visit, SKIP } from "unist-util-visit";
 import { splitLinkText } from "../links/parse";
+import { isDrawing, isImage } from "../vault/paths";
 import { splitFrontmatter } from "./frontmatter";
 
 export interface LinkContext {
@@ -58,7 +59,37 @@ function linkNode(inner: string, ctx: LinkContext): PhrasingContent {
   };
 }
 
+/**
+ * An image or drawing embed. The src is filled in by the reading view (from the
+ * vault, as an object URL), so the HTML only carries the vault path.
+ * "![[pic.png|300]]" sets the width.
+ */
+function assetNode(inner: string, path: string): Image {
+  const { alias } = splitLinkText(inner);
+  const width = alias && /^\d+(x\d+)?$/.test(alias) ? alias.split("x")[0] : undefined;
+  return {
+    type: "image",
+    url: "",
+    alt: alias && !width ? alias : path.split("/").pop()!.replace(/\.excalidraw$/i, ""),
+    data: {
+      hProperties: {
+        className: [isDrawing(path) ? "embed-drawing" : "embed-image"],
+        dataAsset: path,
+        ...(width ? { width } : {}),
+      },
+    },
+  };
+}
+
+function assetPath(inner: string, ctx: LinkContext): string | null {
+  const { target } = splitLinkText(inner);
+  const path = target ? ctx.resolve(target) : null;
+  return path && (isImage(path) || isDrawing(path)) ? path : null;
+}
+
 function embedBlock(inner: string, ctx: LinkContext, depth: number): RootContent {
+  const asset = assetPath(inner, ctx);
+  if (asset) return { type: "paragraph", children: [assetNode(inner, asset)] };
   const { target, heading } = splitLinkText(inner);
   const path = target ? ctx.resolve(target) : null;
   let children: RootContent[];
@@ -94,7 +125,8 @@ function splitText(value: string, ctx: LinkContext): PhrasingContent[] | null {
   const push = (s: string) => s && out.push(...splitTags(s));
   for (const m of value.matchAll(WIKILINK)) {
     push(value.slice(last, m.index));
-    out.push(linkNode(m[2], ctx));
+    const asset = m[1] === "!" ? assetPath(m[2], ctx) : null;
+    out.push(asset ? assetNode(m[2], asset) : linkNode(m[2], ctx));
     last = m.index! + m[0].length;
   }
   if (last === 0) {
@@ -124,6 +156,23 @@ function splitTags(value: string): PhrasingContent[] {
 }
 
 function transform(tree: Root, ctx: LinkContext, depth: number) {
+  // Markdown images pointing into the vault: ![alt](attachments/pic.png)
+  visit(tree, "image", (node: Image) => {
+    if (!node.url || /^[a-z][a-z0-9+.-]*:/i.test(node.url) || node.url.startsWith("//")) return;
+    let target = node.url;
+    try {
+      target = decodeURIComponent(target);
+    } catch {
+      // keep as written
+    }
+    const path = ctx.resolve(target);
+    if (!path) return;
+    node.url = "";
+    node.data = {
+      ...node.data,
+      hProperties: { className: [isDrawing(path) ? "embed-drawing" : "embed-image"], dataAsset: path },
+    };
+  });
   // Block embeds: a paragraph that is only "![[...]]".
   visit(tree, "paragraph", (node, index, parent) => {
     if (!parent || index === undefined) return;

@@ -9,6 +9,8 @@ import {
   WidgetType,
 } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
+import { splitLinkText } from "../links/parse";
+import { linkHost } from "./wikilinks";
 
 class CheckboxWidget extends WidgetType {
   constructor(
@@ -51,6 +53,34 @@ class BulletWidget extends WidgetType {
     span.className = "cm-bullet";
     span.textContent = "•";
     return span;
+  }
+}
+
+/** An image or drawing shown in place of its ![[embed]] link. */
+class EmbedWidget extends WidgetType {
+  constructor(
+    readonly path: string,
+    readonly width: string | undefined,
+  ) {
+    super();
+  }
+  eq(other: EmbedWidget) {
+    return other.path === this.path && other.width === this.width;
+  }
+  toDOM(view: EditorView) {
+    const img = document.createElement("img");
+    img.className = "cm-embed";
+    img.alt = this.path.split("/").pop() ?? "";
+    if (this.width) img.style.width = `${this.width}px`;
+    const host = view.state.facet(linkHost);
+    void host?.fileUrl?.(this.path).then((url) => {
+      if (url) img.src = url;
+      else img.classList.add("cm-embed-missing");
+    });
+    return img;
+  }
+  ignoreEvent() {
+    return false;
   }
 }
 
@@ -111,6 +141,17 @@ function build(view: EditorView): DecorationSet {
             if (touches(state, node.from, node.to)) return false;
             const inner = node.getChild("WikiLinkTarget");
             if (!inner) return false;
+            // ![[pic.png]] and ![[map.excalidraw]] show the picture itself.
+            const host = state.facet(linkHost);
+            if (state.sliceDoc(node.from, node.from + 1) === "!" && host?.embedPath) {
+              const parts = splitLinkText(state.sliceDoc(inner.from, inner.to));
+              const path = parts.target ? host.embedPath(parts.target) : null;
+              if (path) {
+                const width = parts.alias && /^\d+(x\d+)?$/.test(parts.alias) ? parts.alias.split("x")[0] : undefined;
+                decos.push(Decoration.replace({ widget: new EmbedWidget(path, width) }).range(node.from, node.to));
+                return false;
+              }
+            }
             // Hide "[[" / "![[" and "]]"; with an alias, show only the alias.
             decos.push(hidden.range(node.from, inner.from));
             const pipe = state.sliceDoc(inner.from, inner.to).search(/\\?\|/);

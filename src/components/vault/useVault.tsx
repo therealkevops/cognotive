@@ -13,14 +13,20 @@ import {
 import { readPref, writePref } from "@/lib/prefs";
 import type { LinkIndex } from "@/lib/links/link-index";
 import type { NoteIndex } from "@/lib/search/note-index";
+import { drawingToSvgUrl } from "@/lib/drawing/svg";
+import { EMPTY_DRAWING } from "@/lib/drawing/parse";
 import { VaultIndexes } from "@/lib/vault/indexes";
 import { LocalStore } from "@/lib/vault/local-store";
 import {
   basename,
   dirname,
+  extensionFor,
   extname,
+  isBinary,
+  isDrawing,
   isMarkdown,
   isWithin,
+  mimeType,
   joinPath,
   uniquePath,
   validateName,
@@ -29,6 +35,17 @@ import type { VaultEntry, VaultStore } from "@/lib/vault/types";
 import { WELCOME_NOTES } from "@/lib/vault/welcome";
 
 const SAVE_DELAY_MS = 400;
+/** Where pasted, dropped and uploaded files go. */
+export const ATTACHMENT_FOLDER = "attachments";
+
+/** "Pasted image 20261114093012.png", like Obsidian. */
+function attachmentName(file: File, now = new Date()): string {
+  const ext = extname(file.name) || extensionFor(file.type) || "";
+  const generic = !file.name || /^image\.(png|jpe?g|gif|webp)$/i.test(file.name);
+  if (!generic) return file.name.replace(/[\\/:*?"<>|#^[\]]/g, "-");
+  const stamp = now.toISOString().replace(/\D/g, "").slice(0, 14);
+  return `Pasted image ${stamp}${ext}`;
+}
 
 export type SaveState = "saved" | "saving" | "error";
 
@@ -68,6 +85,15 @@ export interface VaultApi {
   reload(changed: string[]): Promise<void>;
   createNote(folder?: string, name?: string): Promise<string | undefined>;
   createFolder(parent?: string): Promise<string | undefined>;
+  /** Creates an empty Excalidraw drawing and opens it. */
+  createDrawing(folder?: string, name?: string): Promise<string | undefined>;
+  /** Saves files (pasted, dropped or uploaded) as attachments. Returns their paths. */
+  addAttachments(files: File[], folder?: string): Promise<string[]>;
+  /**
+   * A URL to show a file: an object URL for images and PDFs, an SVG rendering
+   * for drawings. Cached until the file changes.
+   */
+  fileUrl(path: string, opts?: { dark?: boolean }): Promise<string | null>;
   /** Renames within the same folder. For notes, `newName` excludes ".md". */
   rename(path: string, newName: string): Promise<boolean>;
   move(path: string, toFolder: string): Promise<void>;
@@ -192,10 +218,11 @@ export function VaultProvider({
       indexes.clear();
       for (const e of list) {
         if (e.kind !== "file") continue;
-        if (isMarkdown(e.path)) {
+        if (isBinary(e.path)) indexes.addFile(e.path);
+        else {
           const f = await store.read(e.path);
           if (f) indexes.set(f.path, f.content);
-        } else indexes.addFile(e.path);
+        }
       }
       if (cancelled) return;
       setEntries(list);
@@ -266,6 +293,88 @@ export function VaultProvider({
     [store, indexes, exists, refresh, open, bumpIndex, fail, changed],
   );
 
+  const createDrawing = useCallback(
+    async (folder = "", name = "Drawing") => {
+      try {
+        const err = validateName(name);
+        if (err) throw new Error(err);
+        const path = uniquePath(joinPath(folder, `${name.trim()}.excalidraw`), exists);
+        await store.write(path, EMPTY_DRAWING);
+        indexes.set(path, EMPTY_DRAWING);
+        bumpIndex();
+        await refresh();
+        changed();
+        await open(path);
+        return path;
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [store, indexes, exists, refresh, open, bumpIndex, fail, changed],
+  );
+
+  const addAttachments = useCallback(
+    async (files: File[], folder = ATTACHMENT_FOLDER) => {
+      const saved: string[] = [];
+      try {
+        for (const file of files) {
+          const name = attachmentName(file);
+          const path = uniquePath(joinPath(folder, name), (p) => exists(p) || saved.includes(p));
+          if (isBinary(path)) {
+            await store.writeBinary(path, new Uint8Array(await file.arrayBuffer()));
+            indexes.addFile(path);
+          } else {
+            const text = await file.text();
+            await store.write(path, text);
+            indexes.set(path, text);
+          }
+          saved.push(path);
+        }
+      } catch (e) {
+        fail(e);
+      }
+      if (saved.length) {
+        bumpIndex();
+        await refresh();
+        changed();
+      }
+      return saved;
+    },
+    [store, indexes, exists, refresh, bumpIndex, changed, fail],
+  );
+
+  const urlCache = useRef(new Map<string, { key: string; url: Promise<string | null> }>());
+  useEffect(() => {
+    const cache = urlCache.current;
+    return () => {
+      for (const { url } of cache.values()) void url.then((u) => u && URL.revokeObjectURL(u));
+      cache.clear();
+    };
+  }, [store]);
+
+  const fileUrl = useCallback(
+    async (path: string, opts: { dark?: boolean } = {}) => {
+      const mtime = entriesRef.current.find((e) => e.path === path)?.mtime ?? 0;
+      const cacheKey = `${path}|${opts.dark ? "dark" : "light"}`;
+      const key = `${mtime}`;
+      const hit = urlCache.current.get(cacheKey);
+      if (hit && hit.key === key) return hit.url;
+      if (hit) void hit.url.then((u) => u && URL.revokeObjectURL(u));
+      const url = (async () => {
+        if (isDrawing(path)) {
+          const f = await store.read(path);
+          return f ? drawingToSvgUrl(f.content, !!opts.dark) : null;
+        }
+        if (!isBinary(path)) return null;
+        const bytes = await store.readBinary(path);
+        return bytes ? URL.createObjectURL(new Blob([bytes.slice().buffer], { type: mimeType(path) })) : null;
+      })().catch(() => null);
+      urlCache.current.set(cacheKey, { key, url });
+      return url;
+    },
+    [store],
+  );
+
   const createFolder = useCallback(
     async (parent = "") => {
       try {
@@ -290,10 +399,11 @@ export function VaultProvider({
         const old = joinPath(from, e.path.slice(to.length));
         moved.push([old, e.path]);
         indexes.remove(old);
-        if (isMarkdown(e.path)) {
+        if (isBinary(e.path)) indexes.addFile(e.path);
+        else {
           const f = await store.read(e.path);
           if (f) indexes.set(f.path, f.content);
-        } else indexes.addFile(e.path);
+        }
       }
       setEntries(list);
       bumpIndex();
@@ -417,10 +527,14 @@ export function VaultProvider({
     async (paths: string[]) => {
       if (paths.length === 0) return;
       const list = await store.list();
+      const present = new Set(list.map((e) => e.path));
       for (const path of paths) {
-        const f = await store.read(path);
-        if (f) indexes.set(path, f.content);
-        else indexes.remove(path);
+        if (!present.has(path)) indexes.remove(path);
+        else if (isBinary(path)) indexes.addFile(path);
+        else {
+          const f = await store.read(path);
+          if (f) indexes.set(path, f.content);
+        }
       }
       setEntries(list);
       bumpIndex();
@@ -468,6 +582,9 @@ export function VaultProvider({
       move,
       remove,
       writeNote,
+      createDrawing,
+      addAttachments,
+      fileUrl,
       exists,
     }),
     [
@@ -493,6 +610,9 @@ export function VaultProvider({
       move,
       remove,
       writeNote,
+      createDrawing,
+      addAttachments,
+      fileUrl,
       exists,
     ],
   );

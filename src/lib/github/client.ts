@@ -32,8 +32,7 @@ export interface TreeEntry {
 
 type TokenProvider = () => Promise<string>;
 
-function utf8ToBase64(text: string): string {
-  const bytes = new TextEncoder().encode(text);
+function bytesToBase64(bytes: Uint8Array): string {
   let bin = "";
   for (let i = 0; i < bytes.length; i += 0x8000) {
     bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
@@ -41,12 +40,16 @@ function utf8ToBase64(text: string): string {
   return btoa(bin);
 }
 
-function base64ToUtf8(b64: string): string {
+function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64.replace(/\s/g, ""));
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return new TextDecoder().decode(bytes);
+  return bytes;
 }
+
+const utf8ToBase64 = (text: string) => bytesToBase64(new TextEncoder().encode(text));
+const base64ToUtf8 = (b64: string) => new TextDecoder().decode(base64ToBytes(b64));
+const toBase64 = (c: string | Uint8Array) => (typeof c === "string" ? utf8ToBase64(c) : bytesToBase64(c));
 
 export class GitHubClient {
   constructor(
@@ -163,16 +166,20 @@ export class GitHubClient {
   }
 
   async blob(owner: string, repo: string, sha: string): Promise<string> {
+    return new TextDecoder().decode(await this.blobBytes(owner, repo, sha));
+  }
+
+  async blobBytes(owner: string, repo: string, sha: string): Promise<Uint8Array> {
     const r = await this.request<{ content: string; encoding: string }>(
       "GET",
       `${this.repoPath(owner, repo)}/git/blobs/${sha}`,
     );
-    return r.encoding === "base64" ? base64ToUtf8(r.content) : r.content;
+    return r.encoding === "base64" ? base64ToBytes(r.content) : new TextEncoder().encode(r.content);
   }
 
-  async createBlob(owner: string, repo: string, content: string): Promise<string> {
+  async createBlob(owner: string, repo: string, content: string | Uint8Array): Promise<string> {
     const r = await this.request<{ sha: string }>("POST", `${this.repoPath(owner, repo)}/git/blobs`, {
-      content: utf8ToBase64(content),
+      content: toBase64(content),
       encoding: "base64",
     });
     return r.sha;
@@ -213,13 +220,13 @@ export class GitHubClient {
   }
 
   /** Creates a file with the Contents API: the only way to make the first commit in an empty repo. */
-  async putFile(owner: string, repo: string, branch: string, path: string, content: string, message: string) {
+  async putFile(owner: string, repo: string, branch: string, path: string, content: string | Uint8Array, message: string) {
     await this.request("PUT", `${this.repoPath(owner, repo)}/contents/${path.split("/").map(encodeURIComponent).join("/")}`, {
       message,
-      content: utf8ToBase64(content),
+      content: toBase64(content),
       branch,
     });
   }
 }
 
-export { base64ToUtf8, utf8ToBase64 };
+export { base64ToBytes, base64ToUtf8, bytesToBase64, utf8ToBase64 };

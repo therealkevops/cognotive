@@ -1,11 +1,11 @@
 "use client";
 
-import { ChevronRight, FilePlus, FolderPlus, Pencil, Trash2 } from "lucide-react";
-import { useMemo, useState, type DragEvent, type KeyboardEvent } from "react";
+import { ChevronRight, File, FilePlus, FolderPlus, Image as ImageIcon, PenTool, Pencil, Trash2, Upload } from "lucide-react";
+import { useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { readPref, writePref } from "@/lib/prefs";
-import { dirname, isMarkdown } from "@/lib/vault/paths";
+import { dirname, isDrawing, isImage, isMarkdown } from "@/lib/vault/paths";
 import { buildTree, type TreeNode } from "@/lib/vault/tree";
-import { useVault } from "../vault/useVault";
+import { ATTACHMENT_FOLDER, useVault } from "../vault/useVault";
 
 const DRAG_TYPE = "application/x-noted-path";
 
@@ -33,6 +33,12 @@ export function FileTree() {
     if (folder) setOpen(folder, true);
     await vault.createNote(folder);
   };
+  const upload = useRef<HTMLInputElement>(null);
+  const addFiles = async (files: File[], folder: string) => {
+    const saved = await vault.addAttachments(files, folder || ATTACHMENT_FOLDER);
+    if (saved.length) setOpen(dirname(saved[0]), true);
+    if (saved.length === 1) await vault.open(saved[0]);
+  };
   const newFolder = async (parent: string) => {
     if (parent) setOpen(parent, true);
     const path = await vault.createFolder(parent);
@@ -41,7 +47,7 @@ export function FileTree() {
 
   const dropProps = (folder: string) => ({
     onDragOver: (e: DragEvent) => {
-      if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+      if (!e.dataTransfer.types.includes(DRAG_TYPE) && !e.dataTransfer.types.includes("Files")) return;
       e.preventDefault();
       e.stopPropagation();
       setDropTarget(folder);
@@ -51,6 +57,11 @@ export function FileTree() {
       e.preventDefault();
       e.stopPropagation();
       setDropTarget(null);
+      // Files dragged in from the computer become attachments in that folder.
+      if (e.dataTransfer.files.length) {
+        void addFiles([...e.dataTransfer.files], folder);
+        return;
+      }
       const path = e.dataTransfer.getData(DRAG_TYPE);
       if (path) {
         if (folder) setOpen(folder, true);
@@ -76,12 +87,42 @@ export function FileTree() {
           <button
             type="button"
             className="icon-button"
+            aria-label="New drawing"
+            title="New drawing"
+            onClick={() => void vault.createDrawing(activeFolder)}
+          >
+            <PenTool size={16} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="icon-button"
             aria-label="New folder"
             title="New folder"
             onClick={() => void newFolder(activeFolder)}
           >
             <FolderPlus size={16} aria-hidden />
           </button>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Add files"
+            title={`Add files (saved in ${ATTACHMENT_FOLDER}/, or drop them on a folder)`}
+            onClick={() => upload.current?.click()}
+          >
+            <Upload size={16} aria-hidden />
+          </button>
+          <input
+            ref={upload}
+            type="file"
+            multiple
+            hidden
+            aria-label="Choose files to add"
+            onChange={(e) => {
+              const files = [...(e.target.files ?? [])];
+              e.target.value = "";
+              if (files.length) void addFiles(files, "");
+            }}
+          />
         </div>
       </div>
       <div
@@ -136,7 +177,8 @@ function Node({
   const open = isFolder && expanded.has(node.path);
   const isActive = vault.active?.path === node.path;
   const isRenaming = renaming === node.path;
-  const canOpen = !isFolder && isMarkdown(node.path);
+  const canOpen = !isFolder;
+  const FileIcon = isDrawing(node.path) ? PenTool : isImage(node.path) ? ImageIcon : isMarkdown(node.path) ? null : File;
 
   const activate = () => {
     if (isFolder) setOpen(node.path, !open);
@@ -189,6 +231,8 @@ function Node({
             aria-hidden
             className={`shrink-0 text-muted transition-transform ${open ? "rotate-90" : ""}`}
           />
+        ) : FileIcon ? (
+          <FileIcon size={14} aria-hidden className="shrink-0 text-muted" />
         ) : (
           <span className="w-[14px] shrink-0" />
         )}

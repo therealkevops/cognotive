@@ -1,17 +1,22 @@
 import { merge } from "node-diff3";
 import type { LocalStore } from "../vault/local-store";
-import { basename, dirname, extname, isWithin, joinPath, noteTitle } from "../vault/paths";
+import { basename, dirname, extname, isBinary, isWithin, joinPath, noteTitle } from "../vault/paths";
 import { gitBlobSha } from "./hash";
 import { RemoteMovedError, type Change, type RemoteRepo } from "./remote";
 import type { SyncStateStore } from "./state";
 
-/** File types that sync. Others in the repo (images, binaries) are left untouched for now. */
+/** Text file types that sync, besides attachments (see isBinary). Other files in the repo are left alone. */
 const TEXT_EXTENSIONS = new Set([".md", ".markdown", ".txt", ".excalidraw", ".canvas", ".json", ".csv"]);
+/** Text types where a line-level merge is safe. JSON-based files (drawings) get conflict copies instead. */
+const MERGEABLE = new Set([".md", ".markdown", ".txt", ".csv"]);
 
 /** Hidden paths (.obsidian, .git, .github, ...) never sync. */
 export function isSyncable(path: string): boolean {
-  return !path.split("/").some((seg) => seg.startsWith(".")) && TEXT_EXTENSIONS.has(extname(path));
+  if (path.split("/").some((seg) => seg.startsWith("."))) return false;
+  return TEXT_EXTENSIONS.has(extname(path)) || isBinary(path);
 }
+
+type Content = string | Uint8Array;
 
 export interface SyncResult {
   /** Local paths created, changed or deleted by remote changes (or merges). */
@@ -27,8 +32,8 @@ export interface SyncResult {
 
 interface LocalWrite {
   path: string;
-  expected: string | undefined;
-  content: string | null;
+  expected: Content | undefined;
+  content: Content | null;
   /** Base sha to record if the write succeeds; on failure the old base is kept. */
   baseSha: string | undefined;
 }
@@ -61,14 +66,24 @@ export class SyncEngine {
     return joinPath(this.folder, path);
   }
 
-  private async localFiles(): Promise<Map<string, { content: string; sha: string }>> {
-    const out = new Map<string, { content: string; sha: string }>();
+  private async localFiles(): Promise<Map<string, { content: Content; sha: string }>> {
+    const out = new Map<string, { content: Content; sha: string }>();
     for (const e of await this.local.list()) {
       if (e.kind !== "file" || !isSyncable(e.path)) continue;
-      const f = await this.local.read(e.path);
-      if (f) out.set(e.path, { content: f.content, sha: await gitBlobSha(f.content) });
+      const content = isBinary(e.path) ? await this.local.readBinary(e.path) : (await this.local.read(e.path))?.content;
+      if (content !== undefined) out.set(e.path, { content, sha: await gitBlobSha(content) });
     }
     return out;
+  }
+
+  private read(path: string, sha: string): Promise<Content> {
+    return isBinary(path) ? this.remote.readBlobBytes(sha) : this.remote.readBlob(sha);
+  }
+
+  private write(w: LocalWrite): Promise<boolean> {
+    return isBinary(w.path)
+      ? this.local.writeBinaryIf(w.path, w.expected as Uint8Array | undefined, w.content as Uint8Array | null)
+      : this.local.writeIf(w.path, w.expected as string | undefined, w.content as string | null);
   }
 
   /** Number of local files changed since the last sync. */
@@ -128,7 +143,7 @@ export class SyncEngine {
         writes.push({
           path,
           expected: l?.content,
-          content: r === undefined ? null : await this.remote.readBlob(r),
+          content: r === undefined ? null : await this.read(path, r),
           baseSha: r,
         });
       } else if (r === b) {
@@ -137,15 +152,18 @@ export class SyncEngine {
         setBase(l?.sha);
       } else if (l === undefined) {
         // We deleted it, they edited it: keep their edit.
-        writes.push({ path, expected: undefined, content: await this.remote.readBlob(r!), baseSha: r });
+        writes.push({ path, expected: undefined, content: await this.read(path, r!), baseSha: r });
       } else if (r === undefined) {
         // They deleted it, we edited it: keep ours.
         pushes.push({ path: this.toRepo(path), content: l.content });
         setBase(l.sha);
       } else {
         // Both edited.
-        const theirs = await this.remote.readBlob(r);
-        const merged = b !== undefined ? mergeText(l.content, await this.remote.readBlob(b), theirs) : null;
+        const theirs = await this.read(path, r);
+        const merged =
+          b !== undefined && MERGEABLE.has(extname(path)) && typeof l.content === "string" && typeof theirs === "string"
+            ? mergeText(l.content, await this.remote.readBlob(b), theirs)
+            : null;
         if (merged !== null) {
           const sha = await gitBlobSha(merged);
           writes.push({ path, expected: l.content, content: merged, baseSha: sha });
@@ -174,7 +192,7 @@ export class SyncEngine {
     const changedLocally: string[] = [];
     const deferred: string[] = [];
     for (const w of writes) {
-      if (await this.local.writeIf(w.path, w.expected, w.content)) {
+      if (await this.write(w)) {
         changedLocally.push(w.path);
         if (w.baseSha === undefined) newBase.delete(w.path);
         else newBase.set(w.path, w.baseSha);

@@ -2,7 +2,7 @@
 
 import { FilePlus, FileText } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { dirname, isMarkdown, noteTitle, validateName } from "@/lib/vault/paths";
+import { basename, dirname, isMarkdown, noteTitle, validateName } from "@/lib/vault/paths";
 import { useVault } from "../vault/useVault";
 
 interface Option {
@@ -26,10 +26,10 @@ export function QuickSwitcher({ onClose }: { onClose(): void }) {
     if (!q) {
       // Most recently modified first.
       found = vault.entries
-        .filter((e) => e.kind === "file" && isMarkdown(e.path))
+        .filter((e) => e.kind === "file")
         .sort((a, b) => b.mtime - a.mtime)
         .slice(0, 20)
-        .map((e) => ({ key: e.path, title: noteTitle(e.path), folder: dirname(e.path) }));
+        .map((e) => ({ key: e.path, title: isMarkdown(e.path) ? noteTitle(e.path) : basename(e.path), folder: dirname(e.path) }));
     } else {
       found = vault.index
         .searchTitles(q)

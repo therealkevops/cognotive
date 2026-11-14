@@ -39,6 +39,7 @@ const schema: SanitizeSchema = {
       "dataTag",
     ],
     code: [["className", /^language-./, "math-inline", "math-display"]],
+    img: [...(defaultSchema.attributes?.img ?? []), ["className", "embed-image", "embed-drawing"], "dataAsset", "width"],
   },
 };
 

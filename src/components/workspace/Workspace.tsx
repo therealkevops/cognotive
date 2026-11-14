@@ -10,7 +10,7 @@ import type { LinkHost } from "@/lib/editor/wikilinks";
 import type { LinkContext } from "@/lib/markdown/remark-links";
 import { extractHeadings } from "@/lib/markdown/outline";
 import { plainText } from "@/lib/search/note-index";
-import { basename, dirname, isMarkdown, noteTitle } from "@/lib/vault/paths";
+import { basename, dirname, extname, isDrawing, isImage, isMarkdown, noteTitle } from "@/lib/vault/paths";
 import { GraphDialog, LocalGraph } from "../graph/GraphDialog";
 import { SettingsDialog } from "../settings/SettingsDialog";
 import { SyncButton } from "../sync/SyncButton";
@@ -18,6 +18,7 @@ import { useSync } from "../sync/useSync";
 import { useVault } from "../vault/useVault";
 import { VaultSwitcher } from "../vault/VaultSwitcher";
 import { FileTree } from "./FileTree";
+import { FileView } from "./FileView";
 import { LinksPanel } from "./LinksPanel";
 import { Outline } from "./Outline";
 import { QuickSwitcher } from "./QuickSwitcher";
@@ -26,6 +27,11 @@ import { TagsPanel } from "./TagsPanel";
 import { Toolbar } from "./Toolbar";
 
 const MarkdownEditor = dynamic(() => import("./MarkdownEditor"), { ssr: false });
+// Excalidraw is about 1 MB: loaded only when a drawing is opened.
+const DrawingView = dynamic(() => import("./DrawingView"), {
+  ssr: false,
+  loading: () => <p className="p-8 text-muted">Loading drawing…</p>,
+});
 const ReadingView = dynamic(() => import("./ReadingView"), {
   ssr: false,
   loading: () => <p className="p-8 text-muted">Rendering…</p>,
@@ -129,8 +135,7 @@ export function Workspace() {
       const from = vault.active?.path;
       const path = target ? vault.links.resolve(target, from) : (from ?? null);
       if (path) {
-        if (!isMarkdown(path)) return; // drawings and other files open in later phases
-        if (heading) setPendingHeading(heading);
+        if (heading && isMarkdown(path)) setPendingHeading(heading);
         if (path !== from) await vault.open(path);
         else if (heading) setPendingHeading(heading);
         return;
@@ -178,8 +183,17 @@ export function Workspace() {
           })),
       headings: (p) => vault.links.get(p)?.headings.map((h) => h.text) ?? [],
       preview: (p) => plainText(vault.links.content(p) ?? "").slice(0, 500),
+      embedPath: (t) => {
+        const p = vault.links.resolve(t, vault.active?.path);
+        return p && (isImage(p) || isDrawing(p)) ? p : null;
+      },
+      fileUrl: (p) => vault.fileUrl(p, { dark: prefersDark() }),
+      saveFiles: async (files) => {
+        const paths = await vault.addAttachments(files);
+        return paths.map((p) => vault.links.linkText(p));
+      },
     }),
-    [vault.links, vault.active?.path, openLink],
+    [vault, openLink],
   );
 
   const linkContext = useMemo<LinkContext>(
@@ -257,6 +271,9 @@ export function Workspace() {
     </>
   );
 
+  const activePathNow = vault.active?.path ?? null;
+  const kind = !activePathNow ? null : isMarkdown(activePathNow) ? "note" : isDrawing(activePathNow) ? "drawing" : "file";
+
   return (
     <>
       <AppShell
@@ -315,7 +332,7 @@ export function Workspace() {
           )}
           <SaveIndicator />
           <SyncButton />
-          {vault.active && (
+          {kind === "note" && (
             <div role="radiogroup" aria-label="View mode" className="flex rounded-md border border-border p-0.5">
               {MODES.map(({ id, label, icon: Icon }) => (
                 <button
@@ -336,16 +353,25 @@ export function Workspace() {
             </div>
           )}
         </header>
-        {vault.active && mode !== "reading" && (
+        {kind === "note" && mode !== "reading" && (
           <div className="border-b border-border px-3 py-1">
             <Toolbar view={view} />
           </div>
         )}
-        <div className="min-h-0 flex-1 overflow-y-auto" ref={readingRef}>
+        <div className={`min-h-0 flex-1 ${kind === "drawing" ? "overflow-hidden" : "overflow-y-auto"}`} ref={readingRef}>
           {!vault.ready ? (
             <p className="p-8 text-muted">Loading vault…</p>
           ) : !vault.active ? (
             <EmptyState onCreate={() => void vault.createNote()} onFind={() => setSwitcherOpen(true)} />
+          ) : kind === "drawing" ? (
+            <DrawingView
+              docKey={`${vault.active.version}`}
+              initial={vault.active.initial}
+              onChange={vault.edit}
+              onOpenLink={(t, h) => void openLink(t, h)}
+            />
+          ) : kind === "file" ? (
+            <FileView path={vault.active.path} />
           ) : mode === "reading" ? (
             <ReadingView
               markdown={vault.activeText}
@@ -353,6 +379,8 @@ export function Workspace() {
               properties={vault.links.get(vault.active.path)?.properties}
               onOpenLink={(t, h) => void openLink(t, h)}
               onTag={showTag}
+              fileUrl={(p) => vault.fileUrl(p, { dark: prefersDark() })}
+              onOpenFile={(p) => void vault.open(p)}
             />
           ) : (
             <MarkdownEditor
@@ -376,14 +404,25 @@ export function Workspace() {
   );
 }
 
-/** The note's name, editable in place. Renames the file on Enter or blur. */
+function prefersDark() {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+/** A file's name without its extension: what the title box shows and edits. */
+function stem(path: string) {
+  const name = basename(path);
+  const ext = extname(name);
+  return ext ? name.slice(0, -ext.length) : name;
+}
+
+/** The file's name, editable in place. Renames on Enter or blur; the extension is kept. */
 function TitleInput({ path }: { path: string }) {
   const vault = useVault();
-  const [value, setValue] = useState(noteTitle(path));
+  const [value, setValue] = useState(stem(path));
   const commit = async () => {
     const name = value.trim();
-    if (name === noteTitle(path)) return;
-    if (!name || !(await vault.rename(path, name))) setValue(noteTitle(path));
+    if (name === stem(path)) return;
+    if (!name || !(await vault.rename(path, name))) setValue(stem(path));
   };
   return (
     <input
@@ -395,7 +434,7 @@ function TitleInput({ path }: { path: string }) {
       onKeyDown={(e) => {
         if (e.key === "Enter") e.currentTarget.blur();
         if (e.key === "Escape") {
-          setValue(noteTitle(path));
+          setValue(stem(path));
           e.currentTarget.blur();
         }
       }}

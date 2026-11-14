@@ -351,3 +351,28 @@ mark {
 .properties dt {
   color: var(--muted);
 }
+
+/* ---------- Attachments and drawings ---------- */
+
+.cm-embed {
+  display: inline-block;
+  max-width: 100%;
+  max-height: 28rem;
+  border-radius: 4px;
+  vertical-align: top;
+}
+.cm-embed-missing,
+.prose-note img.embed-missing {
+  min-width: 8rem;
+  min-height: 2rem;
+  border: 1px dashed var(--border);
+}
+.prose-note img.embed-image,
+.prose-note img.embed-drawing {
+  max-width: 100%;
+  border-radius: 4px;
+}
+.prose-note img.embed-drawing {
+  cursor: pointer;
+  border: 1px solid var(--border);
+}

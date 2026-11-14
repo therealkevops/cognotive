@@ -8,7 +8,8 @@ export interface Head {
 /** A change to push: new content, or null to delete. Paths are repo paths. */
 export interface Change {
   path: string;
-  content: string | null;
+  /** Text for notes and drawings, bytes for attachments, null to delete. */
+  content: string | Uint8Array | null;
 }
 
 /** Thrown when the branch moved since we read it; sync re-reads and retries. */
@@ -21,6 +22,7 @@ export interface RemoteRepo {
   /** Every blob in the tree: repo path → blob sha. */
   files(tree: string): Promise<Map<string, string>>;
   readBlob(sha: string): Promise<string>;
+  readBlobBytes(sha: string): Promise<Uint8Array>;
   /** Commits `changes` on top of `parent` and moves the branch. */
   commit(parent: Head | null, changes: Change[], message: string): Promise<Head>;
 }
@@ -46,6 +48,10 @@ export class GitHubRemote implements RemoteRepo {
 
   readBlob(sha: string): Promise<string> {
     return this.client.blob(this.owner, this.repo, sha);
+  }
+
+  readBlobBytes(sha: string): Promise<Uint8Array> {
+    return this.client.blobBytes(this.owner, this.repo, sha);
   }
 
   async commit(parent: Head | null, changes: Change[], message: string): Promise<Head> {

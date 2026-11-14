@@ -97,4 +97,36 @@ describe("LocalStore", () => {
     expect(await s.writeIf("a.md", "v2", null)).toBe(true);
     expect(await s.read("a.md")).toBeUndefined();
   });
+
+  it("stores attachments as bytes, alongside text files", async () => {
+    const s = makeStore();
+    const png = new Uint8Array([137, 80, 78, 71, 0, 255]);
+    await s.writeBinary("attachments/pic.png", png);
+    await s.write("note.md", "x");
+    expect(await paths(s)).toEqual(["attachments/pic.png", "note.md"]);
+    expect(await s.readBinary("attachments/pic.png")).toEqual(png);
+    expect(await s.read("attachments/pic.png")).toBeUndefined();
+  });
+
+  it("moves and deletes attachments with their folder", async () => {
+    const s = makeStore();
+    await s.writeBinary("A/pic.png", new Uint8Array([1]));
+    await s.rename("A", "B");
+    expect(await s.readBinary("B/pic.png")).toEqual(new Uint8Array([1]));
+    await expect(s.rename("B/pic.png", "B/pic.png")).resolves.toBeUndefined();
+    await s.write("x.md", "");
+    await expect(s.rename("x.md", "B/pic.png")).rejects.toThrow(/already exists/);
+    await s.delete("B");
+    expect(await paths(s)).toEqual(["x.md"]);
+  });
+
+  it("writeBinaryIf compares bytes", async () => {
+    const s = makeStore();
+    await s.writeBinary("a.png", new Uint8Array([1, 2]));
+    expect(await s.writeBinaryIf("a.png", new Uint8Array([9]), new Uint8Array([3]))).toBe(false);
+    expect(await s.writeBinaryIf("a.png", new Uint8Array([1, 2]), new Uint8Array([3]))).toBe(true);
+    expect(await s.readBinary("a.png")).toEqual(new Uint8Array([3]));
+    expect(await s.writeBinaryIf("a.png", new Uint8Array([3]), null)).toBe(true);
+    expect(await s.readBinary("a.png")).toBeUndefined();
+  });
 });

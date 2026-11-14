@@ -75,3 +75,45 @@ export function uniquePath(desired: string, taken: (path: string) => boolean): s
     if (!taken(candidate)) return candidate;
   }
 }
+
+const MIME: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".avif": "image/avif",
+  ".bmp": "image/bmp",
+  ".svg": "image/svg+xml",
+  ".pdf": "application/pdf",
+  ".mp3": "audio/mpeg",
+  ".m4a": "audio/mp4",
+  ".wav": "audio/wav",
+  ".ogg": "audio/ogg",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".mov": "video/quicktime",
+};
+
+/** Files stored as bytes rather than text: images, PDFs, audio and video. */
+export function isBinary(path: string): boolean {
+  return extname(path) in MIME;
+}
+
+export function isImage(path: string): boolean {
+  return mimeType(path).startsWith("image/");
+}
+
+export function isDrawing(path: string): boolean {
+  return path.toLowerCase().endsWith(".excalidraw");
+}
+
+export function mimeType(path: string): string {
+  return MIME[extname(path)] ?? "application/octet-stream";
+}
+
+/** The file extension to use for a pasted or dropped file of this MIME type. */
+export function extensionFor(mime: string): string | null {
+  const hit = Object.entries(MIME).find(([, m]) => m === mime);
+  return hit ? hit[0] : null;
+}
