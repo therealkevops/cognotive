@@ -115,6 +115,11 @@ mark {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+.cm-md-frontmatter {
+  color: var(--muted);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.85em;
+}
 .cm-md-url {
   color: var(--muted);
 }
@@ -258,3 +263,91 @@ mark {
 .callout-failure, .callout-danger, .callout-bug { --callout: 220 38 38; }
 .callout-example, .callout-abstract { --callout: 124 58 237; }
 .callout-quote { --callout: 107 114 128; }
+
+/* ---------- Links ---------- */
+
+.cm-wikilink {
+  color: var(--accent);
+  cursor: pointer;
+}
+.cm-live-preview .cm-wikilink {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  text-underline-offset: 2px;
+}
+.cm-wikilink-unresolved {
+  color: color-mix(in srgb, var(--accent) 55%, var(--muted));
+  text-decoration-style: dashed !important;
+}
+.cm-link-preview {
+  max-width: 22rem;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.cm-link-preview-title {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+.cm-link-preview-body {
+  color: var(--muted);
+  white-space: pre-line;
+  display: -webkit-box;
+  -webkit-line-clamp: 8;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cm-tooltip {
+  background: var(--background) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+  color: var(--foreground);
+}
+.cm-tooltip-autocomplete ul li[aria-selected] {
+  background: color-mix(in srgb, var(--accent) 18%, transparent) !important;
+  color: var(--foreground) !important;
+}
+.cm-completionDetail {
+  color: var(--muted);
+  font-style: normal !important;
+  margin-left: 0.6em;
+}
+
+.prose-note a.internal-link {
+  text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.prose-note a.internal-link.unresolved {
+  color: color-mix(in srgb, var(--accent) 55%, var(--muted));
+  text-decoration-style: dashed;
+}
+.prose-note a.tag {
+  text-decoration: none;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 999px;
+  padding: 0.05em 0.5em;
+  font-size: 0.9em;
+}
+.prose-note .embed {
+  border-left: 3px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  padding: 0.2em 0 0.2em 1em;
+}
+.prose-note .embed > * + * {
+  margin-top: 0.7em;
+}
+.prose-note .embed-title {
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.properties {
+  display: grid;
+  grid-template-columns: minmax(6rem, max-content) 1fr;
+  gap: 0.25rem 1rem;
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.75rem;
+}
+.properties dt {
+  color: var(--muted);
+}

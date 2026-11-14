@@ -83,3 +83,48 @@ describe("splitFrontmatter", () => {
     });
   });
 });
+
+describe("renderMarkdown links", () => {
+  const ctx = {
+    resolve: (t: string) => ({ garden: "Garden.md", recipes: "Recipes.md" })[t.toLowerCase()] ?? null,
+    read: (p: string) =>
+      ({
+        "Garden.md": "---\ntags: x\n---\n# Garden\nTomatoes.\n## Beds\nThree beds.\n## Shed\nTools.",
+        "Recipes.md": "See ![[Recipes]] forever",
+      })[p],
+  };
+
+  it("renders wikilinks with their target, alias and resolution", () => {
+    const html = renderMarkdown("Go to [[Garden]], [[Garden#Beds|the beds]] or [[Nowhere]].", ctx);
+    expect(html).toContain('<a href="#" class="internal-link" data-href="Garden">Garden</a>');
+    expect(html).toContain('data-href="Garden#Beds">the beds</a>');
+    expect(html).toContain('class="internal-link unresolved" data-href="Nowhere"');
+  });
+
+  it("renders tags as links, not headings or numbers", () => {
+    const html = renderMarkdown("# Title\nA #Idea and #area/home but not #42.", ctx);
+    expect(html).toContain('<a href="#" class="tag" data-tag="idea">#Idea</a>');
+    expect(html).toContain('data-tag="area/home"');
+    expect(html).not.toContain('data-tag="42"');
+    expect(html).toContain("<h1>Title</h1>");
+  });
+
+  it("embeds a note, or one section of it", () => {
+    const whole = renderMarkdown("![[Garden]]", ctx);
+    expect(whole).toContain('<div class="embed" data-href="Garden">');
+    expect(whole).toContain("Three beds.");
+    expect(whole).not.toContain("tags: x");
+    const section = renderMarkdown("![[Garden#Beds]]", ctx);
+    expect(section).toContain("Three beds.");
+    expect(section).not.toContain("Tools.");
+  });
+
+  it("stops embedding at a fixed depth", () => {
+    // Recipes embeds itself; rendering must terminate.
+    expect(renderMarkdown("![[Recipes]]", ctx)).toContain("embed");
+  });
+
+  it("leaves wikilinks in code alone", () => {
+    expect(renderMarkdown("`[[Garden]]`", ctx)).toContain("<code>[[Garden]]</code>");
+  });
+});

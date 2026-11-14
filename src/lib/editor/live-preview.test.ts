@@ -49,6 +49,47 @@ describe("live preview", () => {
     expect(lineText(v, 1)).toBe("> [!tip] Title");
   });
 
+  it("shows wikilinks as their text, or their alias", () => {
+    const doc = "See [[Garden]] and [[Recipes/Pasta|pasta]] and ![[Pic]]\nend";
+    const v = view(doc, doc.length);
+    expect(lineText(v, 1)).toBe("See Garden and pasta and Pic");
+    v.dispatch({ selection: { anchor: 8 } });
+    expect(lineText(v, 1)).toBe("See [[Garden]] and pasta and Pic");
+  });
+
+  it("marks unresolved wikilinks and opens links on click", () => {
+    const opened: string[] = [];
+    const v = new EditorView({
+      doc: "[[Known]] [[Unknown]]\nend",
+      selection: EditorSelection.cursor(24),
+      extensions: editorExtensions({
+        livePreview: true,
+        onChange: () => {},
+        links: {
+          resolve: (t) => (t === "Known" ? "Known.md" : null),
+          open: (t) => opened.push(t),
+          notes: () => [],
+          headings: () => [],
+          preview: () => "",
+        },
+      }),
+      parent: document.body,
+    });
+    views.push(v);
+    const marks = v.contentDOM.querySelectorAll(".cm-wikilink");
+    expect(marks).toHaveLength(2);
+    expect(marks[1].classList.contains("cm-wikilink-unresolved")).toBe(true);
+    expect(marks[0].classList.contains("cm-wikilink-unresolved")).toBe(false);
+  });
+
+  it("treats top-of-note frontmatter as properties, not headings", () => {
+    const doc = "---\ntags: [a]\n---\n# Title\nend";
+    const v = view(doc, doc.length);
+    expect(v.contentDOM.querySelectorAll(".cm-md-frontmatter").length).toBeGreaterThan(0);
+    expect(lineText(v, 2)).toBe("tags: [a]");
+    expect(lineText(v, 4)).toBe("Title");
+  });
+
   it("ticks a task when its checkbox is clicked", () => {
     const v = view(doc, doc.length);
     v.contentDOM.querySelector<HTMLInputElement>("input.cm-task-checkbox")!.click();

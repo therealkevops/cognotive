@@ -5,7 +5,7 @@ explore them. Notes are stored in a GitHub repository you choose (or locally in 
 
 See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 
-**Status:** phase 2 (GitHub storage). Vaults live in this browser or in GitHub repositories.
+**Status:** phase 3 (links and graph). Vaults live in this browser or in GitHub repositories.
 
 ### What works
 - File tree: create, rename (double-click, F2 or the pencil), delete, and drag notes or
@@ -17,6 +17,19 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 - Quick switcher (Ctrl/Cmd+O) that also creates notes; full-text search (Ctrl/Cmd+Shift+F)
 - Outline of the open note's headings
 - Autosave (400 ms after you stop typing, and when the tab is hidden)
+- Links between notes, as in Obsidian:
+  - `[[Note]]`, `[[Note#Heading]]`, `[[Note|text]]`, and markdown links to `.md` files
+  - typing `[[` suggests notes, aliases and (after `#`) headings; hovering a link previews the note
+  - click a link in live preview (or Ctrl/Cmd-click anywhere) to follow it; links to missing
+    notes are dashed and create the note when followed
+  - `![[Note]]` and `![[Note#Heading]]` embed another note in the reading view
+  - renaming or moving a note rewrites every link to it
+- Links panel: backlinks with context, unlinked mentions (with a one-click **Link** button),
+  and outgoing links
+- Tags (`#tag`, `#nested/tag`, or `tags:` in properties) with a Tags pane; search `tag:name`
+- Properties (YAML frontmatter) shown at the top of the reading view; `aliases:` count as names
+- Graph view (Ctrl/Cmd+G) of the whole vault with highlight, tag filter, unlinked notes and
+  not-yet-created notes; a local graph of the open note in the right panel
 - Several vaults, with a switcher at the top of the sidebar
 - GitHub vaults: sign in with GitHub, pick a repository, branch and optional subfolder.
   Notes sync both ways; see [How sync works](#how-sync-works)
@@ -123,6 +136,8 @@ src/lib/            framework-free logic with unit tests alongside:
   github/           browser GitHub REST client
   sync/             sync engine (three-way, conflict copies), remote adapter, sync state
   server/           sign-in helpers used by the auth routes (session cookie, OAuth)
+  links/            link and tag parsing, Obsidian-style resolution, LinkIndex (backlinks,
+                    mentions, graph, rename rewriting)
 tests/e2e/          Playwright tests
 docs/PLAN.md        design and roadmap
 ```

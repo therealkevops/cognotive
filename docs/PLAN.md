@@ -220,12 +220,17 @@ returned by section rather than whole.
 | **0. Scaffold** ✅ | Next.js + TS, Tailwind, ESLint, Vitest, Playwright, GitHub Actions CI, Vercel project linked | A hello-world deploys from `main` and CI is green |
 | **1. Local editor** ✅ | `VaultStore` interface + `LocalStore`; file tree; CodeMirror with live preview and all formatting; quick switcher; keyword search | You can write and organise notes entirely in the browser |
 | **2. GitHub store** ✅ (text files) | GitHub App, login, Settings → Vaults (multiple vaults, switcher), `GitHubStore`, sync engine with batching, pull, conflicts, offline; attachments | Edits made in the app show up as commits; edits pushed from Obsidian show up in the app |
-| **3. Linking** | Wikilinks, autocomplete, backlinks, unlinked mentions, tags, frontmatter, rename refactor, graph views | The graph matches what Obsidian shows for the same vault |
+| **3. Linking** ✅ | Wikilinks, autocomplete, backlinks, unlinked mentions, tags, frontmatter, rename refactor, graph views | The graph matches what Obsidian shows for the same vault |
 | **4. Excalidraw** | Drawing files, embeds, SVG previews, links from drawings | Drawings round-trip through the repo and appear in the graph |
 | **5. LLM** | `/api/chat` proxy, browser-side tool loop, chat panel, citations, allowlist | You can ask "what have I written about X and how does it connect to Y?" |
 | **6. Polish** | Command palette, themes, mobile layout, templates, daily notes, write tools for the LLM | — |
 
 Each phase ends deployed to Vercel and usable.
+
+**Carried over from phase 3:** styling `#tags` inside the editor (they're styled in the
+reading view and indexed everywhere), showing embeds inline in live preview (they render in the
+reading view), jumping to a `#^block` reference (it opens the note), and drawings in the graph
+(phase 4).
 
 **Carried over from phase 2:** attachments (pasting/dropping images, syncing binary files),
 and per-vault settings in `.noted/settings.json`. Images already in a repo are left alone.

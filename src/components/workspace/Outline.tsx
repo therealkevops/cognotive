@@ -28,8 +28,6 @@ export function Outline({ markdown, onJump }: { markdown: string; onJump(offset:
           ))}
         </ul>
       )}
-      <h2 className="mt-6 mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Backlinks</h2>
-      <p className="text-sm text-muted">Links between notes arrive in phase 3.</p>
     </section>
   );
 }

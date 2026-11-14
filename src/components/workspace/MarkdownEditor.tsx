@@ -2,8 +2,9 @@
 
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { editorExtensions, livePreviewExtension, livePreviewMode } from "@/lib/editor/setup";
+import type { LinkHost } from "@/lib/editor/wikilinks";
 
 export interface MarkdownEditorProps {
   /** Identifies the document; when it changes the editor reloads `initial`. */
@@ -14,6 +15,8 @@ export interface MarkdownEditorProps {
   /** Receives the view once created (and null on unmount), for toolbar commands. */
   onView?(view: EditorView | null): void;
   autoFocus?: boolean;
+  /** Link resolution, opening and completion. May change between renders. */
+  links?: LinkHost;
 }
 
 /** CodeMirror 6 markdown editor. Uncontrolled: it owns the text after loading `initial`. */
@@ -24,15 +27,30 @@ export default function MarkdownEditor({
   onChange,
   onView,
   autoFocus,
+  links,
 }: MarkdownEditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   const livePreviewRef = useRef(livePreview);
 
+  const linksRef = useRef(links);
   useEffect(() => {
     onChangeRef.current = onChange;
-  }, [onChange]);
+    linksRef.current = links;
+  }, [onChange, links]);
+
+  // A stable host that always calls the latest `links`, so the editor needn't be rebuilt.
+  const linkHostProxy = useMemo<LinkHost>(
+    () => ({
+      resolve: (t) => linksRef.current?.resolve(t) ?? null,
+      open: (t, h) => linksRef.current?.open(t, h),
+      notes: () => linksRef.current?.notes() ?? [],
+      headings: (p) => linksRef.current?.headings(p) ?? [],
+      preview: (p) => linksRef.current?.preview(p) ?? "",
+    }),
+    [],
+  );
 
   // Create the view once.
   useEffect(() => {
@@ -57,6 +75,7 @@ export default function MarkdownEditor({
         extensions: editorExtensions({
           livePreview: livePreviewRef.current,
           onChange: (text) => onChangeRef.current(text),
+          links: linkHostProxy,
         }),
       }),
     );

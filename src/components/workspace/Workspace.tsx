@@ -1,22 +1,28 @@
 "use client";
 
 import type { EditorView } from "@codemirror/view";
-import { BookOpen, CodeXml, Files, PanelLeft, Pencil, Search, Settings, X } from "lucide-react";
+import { BookOpen, CodeXml, Files, Network, PanelLeft, Pencil, Search, Settings, Tags, X } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { readPref, writePref } from "@/lib/prefs";
+import type { LinkHost } from "@/lib/editor/wikilinks";
+import type { LinkContext } from "@/lib/markdown/remark-links";
 import { extractHeadings } from "@/lib/markdown/outline";
-import { noteTitle } from "@/lib/vault/paths";
+import { plainText } from "@/lib/search/note-index";
+import { basename, dirname, isMarkdown, noteTitle } from "@/lib/vault/paths";
+import { GraphDialog, LocalGraph } from "../graph/GraphDialog";
 import { SettingsDialog } from "../settings/SettingsDialog";
 import { SyncButton } from "../sync/SyncButton";
 import { useSync } from "../sync/useSync";
 import { useVault } from "../vault/useVault";
 import { VaultSwitcher } from "../vault/VaultSwitcher";
 import { FileTree } from "./FileTree";
+import { LinksPanel } from "./LinksPanel";
 import { Outline } from "./Outline";
 import { QuickSwitcher } from "./QuickSwitcher";
 import { SearchPanel } from "./SearchPanel";
+import { TagsPanel } from "./TagsPanel";
 import { Toolbar } from "./Toolbar";
 
 const MarkdownEditor = dynamic(() => import("./MarkdownEditor"), { ssr: false });
@@ -26,7 +32,8 @@ const ReadingView = dynamic(() => import("./ReadingView"), {
 });
 
 type Mode = "live" | "source" | "reading";
-type SidebarTab = "files" | "search";
+type SidebarTab = "files" | "search" | "tags";
+type PanelTab = "outline" | "links" | "graph";
 
 const MODES: Array<{ id: Mode; label: string; icon: typeof Pencil }> = [
   { id: "live", label: "Live preview", icon: Pencil },
@@ -43,6 +50,15 @@ export function Workspace() {
   const [tab, setTab] = useState<SidebarTab>("files");
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [graphOpen, setGraphOpen] = useState(false);
+  const [panelTab, setPanelTabState] = useState<PanelTab>(() => readPref<PanelTab>("panelTab", "links"));
+  const setPanelTab = (t: PanelTab) => {
+    setPanelTabState(t);
+    writePref("panelTab", t);
+  };
+  const [searchQuery, setSearchQuery] = useState("");
+  /** Heading to scroll to once the note being opened has loaded. */
+  const [pendingHeading, setPendingHeading] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [view, setView] = useState<EditorView | null>(null);
   const readingRef = useRef<HTMLDivElement>(null);
@@ -72,6 +88,9 @@ export function Workspace() {
       } else if (key === "e" && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         setMode(mode === "reading" ? lastEditMode : "reading");
+      } else if (key === "g" && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        setGraphOpen(true);
       } else if (e.code === "KeyN" && e.altKey) {
         e.preventDefault();
         void vault.createNote();
@@ -89,17 +108,89 @@ export function Workspace() {
     setSidebarOpen(false);
   }
 
-  const jumpTo = (offset: number) => {
-    if (mode === "reading") {
-      const index = extractHeadings(vault.activeText).findIndex((h) => h.offset === offset);
-      readingRef.current
-        ?.querySelectorAll("h1, h2, h3, h4, h5, h6")
-        [index]?.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else if (view) {
-      view.dispatch({ selection: { anchor: offset }, scrollIntoView: true });
-      view.focus();
-    }
-  };
+  const jumpTo = useCallback(
+    (offset: number) => {
+      if (mode === "reading") {
+        const index = extractHeadings(vault.activeText).findIndex((h) => h.offset === offset);
+        readingRef.current
+          ?.querySelectorAll(".prose-note > h1, .prose-note > h2, .prose-note > h3, .prose-note > h4, .prose-note > h5, .prose-note > h6")
+          [index]?.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else if (view) {
+        view.dispatch({ selection: { anchor: offset }, scrollIntoView: true });
+        view.focus();
+      }
+    },
+    [mode, vault.activeText, view],
+  );
+
+  /** Follows a link: opens the note it resolves to, or creates it. Then scrolls to `heading`. */
+  const openLink = useCallback(
+    async (target: string, heading?: string) => {
+      const from = vault.active?.path;
+      const path = target ? vault.links.resolve(target, from) : (from ?? null);
+      if (path) {
+        if (!isMarkdown(path)) return; // drawings and other files open in later phases
+        if (heading) setPendingHeading(heading);
+        if (path !== from) await vault.open(path);
+        else if (heading) setPendingHeading(heading);
+        return;
+      }
+      const clean = target.replace(/\.md$/i, "");
+      await vault.createNote(clean.includes("/") ? dirname(clean) : "", basename(clean));
+    },
+    [vault],
+  );
+
+  // Scroll to a linked heading once its note is open.
+  useEffect(() => {
+    if (!pendingHeading || !vault.active) return;
+    const want = pendingHeading.toLowerCase();
+    const h = extractHeadings(vault.activeText).find((x) => x.text.toLowerCase() === want);
+    // Wait a frame so the editor or reading view has the new note.
+    const id = requestAnimationFrame(() => {
+      if (h) jumpTo(h.offset);
+      setPendingHeading(null);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [pendingHeading, vault.active, vault.activeText, jumpTo]);
+
+  const showTag = useCallback((tag: string) => {
+    setSearchQuery(`tag:${tag}`);
+    setTab("search");
+    setSidebarOpen(true);
+  }, []);
+
+  // What the editor needs for [[links]].
+  const linkHost = useMemo<LinkHost>(
+    () => ({
+      resolve: (t) => vault.links.resolve(t, vault.active?.path),
+      open: (t, h) => void openLink(t, h),
+      notes: () =>
+        vault.links
+          .paths()
+          .filter((p) => p !== vault.active?.path)
+          .sort()
+          .map((p) => ({
+            path: p,
+            title: noteTitle(p),
+            aliases: vault.links.get(p)?.aliases ?? [],
+            linkText: vault.links.linkText(p),
+          })),
+      headings: (p) => vault.links.get(p)?.headings.map((h) => h.text) ?? [],
+      preview: (p) => plainText(vault.links.content(p) ?? "").slice(0, 500),
+    }),
+    [vault.links, vault.active?.path, openLink],
+  );
+
+  const linkContext = useMemo<LinkContext>(
+    () => ({
+      resolve: (t) => vault.links.resolve(t, vault.active?.path),
+      read: (p) => vault.links.content(p),
+    }),
+    // indexVersion: re-render links and embeds when other notes change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [vault.links, vault.active?.path, vault.indexVersion],
+  );
 
   const sidebar = (
     <>
@@ -109,6 +200,7 @@ export function Workspace() {
           [
             ["files", "Files", Files],
             ["search", "Search", Search],
+            ["tags", "Tags", Tags],
           ] as const
         ).map(([id, label, Icon]) => (
           <button
@@ -134,8 +226,25 @@ export function Workspace() {
           <X size={16} aria-hidden />
         </button>
       </div>
-      <div className="min-h-0 flex-1">{tab === "files" ? <FileTree /> : <SearchPanel autoFocus />}</div>
-      <div className="-mx-1 mt-2 border-t border-border pt-2">
+      <div className="min-h-0 flex-1">
+        {tab === "files" ? (
+          <FileTree />
+        ) : tab === "search" ? (
+          <SearchPanel query={searchQuery} onQuery={setSearchQuery} autoFocus />
+        ) : (
+          <TagsPanel onTag={showTag} />
+        )}
+      </div>
+      <button
+        type="button"
+        className="-mx-1 mt-2 flex items-center gap-2 rounded px-2 py-1.5 text-sm text-muted hover:bg-foreground/5 hover:text-foreground"
+        onClick={() => setGraphOpen(true)}
+        title="Graph view (Ctrl/Cmd+G)"
+      >
+        <Network size={15} aria-hidden />
+        Graph view
+      </button>
+      <div className="-mx-1 mt-1 border-t border-border pt-2">
         <button
           type="button"
           className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-muted hover:bg-foreground/5 hover:text-foreground"
@@ -154,7 +263,41 @@ export function Workspace() {
         sidebar={sidebar}
         sidebarOpen={sidebarOpen}
         onCloseSidebar={() => setSidebarOpen(false)}
-        panel={vault.active ? <Outline markdown={vault.activeText} onJump={jumpTo} /> : null}
+        panel={
+          vault.active ? (
+            <>
+              <div role="tablist" aria-label="Note panels" className="mb-4 flex gap-1">
+                {(
+                  [
+                    ["links", "Links"],
+                    ["outline", "Outline"],
+                    ["graph", "Graph"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={panelTab === id}
+                    className={`flex-1 rounded px-2 py-1 text-sm ${
+                      panelTab === id ? "bg-background font-medium shadow-sm" : "text-muted hover:text-foreground"
+                    }`}
+                    onClick={() => setPanelTab(id)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {panelTab === "outline" ? (
+                <Outline markdown={vault.activeText} onJump={jumpTo} />
+              ) : panelTab === "links" ? (
+                <LinksPanel onOpenLink={(t) => void openLink(t)} />
+              ) : (
+                <LocalGraph onOpenFull={() => setGraphOpen(true)} />
+              )}
+            </>
+          ) : null
+        }
       >
         <header className="flex items-center gap-2 border-b border-border px-3 py-2">
           <button
@@ -204,7 +347,13 @@ export function Workspace() {
           ) : !vault.active ? (
             <EmptyState onCreate={() => void vault.createNote()} onFind={() => setSwitcherOpen(true)} />
           ) : mode === "reading" ? (
-            <ReadingView markdown={vault.activeText} />
+            <ReadingView
+              markdown={vault.activeText}
+              links={linkContext}
+              properties={vault.links.get(vault.active.path)?.properties}
+              onOpenLink={(t, h) => void openLink(t, h)}
+              onTag={showTag}
+            />
           ) : (
             <MarkdownEditor
               docKey={`${vault.active.version}`}
@@ -212,6 +361,7 @@ export function Workspace() {
               livePreview={mode === "live"}
               onChange={vault.edit}
               onView={setView}
+              links={linkHost}
               // On touch devices, focusing would pop up the keyboard on every note open.
               autoFocus={!window.matchMedia("(pointer: coarse)").matches}
             />
@@ -220,6 +370,7 @@ export function Workspace() {
       </AppShell>
       {switcherOpen && <QuickSwitcher onClose={() => setSwitcherOpen(false)} />}
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      {graphOpen && <GraphDialog onClose={() => setGraphOpen(false)} />}
       <Toasts />
     </>
   );

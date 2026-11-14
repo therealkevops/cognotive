@@ -1,20 +1,40 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
-import { dirname } from "@/lib/vault/paths";
+import { useDeferredValue, useMemo } from "react";
+import type { NoteHit } from "@/lib/search/note-index";
+import { dirname, noteTitle } from "@/lib/vault/paths";
 import { useVault } from "../vault/useVault";
 import { Highlighted } from "./Highlighted";
 
-/** Full-text search across every note in the vault. */
-export function SearchPanel({ autoFocus }: { autoFocus?: boolean }) {
+/**
+ * Full-text search across every note. "tag:name" or a lone "#name" lists the
+ * notes with that tag (including nested tags under it).
+ */
+export function SearchPanel({
+  query,
+  onQuery,
+  autoFocus,
+}: {
+  query: string;
+  onQuery(q: string): void;
+  autoFocus?: boolean;
+}) {
   const vault = useVault();
-  const [query, setQuery] = useState("");
   const deferred = useDeferredValue(query);
-  const hits = useMemo(
-    () => vault.index.search(deferred),
+  const hits = useMemo<NoteHit[]>(() => {
+    const tag = /^\s*(?:tag:\s*#?|#)([^\s#]+)\s*$/i.exec(deferred)?.[1];
+    if (tag) {
+      return vault.links.withTag(tag).map((path) => ({
+        path,
+        title: noteTitle(path),
+        snippet: `#${vault.links.get(path)?.tags.filter((t) => t === tag.toLowerCase() || t.startsWith(tag.toLowerCase() + "/")).join(" #")}`,
+        matches: [],
+        score: 1,
+      }));
+    }
+    return vault.index.search(deferred);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-    [deferred, vault.index, vault.indexVersion],
-  );
+  }, [deferred, vault.index, vault.links, vault.indexVersion]);
 
   return (
     <section aria-label="Search" className="flex h-full flex-col">
@@ -22,10 +42,10 @@ export function SearchPanel({ autoFocus }: { autoFocus?: boolean }) {
         type="search"
         autoFocus={autoFocus}
         aria-label="Search all notes"
-        placeholder="Search all notes…"
+        placeholder="Search notes, or tag:name…"
         className="mb-2 w-full rounded border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-accent"
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => onQuery(e.target.value)}
       />
       {deferred.trim() && (
         <p className="mb-1 text-xs text-muted" aria-live="polite">
