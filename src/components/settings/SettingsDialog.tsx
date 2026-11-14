@@ -103,6 +103,16 @@ function AppearanceSection() {
             <option value="follow">Opens it</option>
           </select>
         </Field>
+        <Field label="Link previews on hover">
+          <select
+            className="input"
+            value={a.hoverPreview}
+            onChange={(e) => set({ hoverPreview: e.target.value as Appearance["hoverPreview"] })}
+          >
+            <option value="always">Show</option>
+            <option value="mod">Only while holding Ctrl/Cmd</option>
+          </select>
+        </Field>
         <Field label={`Text size: ${a.fontSize}px`}>
           <input
             type="range"

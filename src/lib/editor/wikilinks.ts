@@ -45,8 +45,13 @@ export interface LinkHost {
   /** Opens a note picker that links the selection to the chosen note (Ctrl/Cmd+Shift+K). */
   linkSelection?(): void;
   headings(path: string): string[];
-  /** A short plain-text preview of a note, for hover cards. */
-  preview(path: string): string;
+  /**
+   * What a hover card shows for a link: the note (or its heading section or
+   * block), or an embed of an image or drawing. Null if the target doesn't exist.
+   */
+  notePreview?(target: string, sub?: string): { title: string; markdown: string } | null;
+  /** Hover cards: always, or only while Ctrl/Cmd is held. */
+  hoverPreview?(): "always" | "mod";
   /** If `target` resolves to an image or drawing, its path (for inline embeds). */
   embedPath?(target: string): string | null;
   /** A displayable URL for an image or drawing. */
@@ -398,13 +403,43 @@ function completeLinks(ctx: CompletionContext): CompletionResult | null {
   return { from, options };
 }
 
-/** Hovering a wikilink shows the start of the linked note. */
+/** Loads images and drawings in rendered HTML (they carry their vault path in data-asset). */
+export function fillAssets(el: HTMLElement, host: LinkHost) {
+  for (const img of el.querySelectorAll<HTMLImageElement>("img[data-asset]")) {
+    void host.fileUrl?.(img.dataset.asset!).then((url) => {
+      if (url) img.src = url;
+      else img.classList.add("embed-missing");
+    });
+  }
+}
+
+/** Whether Ctrl/Cmd was held at the last pointer move or key press over the editor. */
+let modHeld = false;
+const trackMod = EditorView.domEventHandlers({
+  mousemove(e) {
+    modHeld = hasModKey(e);
+  },
+  keydown(e) {
+    modHeld = hasModKey(e) || e.key === "Control" || e.key === "Meta";
+  },
+  keyup(e) {
+    modHeld = hasModKey(e);
+  },
+});
+
+/**
+ * Hovering a link shows the linked note rendered: formatting, images and
+ * drawings, scrollable. A heading or block link shows just that part. Click
+ * the card's title to open the note (Ctrl/Cmd-click: new tab).
+ */
 const linkPreview = hoverTooltip(
   (view, pos, side) => {
     const host = view.state.facet(linkHost);
     const wl = wikiLinkAt(view.state, pos, side);
     if (!host || !wl || !wl.target) return null;
-    const path = host.resolve(wl.target);
+    if (host.hoverPreview?.() === "mod" && !modHeld) return null;
+    const sub = wl.heading ?? (wl.block ? `^${wl.block}` : undefined);
+    const preview = host.notePreview?.(wl.target, sub) ?? null;
     return {
       pos: wl.innerFrom,
       end: wl.innerTo,
@@ -412,12 +447,38 @@ const linkPreview = hoverTooltip(
       create() {
         const dom = document.createElement("div");
         dom.className = "cm-link-preview";
-        const title = document.createElement("div");
+        dom.setAttribute("role", "dialog");
+        dom.setAttribute("aria-label", "Link preview");
+        const title = document.createElement("button");
+        title.type = "button";
         title.className = "cm-link-preview-title";
-        title.textContent = path ? path.replace(/\.md$/, "") : wl.target;
+        title.textContent = preview ? preview.title : wl.target;
+        title.title = "Open (Ctrl/Cmd-click: new tab)";
+        title.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          host.open(wl.target, sub, openHow(e));
+        });
         const body = document.createElement("div");
-        body.className = "cm-link-preview-body";
-        body.textContent = path ? host.preview(path) || "(empty note)" : "This note doesn't exist yet. Open the link to create it.";
+        body.className = "cm-link-preview-body prose-note";
+        if (!preview) {
+          body.textContent = "This note doesn't exist yet. Open the link to create it.";
+        } else if (!preview.markdown.trim()) {
+          body.textContent = sub ? "Nothing found at this heading or block." : "(empty note)";
+        } else {
+          body.textContent = preview.markdown; // until rendered
+          void host.renderHtml?.(preview.markdown).then((html) => {
+            body.innerHTML = html; // sanitized by the markdown pipeline
+            fillAssets(body, host);
+          });
+        }
+        // Links inside the card open like links anywhere else.
+        body.addEventListener("click", (e) => {
+          const a = (e.target as HTMLElement).closest("a");
+          if (!a?.classList.contains("internal-link")) return;
+          e.preventDefault();
+          const parts = splitLinkText(a.dataset.href ?? "");
+          host.open(parts.target, parts.heading ?? (parts.block ? `^${parts.block}` : undefined), openHow(e));
+        });
         dom.append(title, body);
         return { dom };
       },
@@ -524,6 +585,7 @@ export function wikilinkExtensions(): Extension {
     linkMarks,
     linkClicks,
     followKeys,
+    trackMod,
     linkPreview,
     fileDrops,
     autocompletion({ override: [completeLinks], icons: false }),

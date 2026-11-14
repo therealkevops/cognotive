@@ -29,8 +29,8 @@ import type { LinkContext } from "@/lib/markdown/remark-links";
 import { splitLinkText } from "@/lib/links/parse";
 import { splitFrontmatter } from "@/lib/markdown/frontmatter";
 import { extractHeadings } from "@/lib/markdown/outline";
+import { previewMarkdown } from "@/lib/markdown/preview";
 import { sectionUnder } from "@/lib/markdown/remark-links";
-import { plainText } from "@/lib/search/note-index";
 import {
   basename,
   dirname,
@@ -395,7 +395,18 @@ export function Workspace() {
       linkText: (p) => (vault.entries.some((e) => e.path === p && e.kind === "file") ? vault.links.linkText(p) : null),
       linkSelection: () => setLinkPickerOpen(true),
       headings: (p) => vault.links.get(p)?.headings.map((h) => h.text) ?? [],
-      preview: (p) => plainText(vault.links.content(p) ?? "").slice(0, 500),
+      notePreview: (t, sub) => {
+        const p = vault.links.resolve(t, vault.active?.path);
+        if (!p) return null;
+        if (isImage(p) || isDrawing(p)) {
+          return { title: isDrawing(p) ? drawingName(p) : basename(p), markdown: `![[${vault.links.linkText(p)}]]` };
+        }
+        if (!isNote(p)) return { title: basename(p), markdown: "" };
+        const body = splitFrontmatter(vault.links.content(p) ?? "").body;
+        const where = sub ? ` › ${sub.startsWith("^") ? "block" : sub}` : "";
+        return { title: noteTitle(p) + where, markdown: previewMarkdown(body, sub) };
+      },
+      hoverPreview: () => loadAppearance().hoverPreview,
       embedPath: (t) => {
         const p = vault.links.resolve(t, vault.active?.path);
         return p && (isImage(p) || isDrawing(p)) ? p : null;

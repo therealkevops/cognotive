@@ -1,7 +1,7 @@
 import { ensureSyntaxTree } from "@codemirror/language";
 import { StateField, type EditorState, type Range } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, WidgetType } from "@codemirror/view";
-import { linkHost, livePreviewOn } from "./wikilinks";
+import { fillAssets, linkHost, livePreviewOn } from "./wikilinks";
 
 /**
  * A block of markdown shown rendered in live preview: a table, or an embedded
@@ -36,6 +36,7 @@ class RenderedBlock extends WidgetType {
     const host = view.state.facet(linkHost);
     void host?.renderHtml?.(this.markdown).then((html) => {
       body.innerHTML = html; // sanitized by the markdown pipeline
+      fillAssets(body, host);
     });
     wrap.addEventListener("mousedown", (e) => {
       if ((e.target as HTMLElement).closest("a")) return;
