@@ -403,6 +403,39 @@ export function Workspace() {
     return () => clearTimeout(id);
   }, [pendingScroll, activePath, scroller]);
 
+  // App shortcuts (from the installed app's icon) open "/?action=…". Run the action
+  // once the vault is ready, then tidy the URL. A window that's already open gets
+  // later shortcuts through the launch queue instead of a reload.
+  const runActionRef = useRef<(action: string) => void>(() => {});
+  useEffect(() => {
+    runActionRef.current = (action) => {
+      if (action === "new-note") void vault.createNote();
+      else if (action === "new-canvas") void vault.createCanvas();
+      else if (action === "daily") void openDaily();
+      else if (action === "search") {
+        setTab("search");
+        setLeftCollapsed(false);
+        setSidebarOpen(true);
+      }
+    };
+  });
+  useEffect(() => {
+    if (!vault.ready) return;
+    const url = new URL(window.location.href);
+    const action = url.searchParams.get("action");
+    if (action) {
+      url.searchParams.delete("action");
+      window.history.replaceState(null, "", url);
+      runActionRef.current(action);
+    }
+    const queue = (window as Window & { launchQueue?: { setConsumer(f: (p: { targetURL?: string }) => void): void } })
+      .launchQueue;
+    queue?.setConsumer((params) => {
+      const a = params.targetURL ? new URL(params.targetURL).searchParams.get("action") : null;
+      if (a) runActionRef.current(a);
+    });
+  }, [vault.ready]);
+
   const showTag = useCallback((tag: string) => {
     setSearchQuery(`tag:${tag}`);
     setTab("search");
@@ -852,6 +885,7 @@ export function Workspace() {
     { id: "export", label: "Export vault as zip" },
     { id: "import", label: "Import notes from a zip…" },
     { id: "settings", label: "Open settings" },
+    { id: "install", label: "Install noted-ai as an app" },
   ];
   const runCommand: Record<string, () => void> = {
     "new-note": () => void vault.createNote(),
@@ -883,6 +917,7 @@ export function Workspace() {
     export: () => void exportZip(),
     import: chooseZip,
     settings: () => setSettingsOpen("appearance"),
+    install: () => setSettingsOpen("app"),
   };
 
   return (

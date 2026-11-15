@@ -1,5 +1,6 @@
 "use client";
 
+import "@/lib/install"; // catch the browser's install offer as early as possible
 import dynamic from "next/dynamic";
 import { useEffect, useMemo } from "react";
 import { AuthProvider } from "@/components/auth/useAuth";

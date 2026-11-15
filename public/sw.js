@@ -1,6 +1,6 @@
 // noted-ai service worker: lets the installed app open without a connection.
 // Notes themselves live in IndexedDB; this only caches the app's own files.
-const CACHE = "noted-ai-v1";
+const CACHE = "noted-ai-v2";
 const SHELL = "/";
 
 self.addEventListener("install", (event) => {
