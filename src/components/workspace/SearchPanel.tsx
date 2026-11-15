@@ -2,7 +2,7 @@
 
 import { useDeferredValue, useMemo } from "react";
 import type { NoteHit } from "@/lib/search/note-index";
-import { dirname, noteTitle } from "@/lib/vault/paths";
+import { dirname, displayName } from "@/lib/vault/paths";
 import { useVault } from "../vault/useVault";
 import { Highlighted } from "./Highlighted";
 
@@ -26,7 +26,7 @@ export function SearchPanel({
     if (tag) {
       return vault.links.withTag(tag).map((path) => ({
         path,
-        title: noteTitle(path),
+        title: displayName(path),
         snippet: `#${vault.links.get(path)?.tags.filter((t) => t === tag.toLowerCase() || t.startsWith(tag.toLowerCase() + "/")).join(" #")}`,
         matches: [],
         score: 1,

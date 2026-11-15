@@ -1,9 +1,21 @@
 "use client";
 
-import { ChevronRight, Columns2, File, FilePlus, FolderPlus, Image as ImageIcon, PenTool, Pencil, Trash2, Upload } from "lucide-react";
+import {
+  ChevronRight,
+  Columns2,
+  File,
+  FilePlus,
+  FolderPlus,
+  Image as ImageIcon,
+  LayoutDashboard,
+  PenTool,
+  Pencil,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { useContext, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { readPref, writePref } from "@/lib/prefs";
-import { dirname, isDrawing, isImage, isMarkdown } from "@/lib/vault/paths";
+import { dirname, isCanvas, isDrawing, isImage, isMarkdown } from "@/lib/vault/paths";
 import { buildTree, type TreeNode } from "@/lib/vault/tree";
 import { ATTACHMENT_FOLDER, useVault } from "../vault/useVault";
 import { DeleteDialog } from "./DeleteDialog";
@@ -98,6 +110,15 @@ export function FileTree() {
           <button
             type="button"
             className="icon-button"
+            aria-label="New canvas"
+            title="New canvas"
+            onClick={() => void vault.createCanvas(activeFolder)}
+          >
+            <LayoutDashboard size={16} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="icon-button"
             aria-label="New folder"
             title="New folder"
             onClick={() => void newFolder(activeFolder)}
@@ -181,7 +202,15 @@ function Node({
   const isActive = vault.active?.path === node.path;
   const isRenaming = renaming === node.path;
   const canOpen = !isFolder;
-  const FileIcon = isDrawing(node.path) ? PenTool : isImage(node.path) ? ImageIcon : isMarkdown(node.path) ? null : File;
+  const FileIcon = isDrawing(node.path)
+    ? PenTool
+    : isCanvas(node.path)
+      ? LayoutDashboard
+      : isImage(node.path)
+        ? ImageIcon
+        : isMarkdown(node.path)
+          ? null
+          : File;
 
   const activate = () => {
     if (isFolder) setOpen(node.path, !open);

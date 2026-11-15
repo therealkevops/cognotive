@@ -104,8 +104,15 @@ export default function GraphCanvas({ nodes, edges, activeId, highlight, onSelec
             const lit = isLit(n.id as string);
             ctx.globalAlpha = lit ? 1 : 0.2;
             ctx.beginPath();
-            // Drawings are squares, notes are circles.
+            // Drawings are squares, canvases diamonds, notes circles.
             if (n.kind === "drawing") ctx.rect(n.x! - r, n.y! - r, 2 * r, 2 * r);
+            else if (n.kind === "canvas") {
+              ctx.moveTo(n.x!, n.y! - r * 1.25);
+              ctx.lineTo(n.x! + r * 1.25, n.y!);
+              ctx.lineTo(n.x!, n.y! + r * 1.25);
+              ctx.lineTo(n.x! - r * 1.25, n.y!);
+              ctx.closePath();
+            }
             else ctx.arc(n.x!, n.y!, r, 0, 2 * Math.PI);
             if (n.unresolved) {
               ctx.strokeStyle = colors.node;

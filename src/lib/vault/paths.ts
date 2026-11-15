@@ -134,6 +134,23 @@ export function isDrawing(path: string): boolean {
   return /\.excalidraw(\.md)?$/i.test(path);
 }
 
+/** An Obsidian canvas board (JSON Canvas). */
+export function isCanvas(path: string): boolean {
+  return /\.canvas$/i.test(path);
+}
+
+/** A canvas's name without ".canvas". */
+export function canvasName(path: string): string {
+  return basename(path).replace(/\.canvas$/i, "");
+}
+
+/** How a file is named in lists: notes, drawings and canvases without their extension. */
+export function displayName(path: string): string {
+  if (isDrawing(path)) return drawingName(path);
+  if (isCanvas(path)) return canvasName(path);
+  return noteTitle(path);
+}
+
 /** A markdown note (not a drawing stored as markdown). */
 export function isNote(path: string): boolean {
   return isMarkdown(path) && !isDrawing(path);

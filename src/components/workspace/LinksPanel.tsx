@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { formatLink } from "@/lib/links/format";
-import type { Backlink, Mention } from "@/lib/links/link-index";
-import { noteTitle } from "@/lib/vault/paths";
+import type { Backlink, CanvasRelation, Mention } from "@/lib/links/link-index";
+import { canvasName, displayName, noteTitle } from "@/lib/vault/paths";
 import { useVault } from "../vault/useVault";
 
 function group<T extends { source: string }>(items: T[]): Array<[string, T[]]> {
@@ -66,12 +66,13 @@ export function LinksPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vault.links, vault.indexVersion]);
 
-  const { backlinks, mentions, outgoing } = useMemo(() => {
-    if (!path) return { backlinks: [] as Backlink[], mentions: [] as Mention[], outgoing: [] };
+  const { backlinks, mentions, outgoing, relations } = useMemo(() => {
+    if (!path) return { backlinks: [] as Backlink[], mentions: [] as Mention[], outgoing: [], relations: [] as CanvasRelation[] };
     return {
       backlinks: vault.links.backlinks(path),
       mentions: vault.links.unlinkedMentions(path),
       outgoing: vault.links.outgoing(path),
+      relations: vault.links.canvasRelations(path),
     };
     // indexVersion signals index changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -108,7 +109,7 @@ export function LinksPanel({
                   className="text-left text-sm font-medium hover:text-accent"
                   onClick={() => void vault.open(source)}
                 >
-                  {noteTitle(source)}
+                  {displayName(source)}
                 </button>
                 <ul>
                   {items.map((b, i) => (
@@ -122,6 +123,33 @@ export function LinksPanel({
           </ul>
         )}
       </Section>
+
+      {relations.length > 0 && (
+        <Section title="Canvas connections" count={relations.length}>
+          <ul className="space-y-1.5">
+            {relations.map((r, i) => (
+              <li key={i} className="text-sm">
+                <span className="text-muted">{r.direction === "out" ? `${r.label} →` : `← ${r.label}`}</span>{" "}
+                <button
+                  type="button"
+                  className={`hover:underline ${r.resolved ? "text-accent" : "text-muted italic"}`}
+                  onClick={() => (r.resolved ? void vault.open(r.other) : onOpenLink(r.other))}
+                >
+                  {r.resolved ? noteTitle(r.other) : r.other}
+                </button>
+                <button
+                  type="button"
+                  className="ml-1.5 text-xs text-muted hover:text-accent"
+                  title="Open the canvas"
+                  onClick={() => void vault.open(r.canvas)}
+                >
+                  on {canvasName(r.canvas)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
 
       <Section title="Unlinked mentions" count={mentions.length} defaultOpen={mentions.length > 0}>
         {mentions.length === 0 ? (

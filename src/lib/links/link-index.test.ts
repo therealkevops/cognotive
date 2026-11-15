@@ -129,3 +129,45 @@ describe("LinkIndex", () => {
     expect(JSON.parse(updated!).elements[0].link).toBe("[[Plot]]");
   });
 });
+
+describe("canvases in the link index", () => {
+  const board = (file: string) =>
+    JSON.stringify({
+      nodes: [
+        { id: "a", type: "file", file, x: 0, y: 0, width: 10, height: 10 },
+        { id: "b", type: "file", file: "Goal.md", x: 0, y: 0, width: 10, height: 10 },
+        { id: "t", type: "text", text: "Remember [[Plan]]", x: 0, y: 0, width: 10, height: 10 },
+      ],
+      edges: [{ id: "e", fromNode: "a", toNode: "b", label: "supports" }],
+    });
+
+  it("counts cards and text links as backlinks, and labelled arrows as relations", () => {
+    const ix = new LinkIndex();
+    ix.set("Plan.md", "# Plan");
+    ix.set("Goal.md", "# Goal");
+    ix.set("Board.canvas", board("Plan.md"));
+    expect(ix.backlinks("Plan.md").map((b) => [b.source, b.context])).toEqual([
+      ["Board.canvas", "On the canvas"],
+      ["Board.canvas", "On the canvas"],
+    ]);
+    expect(ix.canvasRelations("Plan.md")).toEqual([
+      { canvas: "Board.canvas", other: "Goal.md", resolved: true, label: "supports", direction: "out" },
+    ]);
+    expect(ix.canvasRelations("Goal.md")[0]).toMatchObject({ other: "Plan.md", direction: "in", label: "supports" });
+    expect(ix.graph().nodes.find((n) => n.id === "Board.canvas")?.kind).toBe("canvas");
+  });
+
+  it("follows renames in file cards and text cards", () => {
+    const ix = new LinkIndex();
+    ix.set("Plan.md", "# Plan");
+    ix.set("Goal.md", "# Goal");
+    ix.set("Board.canvas", board("Plan.md"));
+    const before = ix.snapshotResolver();
+    ix.remove("Plan.md");
+    ix.set("Work/Roadmap.md", "# Plan");
+    const out = ix.rewriteLinksTo("Plan.md", "Work/Roadmap.md", before);
+    const updated = JSON.parse(out.get("Board.canvas")!);
+    expect(updated.nodes[0].file).toBe("Work/Roadmap.md");
+    expect(updated.nodes[2].text).toBe("Remember [[Roadmap]]");
+  });
+});

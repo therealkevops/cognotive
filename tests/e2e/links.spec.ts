@@ -18,7 +18,8 @@ async function newNote(page: Page, name: string) {
 test("typing [[ suggests notes, and links can be followed", async ({ page }) => {
   await newNote(page, "Daily");
   await page.keyboard.type("Read [[Welc");
-  await expect(page.locator(".cm-tooltip-autocomplete")).toContainText("Welcome");
+  await expect(page.locator(".cm-tooltip-autocomplete [aria-selected=true]")).toContainText("Welcome");
+  await page.waitForTimeout(100); // the editor ignores Enter for a moment after suggestions open
   await page.keyboard.press("Enter");
   await page.keyboard.type(" today.");
   await page.getByRole("radio", { name: "Source" }).click();

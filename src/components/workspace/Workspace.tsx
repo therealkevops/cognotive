@@ -37,6 +37,9 @@ import {
   basename,
   dirname,
   extname,
+  canvasName,
+  displayName,
+  isCanvas,
   isDrawing,
   isImage,
   isNote,
@@ -46,6 +49,7 @@ import {
 } from "@/lib/vault/paths";
 import { drawingJson, isObsidianDrawing, replaceScene } from "@/lib/drawing/obsidian";
 import { drawingName } from "@/lib/vault/paths";
+import type { CanvasVault } from "./CanvasView";
 import type { DrawingVault } from "./DrawingView";
 import { fillTemplate, formatDate, newNoteFromLink } from "@/lib/vault/settings";
 import { GraphDialog, LocalGraph } from "../graph/GraphDialog";
@@ -75,6 +79,11 @@ const MarkdownEditor = dynamic(() => import("./MarkdownEditor"), { ssr: false })
 const DrawingView = dynamic(() => import("./DrawingView"), {
   ssr: false,
   loading: () => <p className="p-8 text-muted">Loading drawing…</p>,
+});
+// React Flow, for canvases: loaded only when a canvas is opened.
+const CanvasView = dynamic(() => import("./CanvasView"), {
+  ssr: false,
+  loading: () => <p className="p-8 text-muted">Loading canvas…</p>,
 });
 const ReadingView = dynamic(() => import("./ReadingView"), {
   ssr: false,
@@ -389,7 +398,7 @@ export function Workspace() {
           .sort()
           .map((p) => ({
             path: p,
-            title: noteTitle(p),
+            title: displayName(p),
             aliases: vault.links.get(p)?.aliases ?? [],
             linkText: vault.links.linkText(p),
             recentRank: recent.includes(p) ? recent.filter((r) => r !== vault.active?.path).indexOf(p) : undefined,
@@ -477,7 +486,7 @@ export function Workspace() {
   const drawingVault = useMemo<DrawingVault>(() => {
     const describe = (p: string) => ({
       path: p,
-      title: isDrawing(p) ? drawingName(p) : isNote(p) ? noteTitle(p) : basename(p),
+      title: isNote(p) || isDrawing(p) || isCanvas(p) ? displayName(p) : basename(p),
       linkText: vault.links.linkText(p),
       folder: dirname(p),
     });
@@ -525,6 +534,36 @@ export function Workspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [vault.links, vault.active?.path, vault.indexVersion],
   );
+  // What a canvas needs: files to place as cards, note previews, pictures and link resolution.
+  const canvasVault = useMemo<CanvasVault>(
+    () => ({
+      files: () =>
+        vault.entries
+          .filter((e) => e.kind === "file" && e.path !== vault.active?.path && !e.path.split("/").some((seg) => seg.startsWith(".")))
+          .map((e) => ({
+            path: e.path,
+            title: isDrawing(e.path) ? drawingName(e.path) : isCanvas(e.path) ? canvasName(e.path) : isNote(e.path) ? noteTitle(e.path) : basename(e.path),
+            folder: dirname(e.path),
+          }))
+          .sort((a, b) => a.title.localeCompare(b.title)),
+      notePreview: (p, subpath) => {
+        const content = vault.links.content(p);
+        if (content === undefined) return null;
+        const sub = subpath?.replace(/^#/, "") || undefined;
+        return {
+          title: noteTitle(p) + (sub ? ` › ${sub.startsWith("^") ? "block" : sub}` : ""),
+          markdown: previewMarkdown(splitFrontmatter(content).body, sub),
+        };
+      },
+      fileUrl: (p) => vault.fileUrl(p, { dark: prefersDark() }),
+      exists: (p) => vault.entries.some((e) => e.path === p),
+      links: linkContext,
+    }),
+    // indexVersion: cards showing notes re-render when those notes change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [vault.entries, vault.links, vault.indexVersion, vault.active?.path, linkContext],
+  );
+
 
   const sidebar = (
     <>
@@ -602,7 +641,15 @@ export function Workspace() {
   );
 
   const activePathNow = vault.active?.path ?? null;
-  const kind = !activePathNow ? null : isNote(activePathNow) ? "note" : isDrawing(activePathNow) ? "drawing" : "file";
+  const kind = !activePathNow
+    ? null
+    : isNote(activePathNow)
+      ? "note"
+      : isDrawing(activePathNow)
+        ? "drawing"
+        : isCanvas(activePathNow)
+          ? "canvas"
+          : "file";
   const editing = kind === "note" && mode !== "reading" && !!view;
 
   const templates = vault.links
@@ -654,6 +701,7 @@ export function Workspace() {
   const commands: Array<PickerItem & { when?: boolean }> = [
     { id: "new-note", label: "New note", hint: "Ctrl/Cmd+Alt+N" },
     { id: "new-drawing", label: "New drawing" },
+    { id: "new-canvas", label: "New canvas" },
     { id: "daily", label: "Open today's daily note", hint: "Ctrl/Cmd+Shift+D" },
     {
       id: "daily-yesterday",
@@ -698,6 +746,7 @@ export function Workspace() {
   const runCommand: Record<string, () => void> = {
     "new-note": () => void vault.createNote(),
     "new-drawing": () => void vault.createDrawing(),
+    "new-canvas": () => void vault.createCanvas(),
     daily: () => void openDaily(),
     "daily-yesterday": () => void openDaily(new Date(Date.now() - 86_400_000)),
     template: () => setTemplatesOpen(true),
@@ -839,7 +888,7 @@ export function Workspace() {
           )}
           <div className="flex min-h-0 flex-1">
             <div
-              className={`min-h-0 min-w-0 flex-1 ${kind === "drawing" ? "overflow-hidden" : "overflow-y-auto"}`}
+              className={`min-h-0 min-w-0 flex-1 ${kind === "drawing" || kind === "canvas" ? "overflow-hidden" : "overflow-y-auto"}`}
               ref={readingRef}
               onScrollCapture={(e) => {
                 const el = e.target as HTMLElement;
@@ -852,6 +901,15 @@ export function Workspace() {
                 <p className="p-8 text-muted">Loading vault…</p>
               ) : !vault.active ? (
                 <EmptyState onCreate={() => void vault.createNote()} onFind={() => setSwitcherOpen(true)} />
+              ) : kind === "canvas" ? (
+                <CanvasView
+                  docKey={`${vault.active.path}:${vault.active.version}`}
+                  initial={vault.activeText}
+                  onChange={vault.edit}
+                  onOpenLink={(t, h, how) => void openLink(t, h, how)}
+                  onOpenFile={(p, how) => (how === "side" ? setSidePath(p) : void vault.open(p))}
+                  vault={canvasVault}
+                />
               ) : kind === "drawing" ? (
                 <DrawingView
                   docKey={`${vault.active.version}`}
@@ -961,7 +1019,7 @@ export function Workspace() {
             .paths()
             .filter((p) => p !== activePathNow)
             .sort((a, b) => (inbound.get(b) ?? 0) - (inbound.get(a) ?? 0) || a.localeCompare(b))
-            .map((p) => ({ id: p, label: isNote(p) ? noteTitle(p) : basename(p), hint: dirname(p) }))}
+            .map((p) => ({ id: p, label: isNote(p) || isDrawing(p) || isCanvas(p) ? displayName(p) : basename(p), hint: dirname(p) }))}
           onPick={(item) => linkSelectionTo(item.id)}
           onClose={() => {
             setLinkPickerOpen(false);

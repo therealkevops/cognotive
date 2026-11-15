@@ -1,4 +1,4 @@
-import { basename, dirname, drawingName, isDrawing, isMarkdown, noteTitle } from "./paths";
+import { basename, canvasName, dirname, drawingName, isCanvas, isDrawing, isMarkdown, noteTitle } from "./paths";
 import type { VaultEntry } from "./types";
 
 export interface TreeNode {
@@ -34,7 +34,13 @@ export function buildTree(entries: VaultEntry[]): TreeNode {
       folder(dirname(e.path)).children.push({
         path: e.path,
         // Notes and drawings show without their extension, as in Obsidian.
-        name: isDrawing(e.path) ? drawingName(e.path) : isMarkdown(e.path) ? noteTitle(e.path) : basename(e.path),
+        name: isDrawing(e.path)
+          ? drawingName(e.path)
+          : isCanvas(e.path)
+            ? canvasName(e.path)
+            : isMarkdown(e.path)
+              ? noteTitle(e.path)
+              : basename(e.path),
         kind: "file",
         children: [],
       });

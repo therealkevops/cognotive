@@ -1,6 +1,7 @@
 import { drawingJson, isObsidianDrawing, replaceScene } from "../drawing/obsidian";
 import { parseDrawing, rewriteDrawingLinks } from "../drawing/parse";
-import { dirname, drawingName, isDrawing, isNote, noteTitle, relativePath } from "../vault/paths";
+import { canvasLinks, canvasRelations, parseCanvas, serializeCanvas } from "../canvas/format";
+import { canvasName, dirname, drawingName, isCanvas, isDrawing, isNote, noteTitle, relativePath } from "../vault/paths";
 import { parseNote, splitLinkText, type ParsedLink, type ParsedNote } from "./parse";
 import { Resolver } from "./resolve";
 
@@ -25,7 +26,7 @@ export interface Mention {
 export interface GraphNode {
   id: string;
   title: string;
-  kind: "note" | "drawing";
+  kind: "note" | "drawing" | "canvas";
   /** Unresolved link targets appear as ghost nodes. */
   unresolved: boolean;
   tags: string[];
@@ -40,7 +41,28 @@ export interface GraphEdge {
 interface Entry {
   content: string;
   parsed: ParsedNote;
+  /** A canvas's labelled arrows between file cards (targets as written). */
+  relations?: Array<{ from: string; to: string; label: string }>;
 }
+
+/** A labelled arrow on a canvas that touches a note. */
+export interface CanvasRelation {
+  canvas: string;
+  /** The note at the other end of the arrow (resolved path, or the target as written). */
+  other: string;
+  resolved: boolean;
+  label: string;
+  /** "out": this note → other; "in": other → this note. */
+  direction: "out" | "in";
+}
+
+const EMPTY_PARSED: Omit<ParsedNote, "links"> = {
+  tags: [],
+  properties: {},
+  aliases: [],
+  headings: [],
+  propertiesError: false,
+};
 
 /**
  * The vault's knowledge graph, built from the text of every note: links
@@ -65,7 +87,31 @@ export class LinkIndex {
         content,
         parsed: { links, tags: [], properties: {}, aliases: [], headings: [], propertiesError: false },
       });
+    } else if (isCanvas(path)) {
+      const data = parseCanvas(content);
+      this.notes.set(path, {
+        content,
+        parsed: { ...EMPTY_PARSED, links: data ? canvasLinks(data) : [] },
+        relations: data ? canvasRelations(data) : [],
+      });
     } else if (isNote(path)) this.notes.set(path, { content, parsed: parseNote(content) });
+  }
+
+  /** Labelled arrows on canvases between `path` and other notes, as typed relations. */
+  canvasRelations(path: string): CanvasRelation[] {
+    const out: CanvasRelation[] = [];
+    for (const [canvas, e] of this.notes) {
+      for (const r of e.relations ?? []) {
+        const from = this.resolve(r.from, canvas);
+        const to = this.resolve(r.to, canvas);
+        if (from === path && to !== path) {
+          out.push({ canvas, other: to ?? r.to, resolved: !!to, label: r.label, direction: "out" });
+        } else if (to === path && from !== path) {
+          out.push({ canvas, other: from ?? r.from, resolved: !!from, label: r.label, direction: "in" });
+        }
+      }
+    }
+    return out;
   }
 
   remove(path: string): void {
@@ -115,7 +161,11 @@ export class LinkIndex {
       if (source === path) continue;
       for (const link of e.parsed.links) {
         if (this.resolve(link.target, source) === path) {
-          const context = isDrawing(source) ? "Linked from the drawing" : lineText(e.content, link.from);
+          const context = isDrawing(source)
+            ? "Linked from the drawing"
+            : isCanvas(source)
+              ? "On the canvas"
+              : lineText(e.content, link.from);
           out.push({ source, line: link.line, context, link });
         }
       }
@@ -170,7 +220,7 @@ export class LinkIndex {
     );
     const out: Mention[] = [];
     for (const [source, other] of this.notes) {
-      if (source === path || isDrawing(source)) continue;
+      if (source === path || isDrawing(source) || isCanvas(source)) continue;
       const masked = maskLinks(other.content, other.parsed);
       for (const m of masked.matchAll(pattern)) {
         const from = m.index!;
@@ -215,8 +265,8 @@ export class LinkIndex {
     for (const [p, e] of this.notes) {
       nodes.set(p, {
         id: p,
-        title: isDrawing(p) ? drawingName(p) : noteTitle(p),
-        kind: isDrawing(p) ? "drawing" : "note",
+        title: isDrawing(p) ? drawingName(p) : isCanvas(p) ? canvasName(p) : noteTitle(p),
+        kind: isDrawing(p) ? "drawing" : isCanvas(p) ? "canvas" : "note",
         unresolved: false,
         tags: e.parsed.tags,
         degree: 0,
@@ -295,6 +345,11 @@ export class LinkIndex {
     const out = new Map<string, string>();
     const newText = this.linkText(newPath);
     for (const [source, e] of this.notes) {
+      if (isCanvas(source)) {
+        const updated = rewriteCanvas(e.content, source, oldPath, newPath, newText, resolveOld);
+        if (updated) out.set(source, updated);
+        continue;
+      }
       if (isDrawing(source)) {
         const updated = rewriteDrawingLinks(drawingJson(source, e.content), (t) => resolveOld(t, source) === oldPath, newText);
         if (updated) out.set(source, isObsidianDrawing(source) ? replaceScene(e.content, updated) : updated);
@@ -325,7 +380,7 @@ export class LinkIndex {
   unlinkTo(isGone: (path: string) => boolean): Map<string, string> {
     const out = new Map<string, string>();
     for (const [source, e] of this.notes) {
-      if (isDrawing(source) || isGone(source)) continue;
+      if (isDrawing(source) || isCanvas(source) || isGone(source)) continue;
       const edits: Array<{ from: number; to: number; insert: string }> = [];
       for (const link of e.parsed.links) {
         const p = link.target ? this.resolve(link.target, source) : null;
@@ -360,6 +415,38 @@ function retarget(raw: string, link: ParsedLink, newText: string, newPath: strin
   const label = raw.slice(raw.indexOf("[") + 1, raw.indexOf("]("));
   const href = relativePath(dirname(source), newPath).split("/").map(encodeURIComponent).join("/") + (sub ? encodeURI(sub) : "");
   return `${link.embed ? "!" : ""}[${label}](${href})`;
+}
+
+/**
+ * A canvas after `oldPath` was renamed to `newPath`: file cards that showed it
+ * point at the new path, and [[links]] to it in text cards are updated.
+ */
+function rewriteCanvas(
+  content: string,
+  source: string,
+  oldPath: string,
+  newPath: string,
+  newText: string,
+  resolveOld: (target: string, from: string) => string | null,
+): string | null {
+  const data = parseCanvas(content);
+  if (!data) return null;
+  let changed = false;
+  for (const n of data.nodes) {
+    if (n.type === "file" && resolveOld(n.file, source) === oldPath) {
+      n.file = newPath;
+      changed = true;
+    } else if (n.type === "text") {
+      const edits = parseNote(n.text)
+        .links.filter((l) => l.target && resolveOld(l.target, source) === oldPath)
+        .map((l) => ({ from: l.from, to: l.to, insert: retarget(n.text.slice(l.from, l.to), l, newText, newPath, source) }));
+      for (const ed of edits.sort((a, b) => b.from - a.from)) {
+        n.text = n.text.slice(0, ed.from) + ed.insert + n.text.slice(ed.to);
+        changed = true;
+      }
+    }
+  }
+  return changed ? serializeCanvas(data) : null;
 }
 
 /** What a link reads as without the link. */

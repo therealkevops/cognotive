@@ -6,7 +6,7 @@ import { createContext, useEffect, useMemo, useState } from "react";
 import { isDark } from "@/lib/appearance";
 import { splitLinkText } from "@/lib/links/parse";
 import type { LinkContext } from "@/lib/markdown/remark-links";
-import { drawingName, isDrawing, isNote, noteTitle } from "@/lib/vault/paths";
+import { canvasName, drawingName, isCanvas, isDrawing, isNote, noteTitle } from "@/lib/vault/paths";
 import { useVault } from "../vault/useVault";
 import { FileView } from "./FileView";
 
@@ -51,7 +51,9 @@ export function SidePane({
   return (
     <section aria-label="Side pane" className="hidden min-h-0 min-w-0 flex-1 flex-col border-l border-border lg:flex">
       <div className="flex items-center gap-1 border-b border-border px-3 py-2">
-        <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{isDrawing(path) ? drawingName(path) : noteTitle(path)}</h2>
+        <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
+          {isDrawing(path) ? drawingName(path) : isCanvas(path) ? canvasName(path) : noteTitle(path)}
+        </h2>
         <button type="button" className="icon-button" aria-label="Open in main pane" title="Open in main pane" onClick={() => onOpenHere(path)}>
           <ArrowLeftToLine size={15} aria-hidden />
         </button>
@@ -75,6 +77,13 @@ export function SidePane({
         ) : isDrawing(path) ? (
           // eslint-disable-next-line @next/next/no-img-element -- SVG object URL from the vault
           drawingUrl ? <img src={drawingUrl} alt="" className="mx-auto max-w-full p-4" /> : <p className="p-6 text-muted">Rendering…</p>
+        ) : isCanvas(path) ? (
+          <div className="p-6 text-sm text-muted">
+            <p className="mb-3">Canvases open in the main pane.</p>
+            <button type="button" className="button-secondary" onClick={() => onOpenHere(path)}>
+              Open the canvas
+            </button>
+          </div>
         ) : (
           <FileView path={path} />
         )}

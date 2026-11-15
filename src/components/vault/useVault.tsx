@@ -22,6 +22,7 @@ import {
   type VaultSettings,
 } from "@/lib/vault/settings";
 import { drawingJson } from "@/lib/drawing/obsidian";
+import { EMPTY_CANVAS } from "@/lib/canvas/format";
 import { EMPTY_DRAWING } from "@/lib/drawing/parse";
 import { VaultIndexes } from "@/lib/vault/indexes";
 import { exportVault } from "@/lib/vault/zip";
@@ -96,6 +97,8 @@ export interface VaultApi {
   createFolder(parent?: string): Promise<string | undefined>;
   /** Creates an empty Excalidraw drawing and opens it. */
   createDrawing(folder?: string, name?: string): Promise<string | undefined>;
+  /** Creates an empty canvas board (.canvas) and opens it. */
+  createCanvas(folder?: string, name?: string): Promise<string | undefined>;
   /** Saves files (pasted, dropped or uploaded) as attachments. Returns their paths. */
   addAttachments(files: File[], folder?: string): Promise<string[]>;
   /**
@@ -337,6 +340,25 @@ export function VaultProvider({
         const path = uniquePath(joinPath(folder, `${name.trim()}.excalidraw`), exists);
         await store.write(path, EMPTY_DRAWING);
         indexes.set(path, EMPTY_DRAWING);
+        bumpIndex();
+        await refresh();
+        changed();
+        await open(path);
+        return path;
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [store, indexes, exists, refresh, open, bumpIndex, fail, changed],
+  );
+  const createCanvas = useCallback(
+    async (folder = "", name = "Canvas") => {
+      try {
+        const err = validateName(name);
+        if (err) throw new Error(err);
+        const path = uniquePath(joinPath(folder, `${name.trim()}.canvas`), exists);
+        await store.write(path, EMPTY_CANVAS);
+        indexes.set(path, EMPTY_CANVAS);
         bumpIndex();
         await refresh();
         changed();
@@ -719,6 +741,7 @@ export function VaultProvider({
       updateSettings,
       createNoteWith,
       createDrawing,
+      createCanvas,
       addAttachments,
       fileUrl,
       exists,
@@ -752,6 +775,7 @@ export function VaultProvider({
       updateSettings,
       createNoteWith,
       createDrawing,
+      createCanvas,
       addAttachments,
       fileUrl,
       exists,

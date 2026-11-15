@@ -211,6 +211,17 @@ returned by section rather than whole.
 - Elements can link to notes (`[[Note]]` in the element's link), feeding the graph.
 - The Excalidraw bundle (~1 MB) loads only when a drawing is opened or embedded.
 
+### Canvas
+- Boards are `.canvas` files in [JSON Canvas](https://jsoncanvas.org) format, the same as Obsidian's,
+  so they open in either app. Unknown fields are kept when saving.
+- Cards: text (markdown, `[[links]]` work), notes (rendered, a heading or block via `subpath`),
+  images and drawings, other files, web links, and groups. Arrows join card sides and can carry a
+  label and colour.
+- File cards and links in text cards count as links (backlinks, graph, renames update them).
+- Labelled arrows between note cards are typed relations (`canvasRelations` in the link index),
+  shown on each note's Links panel as "Canvas connections", and ready for the LLM to query.
+- Built on React Flow, loaded only when a canvas is opened.
+
 ---
 
 ## 7. Phases

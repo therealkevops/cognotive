@@ -1,12 +1,13 @@
 "use client";
 
-import { FileText, Image as ImageIcon, PenTool, X } from "lucide-react";
-import { basename, drawingName, extname, isDrawing, isImage, isMarkdown } from "@/lib/vault/paths";
+import { FileText, Image as ImageIcon, LayoutDashboard, PenTool, X } from "lucide-react";
+import { basename, canvasName, drawingName, extname, isCanvas, isDrawing, isImage, isMarkdown } from "@/lib/vault/paths";
 
 function label(path: string) {
   const name = basename(path);
   const ext = extname(name);
   if (isDrawing(path)) return drawingName(path);
+  if (isCanvas(path)) return canvasName(path);
   return isMarkdown(path) ? name.slice(0, -ext.length) : name;
 }
 
@@ -26,7 +27,7 @@ export function TabBar({
   return (
     <div role="tablist" aria-label="Open notes" className="flex gap-1 overflow-x-auto px-3 pt-1.5 pb-1">
       {tabs.map((path) => {
-        const Icon = isDrawing(path) ? PenTool : isImage(path) ? ImageIcon : FileText;
+        const Icon = isDrawing(path) ? PenTool : isCanvas(path) ? LayoutDashboard : isImage(path) ? ImageIcon : FileText;
         const selected = path === active;
         return (
           // The tab and its close button are siblings: a role="tab" element can't contain other controls.

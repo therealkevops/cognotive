@@ -677,3 +677,89 @@ mark {
 @media (prefers-reduced-motion: reduce) {
   .dialog-backdrop, .dialog-panel { animation: none; }
 }
+
+/* ---------- Canvas ---------- */
+
+.canvas-board {
+  --canvas-arrow: color-mix(in srgb, var(--foreground) 45%, transparent);
+}
+.canvas-board .react-flow {
+  --xy-background-color: var(--background);
+  --xy-background-pattern-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+  --xy-node-background-color: transparent;
+  --xy-node-border: none;
+  --xy-node-boxshadow-selected: none;
+  --xy-selection-background-color: color-mix(in srgb, var(--accent) 8%, transparent);
+  --xy-selection-border: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent);
+  --xy-controls-button-background-color: var(--raised);
+  --xy-controls-button-background-color-hover: color-mix(in srgb, var(--foreground) 6%, var(--raised));
+  --xy-controls-button-color: var(--muted);
+  --xy-controls-button-color-hover: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 28px -6px rgb(0 0 0 / 0.18);
+  --xy-edge-label-background-color: var(--raised);
+}
+.canvas-board .react-flow__controls {
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.canvas-board .react-flow__node {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  color: var(--foreground);
+}
+.canvas-card {
+  --card-color: var(--border-strong);
+  border: 1.5px solid var(--card-color);
+  border-radius: 0.875rem;
+  background: color-mix(in srgb, var(--card-color) 7%, var(--raised));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 6px 18px -8px rgb(0 0 0 / 0.18);
+}
+.canvas-card.is-selected {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 6px 18px -8px rgb(0 0 0 / 0.22);
+}
+.canvas-card-body > :first-child {
+  margin-top: 0;
+}
+.canvas-group {
+  --card-color: var(--border-strong);
+  position: relative;
+  border: 1.5px solid var(--card-color);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--card-color) 9%, transparent);
+}
+.canvas-group.is-selected {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.canvas-group-label {
+  background: color-mix(in srgb, var(--card-color) 18%, var(--raised));
+  color: var(--foreground);
+}
+.canvas-handle {
+  width: 10px !important;
+  height: 10px !important;
+  border: 2px solid var(--raised) !important;
+  background: var(--accent) !important;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.react-flow__node:hover .canvas-handle,
+.react-flow__node.selected .canvas-handle,
+.react-flow.connecting .canvas-handle {
+  opacity: 1;
+}
+.canvas-resize-line {
+  border-color: transparent !important;
+}
+.canvas-resize-handle {
+  width: 9px !important;
+  height: 9px !important;
+  border-radius: 3px;
+  border: 1.5px solid var(--accent) !important;
+  background: var(--raised) !important;
+}
+.canvas-edge-label {
+  background: var(--raised);
+  border: 1px solid var(--border);
+  pointer-events: all;
+}
