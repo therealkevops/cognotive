@@ -352,7 +352,7 @@ function EditorSection() {
   const hoverId = useId();
   return (
     <section aria-label="Editor">
-      <SectionHeader title="Editor" description="How links behave while you write. These apply to this browser only." />
+      <SectionHeader title="Editor" description="How writing and links behave. These apply to this browser only." />
       <Group>
         <Row
           label="Clicking a link in live preview"
@@ -368,6 +368,11 @@ function EditorSection() {
             <option value="edit">Edits the link</option>
             <option value="follow">Opens the link</option>
           </select>
+        </Row>
+        <Row label="Check spelling" description="Underline misspelt words using your browser's spell checker.">
+          <div className="flex sm:justify-end">
+            <Switch label="Check spelling" checked={a.spellcheck} onChange={(v) => set({ spellcheck: v })} />
+          </div>
         </Row>
         <Row label="Link previews on hover" description="A card showing the linked note." id={hoverId}>
           <select

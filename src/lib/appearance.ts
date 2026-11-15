@@ -9,6 +9,8 @@ export interface Appearance {
   lineWidth: "narrow" | "normal" | "wide" | "full";
   /** What a plain click on a link does in live preview: edit it (↗ follows) or follow it. */
   linkClick: "edit" | "follow";
+  /** The browser's spell checker (and autocorrect on phones) while editing. */
+  spellcheck: boolean;
   /** Typeface for notes: a book-like serif, a clean sans, or the system font. */
   noteFont: "serif" | "sans" | "system";
   /** Link previews on hover: always, or only while Ctrl/Cmd is held. */
@@ -46,12 +48,14 @@ export const DEFAULT_APPEARANCE: Appearance = {
   linkClick: "edit",
   hoverPreview: "always",
   noteFont: "serif",
+  spellcheck: true,
 };
 
 export function loadAppearance(): Appearance {
   const a = { ...DEFAULT_APPEARANCE, ...readPref<Partial<Appearance>>("appearance", {}) };
   if (!(a.accent in ACCENTS)) a.accent = "clay";
   if (!(a.noteFont in NOTE_FONTS)) a.noteFont = "serif";
+  if (typeof a.spellcheck !== "boolean") a.spellcheck = true;
   if (a.linkClick !== "edit" && a.linkClick !== "follow") a.linkClick = "edit";
   if (a.hoverPreview !== "always" && a.hoverPreview !== "mod") a.hoverPreview = "always";
   return a;

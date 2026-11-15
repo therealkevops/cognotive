@@ -105,6 +105,18 @@ const theme = EditorView.theme({
   ".cm-selectionMatch": { backgroundColor: "color-mix(in srgb, var(--accent) 12%, transparent)" },
 });
 
+/** The browser's spell checker on or off. Reconfigure with `spellcheckMode.reconfigure(...)`. */
+export const spellcheckMode = new Compartment();
+
+/** CodeMirror turns spell checking off by default; this turns it (and phone autocorrect) back on. */
+export function spellcheckExtension(on: boolean): Extension {
+  return EditorView.contentAttributes.of(
+    on
+      ? { spellcheck: "true", autocorrect: "on", autocapitalize: "sentences" }
+      : { spellcheck: "false", autocorrect: "off", autocapitalize: "off" },
+  );
+}
+
 /** Live preview on or off. Reconfigure with `livePreviewMode.reconfigure(...)`. */
 export const livePreviewMode = new Compartment();
 
@@ -118,6 +130,7 @@ export function editorExtensions(opts: {
   livePreview: boolean;
   onChange: (doc: string) => void;
   links?: LinkHost;
+  spellcheck?: boolean;
 }): Extension {
   return [
     history(),
@@ -144,6 +157,7 @@ export function editorExtensions(opts: {
       ...defaultKeymap,
     ]),
     livePreviewMode.of(livePreviewExtension(opts.livePreview)),
+    spellcheckMode.of(spellcheckExtension(opts.spellcheck ?? true)),
     theme,
     EditorView.updateListener.of((u) => {
       if (u.docChanged) opts.onChange(u.state.doc.toString());

@@ -878,7 +878,9 @@ export function Workspace() {
               ) : (
                 <MarkdownEditor
                   docKey={`${vault.active.version}`}
-                  initial={vault.active.initial}
+                  // The current text, not the text when the note was opened: the editor is
+                  // rebuilt when you come back from reading view, and must keep your edits.
+                  initial={vault.activeText}
                   livePreview={mode === "live"}
                   onChange={vault.edit}
                   onView={setView}

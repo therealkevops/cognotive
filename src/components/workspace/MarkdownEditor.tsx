@@ -3,7 +3,14 @@
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { useEffect, useMemo, useRef } from "react";
-import { editorExtensions, livePreviewExtension, livePreviewMode } from "@/lib/editor/setup";
+import { loadAppearance } from "@/lib/appearance";
+import {
+  editorExtensions,
+  livePreviewExtension,
+  livePreviewMode,
+  spellcheckExtension,
+  spellcheckMode,
+} from "@/lib/editor/setup";
 import type { LinkHost } from "@/lib/editor/wikilinks";
 
 export interface MarkdownEditorProps {
@@ -89,6 +96,7 @@ export default function MarkdownEditor({
           livePreview: livePreviewRef.current,
           onChange: (text) => onChangeRef.current(text),
           links: linkHostProxy,
+          spellcheck: loadAppearance().spellcheck,
         }),
       }),
     );
@@ -106,6 +114,14 @@ export default function MarkdownEditor({
       effects: livePreviewMode.reconfigure(livePreviewExtension(livePreview)),
     });
   }, [livePreview]);
+
+  // Follow the spell-check setting when it changes in Settings.
+  useEffect(() => {
+    const apply = () =>
+      view.current?.dispatch({ effects: spellcheckMode.reconfigure(spellcheckExtension(loadAppearance().spellcheck)) });
+    window.addEventListener("noted-appearance", apply);
+    return () => window.removeEventListener("noted-appearance", apply);
+  }, []);
 
   return <div ref={host} className="h-full" data-testid="editor" />;
 }
