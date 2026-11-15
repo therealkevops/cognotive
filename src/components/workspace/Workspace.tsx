@@ -10,7 +10,14 @@ import {
   Files,
   History,
   Network,
+  FilePlus,
+  ListTree,
+  Link2,
   PanelLeft,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   Pencil,
   Search,
   Settings,
@@ -19,7 +26,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AppShell } from "@/components/AppShell";
+import { AppShell, RailButton } from "@/components/AppShell";
 import { isDark, loadAppearance } from "@/lib/appearance";
 import type { OpenHow } from "@/lib/links/open";
 import { EMPTY_HISTORY, goBack, goForward, renameInHistory, visit, type NavHistory } from "@/lib/nav/history";
@@ -118,6 +125,25 @@ export function Workspace() {
   /** Heading to scroll to once the note being opened has loaded. */
   const [pendingHeading, setPendingHeading] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  /** Collapsed sidebars show a rail of icons instead (remembered per browser). */
+  const [leftCollapsed, setLeftCollapsedState] = useState(() => readPref("leftCollapsed", false));
+  const [rightCollapsed, setRightCollapsedState] = useState(() => readPref("rightCollapsed", false));
+  const setLeftCollapsed = useCallback((v: boolean) => {
+    setLeftCollapsedState(v);
+    writePref("leftCollapsed", v);
+  }, []);
+  const setRightCollapsed = useCallback((v: boolean) => {
+    setRightCollapsedState(v);
+    writePref("rightCollapsed", v);
+  }, []);
+  /** Latest sidebar toggles, for the keyboard shortcut handler. */
+  const toggleSidesRef = useRef<{ left(): void; right(): void }>({ left() {}, right() {} });
+  useEffect(() => {
+    toggleSidesRef.current = {
+      left: () => setLeftCollapsed(!leftCollapsed),
+      right: () => setRightCollapsed(!rightCollapsed),
+    };
+  });
   const [view, setView] = useState<EditorView | null>(null);
   const readingRef = useRef<HTMLDivElement>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -190,6 +216,11 @@ export function Workspace() {
       } else if (e.code === "KeyN" && e.altKey) {
         e.preventDefault();
         void vault.createNote();
+      } else if (e.code === "Backslash" && !e.altKey) {
+        // Ctrl/Cmd+\ collapses or expands the left sidebar; with Shift, the right one.
+        e.preventDefault();
+        if (e.shiftKey) toggleSidesRef.current.right();
+        else toggleSidesRef.current.left();
       } else if ((key === "arrowleft" || key === "arrowright") && e.altKey && !e.shiftKey) {
         e.preventDefault();
         navigateRef.current(key === "arrowleft" ? "back" : "forward");
@@ -567,7 +598,20 @@ export function Workspace() {
 
   const sidebar = (
     <>
-      <VaultSwitcher onManage={() => setSettingsOpen("vaults")} />
+      <div className="flex items-start gap-1">
+        <div className="min-w-0 flex-1">
+          <VaultSwitcher onManage={() => setSettingsOpen("vaults")} />
+        </div>
+        <button
+          type="button"
+          className="icon-button mt-1 hidden md:inline-flex"
+          aria-label="Collapse sidebar"
+          title="Collapse sidebar (Ctrl/Cmd+\)"
+          onClick={() => setLeftCollapsed(true)}
+        >
+          <PanelLeftClose size={17} aria-hidden />
+        </button>
+      </div>
       <div className="mb-3 flex items-center gap-1 px-0.5">
       <div role="tablist" aria-label="Sidebar" className="segmented flex-1">
         {(
@@ -637,6 +681,66 @@ export function Workspace() {
           Settings
         </button>
       </div>
+    </>
+  );
+
+  /** Opens the left sidebar on a tab, from the rail. */
+  const openSidebarTab = (t: SidebarTab) => {
+    setTab(t);
+    setLeftCollapsed(false);
+  };
+  const leftRail = (
+    <>
+      <RailButton label="Expand sidebar" onClick={() => setLeftCollapsed(false)}>
+        <PanelLeftOpen size={18} aria-hidden />
+      </RailButton>
+      <RailButton label="New note" onClick={() => void vault.createNote()}>
+        <FilePlus size={18} aria-hidden />
+      </RailButton>
+      <span className="my-1 h-px w-6 bg-border" aria-hidden />
+      <RailButton label="Files" onClick={() => openSidebarTab("files")}>
+        <Files size={18} aria-hidden />
+      </RailButton>
+      <RailButton label="Search" onClick={() => openSidebarTab("search")}>
+        <Search size={18} aria-hidden />
+      </RailButton>
+      <RailButton label="Tags" onClick={() => openSidebarTab("tags")}>
+        <Tags size={18} aria-hidden />
+      </RailButton>
+      <span className="my-1 h-px w-6 bg-border" aria-hidden />
+      <RailButton label="Today" onClick={() => void openDaily()}>
+        <CalendarDays size={18} aria-hidden />
+      </RailButton>
+      <RailButton label="Graph view" onClick={() => setGraphOpen(true)}>
+        <Network size={18} aria-hidden />
+      </RailButton>
+      <div className="mt-auto">
+        <RailButton label="Settings" onClick={() => setSettingsOpen("appearance")}>
+          <Settings size={18} aria-hidden />
+        </RailButton>
+      </div>
+    </>
+  );
+  /** Opens the right panel on a tab, from its rail. */
+  const openPanelTab = (t: PanelTab) => {
+    setPanelTab(t);
+    setRightCollapsed(false);
+  };
+  const rightRail = (
+    <>
+      <RailButton label="Expand panel" onClick={() => setRightCollapsed(false)}>
+        <PanelRightOpen size={18} aria-hidden />
+      </RailButton>
+      <span className="my-1 h-px w-6 bg-border" aria-hidden />
+      <RailButton label="Links" active={false} onClick={() => openPanelTab("links")}>
+        <Link2 size={18} aria-hidden />
+      </RailButton>
+      <RailButton label="Outline" onClick={() => openPanelTab("outline")}>
+        <ListTree size={18} aria-hidden />
+      </RailButton>
+      <RailButton label="Local graph" onClick={() => openPanelTab("graph")}>
+        <Network size={18} aria-hidden />
+      </RailButton>
     </>
   );
 
@@ -727,6 +831,12 @@ export function Workspace() {
       when: !!activePathNow,
     },
     { id: "side-close", label: "Close the side pane", when: !!sidePath },
+    { id: "toggle-left", label: leftCollapsed ? "Expand the left sidebar" : "Collapse the left sidebar", hint: "Ctrl/Cmd+\\" },
+    {
+      id: "toggle-right",
+      label: rightCollapsed ? "Expand the right panel" : "Collapse the right panel",
+      hint: "Ctrl/Cmd+Shift+\\",
+    },
     { id: "tab-close", label: "Close this tab", when: !!activePathNow },
     {
       id: "delete",
@@ -764,6 +874,8 @@ export function Workspace() {
     "mode-reading": () => setMode("reading"),
     side: () => activePathNow && setSidePath(activePathNow),
     "side-close": () => setSidePath(null),
+    "toggle-left": () => setLeftCollapsed(!leftCollapsed),
+    "toggle-right": () => setRightCollapsed(!rightCollapsed),
     "tab-close": () => activePathNow && closeTab(activePathNow),
     delete: () => activePathNow && setDeleting(activePathNow),
     sync: sync.syncNow,
@@ -780,10 +892,15 @@ export function Workspace() {
           sidebar={sidebar}
           sidebarOpen={sidebarOpen}
           onCloseSidebar={() => setSidebarOpen(false)}
+          leftCollapsed={leftCollapsed}
+          rightCollapsed={rightCollapsed}
+          leftRail={leftRail}
+          rightRail={rightRail}
           panel={
             vault.active ? (
               <>
-                <div role="tablist" aria-label="Note panels" className="segmented mb-4 flex w-full">
+                <div className="mb-4 flex items-center gap-1">
+                <div role="tablist" aria-label="Note panels" className="segmented flex flex-1">
                   {(
                     [
                       ["links", "Links"],
@@ -801,6 +918,16 @@ export function Workspace() {
                       {label}
                     </button>
                   ))}
+                </div>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Collapse panel"
+                    title="Collapse panel (Ctrl/Cmd+Shift+\)"
+                    onClick={() => setRightCollapsed(true)}
+                  >
+                    <PanelRightClose size={17} aria-hidden />
+                  </button>
                 </div>
                 {panelTab === "outline" ? (
                   <Outline markdown={vault.activeText} onJump={jumpTo} />
