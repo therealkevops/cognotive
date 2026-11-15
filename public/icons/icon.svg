@@ -1,15 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#c96442"/>
-  <g fill="none" stroke="#fff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+  <rect width="512" height="512" rx="112" fill="#1f1e1d"/>
+  <g fill="none" stroke="#faf9f5" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
     <path d="M150 128h150l62 62v194a20 20 0 0 1-20 20H150a20 20 0 0 1-20-20V148a20 20 0 0 1 20-20z"/>
     <path d="M300 128v62h62"/>
   </g>
-  <g fill="#fff">
+  <g fill="#faf9f5">
     <circle cx="196" cy="300" r="22"/>
     <circle cx="300" cy="256" r="22"/>
     <circle cx="276" cy="352" r="22"/>
   </g>
-  <g stroke="#fff" stroke-width="12" stroke-linecap="round">
+  <g stroke="#faf9f5" stroke-width="12" stroke-linecap="round">
     <path d="M196 300l104-44M196 300l80 52M300 256l-24 96"/>
   </g>
 </svg>
