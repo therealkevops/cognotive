@@ -21,20 +21,18 @@ import {
   type VaultConfig,
 } from "@/lib/vault/registry";
 import { isIOS, useInstall } from "@/lib/install";
-import { useAuth } from "../auth/useAuth";
 import { MIN_PASSPHRASE, newPassphraseError, RecoveryKeyStep, UnlockFields, type SecretKind } from "../sync/EncryptionFields";
 import { TokenInstructions } from "../sync/TokenFields";
 import { useVault } from "../vault/useVault";
 import { useVaults } from "../vault/useVaults";
 
-export type SettingsSection = "appearance" | "editor" | "vault" | "vaults" | "account" | "app";
+export type SettingsSection = "appearance" | "editor" | "vault" | "vaults" | "app";
 
 const SECTIONS: Array<{ id: SettingsSection; label: string }> = [
   { id: "appearance", label: "Appearance" },
   { id: "editor", label: "Editor" },
   { id: "vault", label: "This repository" },
   { id: "vaults", label: "Repositories & sync" },
-  { id: "account", label: "GitHub account" },
   { id: "app", label: "Install app" },
 ];
 
@@ -83,7 +81,6 @@ export function SettingsDialog({ onClose, initial = "appearance" }: { onClose():
             {section === "editor" && <EditorSection />}
             {section === "vault" && <ThisVaultSection />}
             {section === "vaults" && <VaultsSection />}
-            {section === "account" && <AccountSection />}
             {section === "app" && <InstallSection />}
           </div>
         </div>
@@ -505,52 +502,6 @@ function ThisVaultSection() {
 
 /* ---------- Account ---------- */
 
-function AccountSection() {
-  const { state, signIn, signOut } = useAuth();
-  return (
-    <section aria-label="GitHub account">
-      <SectionHeader
-        title="GitHub account"
-        description="Optional. Repositories connected with a GitHub token don't need this; signing in with a GitHub App is an alternative that needs setting up on the deployment."
-      />
-      <Group>
-        {state.status === "loading" && <p className="py-4 text-sm text-muted">Checking…</p>}
-        {state.status === "signed_in" && (
-          <Row label={`Signed in as @${state.user.login}`}>
-            <div className="flex sm:justify-end">
-              <button type="button" className="button-secondary" onClick={() => void signOut()}>
-                Sign out
-              </button>
-            </div>
-          </Row>
-        )}
-        {state.status === "signed_out" && (
-          <Row label="Not signed in" description="Sign in to sync repositories with GitHub.">
-            <div className="flex sm:justify-end">
-              <button type="button" className="button-primary" onClick={signIn}>
-                Sign in with GitHub
-              </button>
-            </div>
-          </Row>
-        )}
-        {state.status === "not_configured" && (
-          <Row
-            label="GitHub App sign-in isn't set up"
-            description="Not needed to sync: connect repositories with a token in Repositories & sync. To use sign-in instead, create a GitHub App for this deployment."
-          >
-            <div className="flex sm:justify-end">
-              <a href="/github-setup" className="button-secondary">
-                Set up GitHub
-              </a>
-            </div>
-          </Row>
-        )}
-        {state.status === "offline" && <p className="py-4 text-sm text-muted">Offline. Can&apos;t reach the sign-in service.</p>}
-      </Group>
-    </section>
-  );
-}
-
 /* ---------- Install ---------- */
 
 function InstallSection() {
@@ -709,7 +660,7 @@ function EditVault({
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
       </Field>
       {vault.kind === "github" && <SyncFields mode={syncMode} setMode={setSyncMode} idle={idle} setIdle={setIdle} />}
-      {vault.kind === "github" && vault.auth === "token" && <ReplaceToken vault={vault} />}
+      {vault.kind === "github" && <ReplaceToken vault={vault} />}
       {vault.kind === "github" && vault.encrypted && (
         <div className="flex items-start justify-between gap-3">
           <p className="text-xs text-muted">
@@ -877,17 +828,13 @@ function AddButtons({ onGitHub }: { onGitHub(): void }) {
 }
 
 function ConnectRepoForm({ onDone }: { onDone(): void }) {
-  const auth = useAuth();
   const { add } = useVaults();
-  // A personal access token by default; the deployment's GitHub App sign-in if you're already signed in.
-  const appAvailable = auth.state.status !== "not_configured";
-  const [via, setVia] = useState<"token" | "app">(() => (auth.state.status === "signed_in" ? "app" : "token"));
   const [patText, setPatText] = useState("");
   const [pat, setPat] = useState<StoredToken | null>(null);
   const [checkingPat, setCheckingPat] = useState(false);
   const client = useMemo(
-    () => new GitHubClient(via === "token" ? async () => pat?.token ?? "" : auth.getToken),
-    [via, pat, auth.getToken],
+    () => new GitHubClient(async () => pat?.token ?? ""),
+    [pat],
   );
   const [repos, setRepos] = useState<RepoSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -908,15 +855,6 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
   const [busy, setBusy] = useState(false);
   const [recovery, setRecovery] = useState<{ key: string; config: GitHubVaultConfig } | null>(null);
 
-  const signedIn = auth.state.status === "signed_in";
-  useEffect(() => {
-    if (via !== "app" || !signedIn) return;
-    client
-      .listRepos()
-      .then(setRepos)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  }, [client, signedIn, via]);
-
   const checkPat = () => {
     setCheckingPat(true);
     setError(null);
@@ -930,8 +868,9 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setCheckingPat(false));
   };
-  const switchTo = (v: "token" | "app") => {
-    setVia(v);
+  const resetToken = () => {
+    setPat(null);
+    setPatText("");
     setRepos(null);
     setRepoName("");
     setProbe(null);
@@ -981,27 +920,6 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
     );
   }
 
-  if (via === "app" && !signedIn) {
-    return (
-      <section aria-label="Connect a GitHub repository" className="rounded-xl border border-border p-4 text-sm">
-        <p className="mb-2">Sign in with GitHub first.</p>
-        <div className="flex flex-wrap gap-2">
-          {auth.state.status === "signed_out" && (
-            <button type="button" className="button-primary" onClick={auth.signIn}>
-              Sign in with GitHub
-            </button>
-          )}
-          <button type="button" className="button-secondary" onClick={() => switchTo("token")}>
-            Use a token instead
-          </button>
-          <button type="button" className="button-secondary" onClick={onDone}>
-            Cancel
-          </button>
-        </div>
-      </section>
-    );
-  }
-
   const probeKind = probe && typeof probe === "object" ? probe.kind : null;
   const passError = probeKind === "empty" && encrypt ? newPassphraseError(pass, confirm) : null;
   const ready = probe !== "checking" && (probeKind === "encrypted" ? !!secret.trim() : !passError);
@@ -1032,13 +950,12 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
           folder: cleanFolder,
           syncMode,
           idleSeconds: idle,
-          auth: via,
         };
         setBusy(true);
         setError(null);
         void (async () => {
           try {
-            if (via === "token" && pat) await saveToken(config.id, pat);
+            if (pat) await saveToken(config.id, pat);
             if (!probeKind || probeKind === "plain" || (probeKind === "empty" && !encrypt)) {
               add(config);
               onDone();
@@ -1065,110 +982,76 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
       }}
     >
       <h4 className="font-serif text-lg">Connect a GitHub repository</h4>
-      {via === "token" ? (
-        <div className="space-y-3">
-          <p className="text-sm text-muted">
-            noted-ai syncs with a GitHub token that can only reach the repositories you pick.{" "}
-            {appAvailable && (
-              <button type="button" className="underline hover:text-accent" onClick={() => switchTo("app")}>
-                Sign in with the GitHub App instead
-              </button>
-            )}
+      <div className="space-y-3">
+        <p className="text-sm text-muted">
+          noted-ai syncs with a GitHub token that can only reach the repositories you pick.
+        </p>
+        {pat ? (
+          <p className="flex items-center justify-between gap-2 text-sm">
+            <span>
+              Token for <strong>@{pat.login}</strong>
+              {pat.expiresAt ? `, expires ${new Date(pat.expiresAt).toLocaleDateString()}` : ", doesn't expire"}
+            </span>
+            <button
+              type="button"
+              className="text-xs text-muted underline hover:text-accent"
+              onClick={resetToken}
+            >
+              Use another token
+            </button>
           </p>
-          {pat ? (
-            <p className="flex items-center justify-between gap-2 text-sm">
-              <span>
-                Token for <strong>@{pat.login}</strong>
-                {pat.expiresAt ? `, expires ${new Date(pat.expiresAt).toLocaleDateString()}` : ", doesn't expire"}
-              </span>
+        ) : (
+          <>
+            <TokenInstructions />
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-sm">
+                <span className="font-medium">GitHub token</span>
+                <input
+                  className="input font-mono"
+                  type="password"
+                  autoComplete="off"
+                  placeholder="github_pat_…"
+                  value={patText}
+                  onChange={(e) => setPatText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (patText.trim() && !checkingPat) checkPat();
+                    }
+                  }}
+                />
+              </label>
               <button
                 type="button"
-                className="text-xs text-muted underline hover:text-accent"
-                onClick={() => {
-                  setPat(null);
-                  setPatText("");
-                  switchTo("token");
-                }}
+                className="button-primary"
+                disabled={!patText.trim() || checkingPat}
+                onClick={checkPat}
               >
-                Use another token
+                {checkingPat ? "Checking…" : "Continue"}
               </button>
-            </p>
-          ) : (
-            <>
-              <TokenInstructions />
-              <div className="flex flex-wrap items-end gap-2">
-                <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-sm">
-                  <span className="font-medium">GitHub token</span>
-                  <input
-                    className="input font-mono"
-                    type="password"
-                    autoComplete="off"
-                    placeholder="github_pat_…"
-                    value={patText}
-                    onChange={(e) => setPatText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        if (patText.trim() && !checkingPat) checkPat();
-                      }
-                    }}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="button-primary"
-                  disabled={!patText.trim() || checkingPat}
-                  onClick={checkPat}
-                >
-                  {checkingPat ? "Checking…" : "Continue"}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      ) : (
-        <p className="text-sm text-muted">
-          Using the GitHub App sign-in.{" "}
-          <button type="button" className="underline hover:text-accent" onClick={() => switchTo("token")}>
-            Use a token instead
-          </button>
-        </p>
-      )}
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {(via === "app" || pat) && (
-      <Field
-        label="Repository"
-        hint={
-          via === "token" ? (
-            "Only repositories the token can reach are listed."
-          ) : (
-          <>
-            Only repositories the noted-ai GitHub App is installed on are listed.{" "}
-            {auth.state.status === "signed_in" && auth.state.installUrl && (
-              <a className="text-accent underline" href={auth.state.installUrl} target="_blank" rel="noreferrer">
-                Choose repositories
-              </a>
-            )}
+            </div>
           </>
-          )
-        }
-      >
-        <select
-          className="input"
-          value={repoName}
-          onChange={(e) => pickRepo(e.target.value)}
-          disabled={!repos}
-          required
-        >
-          <option value="">{repos ? (repos.length ? "Choose a repository…" : "No repositories yet") : "Loading…"}</option>
-          {repos?.map((r) => (
-            <option key={r.fullName} value={r.fullName}>
-              {r.fullName}
-              {r.private ? " (private)" : ""}
-            </option>
-          ))}
-        </select>
-      </Field>
+        )}
+      </div>
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {pat && (
+        <Field label="Repository" hint="Only repositories the token can reach are listed.">
+          <select
+            className="input"
+            value={repoName}
+            onChange={(e) => pickRepo(e.target.value)}
+            disabled={!repos}
+            required
+          >
+            <option value="">{repos ? (repos.length ? "Choose a repository…" : "No repositories yet") : "Loading…"}</option>
+            {repos?.map((r) => (
+              <option key={r.fullName} value={r.fullName}>
+                {r.fullName}
+                {r.private ? " (private)" : ""}
+              </option>
+            ))}
+          </select>
+        </Field>
       )}
       {repo && (
         <>

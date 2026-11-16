@@ -62,7 +62,7 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   notes are kept in the browser
 - Several repositories, with a switcher at the top of the sidebar; both sidebars collapse to
   icon rails
-- Sync with GitHub: sign in with GitHub, pick a GitHub repository, branch and optional subfolder.
+- Sync with GitHub: paste a GitHub token, pick a repository, branch and optional subfolder.
   Notes sync both ways; see [How sync works](#how-sync-works)
 
 ## Develop
@@ -92,18 +92,18 @@ CI (`.github/workflows/ci.yml`) runs all of the above on every push to `main` an
 
 1. In Vercel, **Add New → Project** and import `therealkevops/noted-ai`.
 2. Keep the detected defaults (Framework: Next.js, build `next build`). No environment
-   variables are needed yet; `.env.example` lists the ones later phases add.
+   variables are needed; `.env.example` lists the one a later phase adds.
 3. Deploy. Every push to `main` deploys to production; other branches get preview URLs.
 
 Check a deployment at `/api/health`, which reports the commit it was built from.
 
 The app is designed for the Hobby plan's limits: pages and `/api/health` are static, and
-later phases keep server functions to GitHub login and a thin Claude proxy. See
+the only server function planned is a thin Claude proxy for the AI features. See
 [docs/PLAN.md § Guiding constraints](docs/PLAN.md#1-guiding-constraints).
 
 ## Set up GitHub storage
 
-**With a token (nothing to set up on the deployment).** In the app, go to **Settings →
+Nothing needs setting up on the deployment. In the app, go to **Settings →
 Repositories & sync → Connect a GitHub repository** and follow the steps: create a
 [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new)
 that can only reach your notes repository, with **Contents: Read and write**, and paste it in.
@@ -115,63 +115,10 @@ The browser talks to GitHub directly with it.
 - Keep the token limited to your notes repository: anything that could run inside the app could
   read it.
 
-**With GitHub App sign-in (optional).** The alternative is a GitHub App, which signs you in and
-keeps its long-lived credential in an httpOnly cookie on the server. It needs settings on the
-deployment, which the app can add for you:
-
-**The quick way:** open your deployment (the Vercel production address, not localhost) and go to
-**Settings → GitHub account → Set up GitHub** (or `/github-setup`):
-
-1. **Create the GitHub App**: one click, using GitHub's
-   [app manifest flow](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest),
-   with the right permissions and callback URL.
-2. **Save it to Vercel**: paste a [Vercel access token](https://vercel.com/account/settings/tokens)
-   (a 1-day expiry is plenty). The app adds the five environment variables below, with a generated
-   `SESSION_SECRET` and your GitHub user id, and redeploys. The token is used once and not kept.
-   This only works while GitHub isn't set up yet, so the route can't change anything afterwards.
-   (You can also add the variables by hand from the same page.)
-3. **Redeploy**: the page waits for the new deployment to go live.
-4. **Choose a repository and sign in**: one trip to GitHub installs the app on the repositories
-   you pick and signs you in.
-
-**By hand,** if you prefer:
-
-1. **Create the app** at <https://github.com/settings/apps/new>:
-   - **GitHub App name:** anything unique, e.g. `noted-ai-<you>`
-   - **Homepage URL:** your Vercel production URL
-   - **Callback URL:** `https://<your-vercel-domain>/api/auth/callback`. Use *Add Callback URL*
-     to also add `http://localhost:3000/api/auth/callback` for local development.
-   - Leave **Expire user authorization tokens** ticked.
-   - Tick **Request user authorization (OAuth) during installation**.
-   - **Webhook:** untick *Active*.
-   - **Permissions → Repository permissions → Contents:** *Read and write*. (Metadata: read-only
-     is added automatically.) No other permissions.
-   - **Where can this GitHub App be installed?** *Only on this account*.
-2. On the app's page, note the **Client ID**, click **Generate a new client secret**, and note
-   the app's URL name (the *slug*, from `github.com/apps/<slug>`).
-3. **Install the app** (left menu → *Install App*) and choose the repository or repositories
-   that will hold notes. A new, empty private repo is fine.
-4. In **Vercel → Project → Settings → Environment Variables**, add the variables from
-   `.env.example`:
-
-   | Variable | Value |
-   |---|---|
-   | `GITHUB_APP_CLIENT_ID` | the Client ID |
-   | `GITHUB_APP_CLIENT_SECRET` | the client secret |
-   | `GITHUB_APP_SLUG` | the slug |
-   | `SESSION_SECRET` | output of `openssl rand -base64 32` |
-   | `ALLOWED_GITHUB_USER_IDS` | your numeric GitHub id (see `https://api.github.com/users/<login>`), so nobody else can sign in |
-
-5. **Redeploy**, open the app, go to **Settings → Connect a GitHub repository**.
-
-Sign-in works on the URLs listed as callback URLs. Vercel preview deployments have their own
-URLs, so sign-in on a preview needs that URL added too; local repositories work everywhere.
-
 ### How sync works
 
 - The browser talks to `api.github.com` directly with your token; note contents never pass
-  through Vercel. The only server routes are `/api/auth/*`, which keep the refresh token in an
-  encrypted httpOnly cookie and hand the browser short-lived access tokens.
+  through Vercel, and there are no server routes involved.
 - Edits are saved in the browser first, so the app works offline. **Automatic** sync commits
   30 seconds (configurable) after you stop typing, when you leave the tab, and when you switch
   repositories; it also checks GitHub for changes when you come back to the tab and every 5 minutes.
@@ -220,16 +167,15 @@ which files are identical, which git shows anyway.
 ## Layout
 
 ```
-src/app/            routes (App Router); src/app/api/auth/* is GitHub sign-in
+src/app/            routes (App Router)
 src/components/     React components (workspace/ = the editor UI, vault/ = repository state)
 src/lib/            framework-free logic with unit tests alongside:
   vault/            repository storage: VaultStore interface, LocalStore (IndexedDB), paths, folder tree
   editor/           CodeMirror setup, formatting commands, live preview
   markdown/         reading-view renderer (unified/remark/rehype), outline
   search/           keyword index (MiniSearch)
-  github/           browser GitHub REST client
+  github/           browser GitHub REST client, token storage and checks
   sync/             sync engine (three-way, conflict copies), remote adapter, sync state
-  server/           sign-in helpers used by the auth routes (session cookie, OAuth)
   links/            link and tag parsing, Obsidian-style resolution, LinkIndex (backlinks,
                     mentions, graph, rename rewriting)
   drawing/          Excalidraw file parsing (text, links), link rewriting, SVG rendering

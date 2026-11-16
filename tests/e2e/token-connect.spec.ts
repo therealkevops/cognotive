@@ -13,7 +13,7 @@ async function openConnect(page: Page) {
 
 test("connects with a GitHub token, with nothing set up on the deployment, and syncs", async ({ page }) => {
   const github = new FakeGitHub({ "Hello.md": "# Hello from GitHub\n" });
-  await github.install(page, { app: false });
+  await github.install(page);
 
   const dialog = await openConnect(page);
   const form = dialog.getByRole("form", { name: "Connect a GitHub repository" });
@@ -46,7 +46,7 @@ test("connects with a GitHub token, with nothing set up on the deployment, and s
 
 test("a rejected token asks for a new one", async ({ page }) => {
   const github = new FakeGitHub({ "Hello.md": "hi" });
-  await github.install(page, { app: false });
+  await github.install(page);
   const dialog = await openConnect(page);
   const form = dialog.getByRole("form", { name: "Connect a GitHub repository" });
 
@@ -87,7 +87,7 @@ test("a token close to expiry shows a reminder", async ({ page }) => {
   const github = new FakeGitHub({ "Hello.md": "hi" });
   const soon = new Date(Date.now() + 3 * 86_400_000 + 3_600_000);
   github.tokenExpiry = `${soon.toISOString().slice(0, 10)} ${soon.toISOString().slice(11, 19)} UTC`;
-  await github.install(page, { app: false });
+  await github.install(page);
   const dialog = await openConnect(page);
   const form = dialog.getByRole("form", { name: "Connect a GitHub repository" });
   await form.getByLabel("GitHub token").fill("github_pat_x");

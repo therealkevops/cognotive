@@ -1288,33 +1288,10 @@ function EmptyState({ onCreate, onFind }: { onCreate(): void; onFind(): void }) 
   );
 }
 
-const AUTH_ERRORS: Record<string, string> = {
-  not_configured: "GitHub isn't set up on this deployment yet. Settings → GitHub account → Set up GitHub.",
-  denied: "GitHub sign-in was cancelled.",
-  bad_state: "Sign-in expired or came from another tab. Please try again.",
-  not_allowed: "This GitHub account isn't allowed to use this app.",
-  failed: "GitHub sign-in failed. Please try again.",
-};
-
-/** Reads ?auth_error=... left by the sign-in callback, then removes it from the URL. */
-function useAuthError(): [string | null, () => void] {
-  const [message, setMessage] = useState<string | null>(() => {
-    const code = new URLSearchParams(window.location.search).get("auth_error");
-    return code ? (AUTH_ERRORS[code] ?? AUTH_ERRORS.failed) : null;
-  });
-  useEffect(() => {
-    if (!message) return;
-    const url = new URL(window.location.href);
-    url.searchParams.delete("auth_error");
-    window.history.replaceState(null, "", url);
-  }, [message]);
-  return [message, () => setMessage(null)];
-}
 
 function Toasts() {
   const { error, clearError } = useVault();
   const { notices, dismissNotices } = useSync();
-  const [authError, clearAuthError] = useAuthError();
   useEffect(() => {
     if (!error) return;
     const t = setTimeout(clearError, 6000);
@@ -1323,7 +1300,6 @@ function Toasts() {
 
   const toasts = [
     ...(error ? [{ key: "error", text: error, tone: "error", dismiss: clearError }] : []),
-    ...(authError ? [{ key: "auth", text: authError, tone: "error", dismiss: clearAuthError }] : []),
     ...notices.map((n, i) => ({ key: `n${i}`, text: n, tone: "info", dismiss: dismissNotices })),
   ];
   if (!toasts.length) return null;

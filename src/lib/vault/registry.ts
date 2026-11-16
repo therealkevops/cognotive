@@ -25,11 +25,6 @@ export interface GitHubVaultConfig extends VaultBase {
   idleSeconds: number;
   /** End-to-end encrypted: GitHub only stores ciphertext. Keys live in each browser. */
   encrypted?: boolean;
-  /**
-   * How it reaches GitHub: a personal access token saved in this browser, or
-   * the deployment's GitHub App sign-in (the default for older connections).
-   */
-  auth?: "token" | "app";
 }
 
 export type VaultConfig = LocalVaultConfig | GitHubVaultConfig;

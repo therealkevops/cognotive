@@ -3,7 +3,6 @@
 import "@/lib/install"; // catch the browser's install offer as early as possible
 import dynamic from "next/dynamic";
 import { useEffect, useMemo } from "react";
-import { AuthProvider } from "@/components/auth/useAuth";
 import { SyncProvider } from "@/components/sync/useSync";
 import { VaultProvider } from "@/components/vault/useVault";
 import { VaultsProvider, useVaults } from "@/components/vault/useVaults";
@@ -51,10 +50,8 @@ export function AppRoot() {
     }
   }, []);
   return (
-    <AuthProvider>
-      <VaultsProvider>
-        <ClientOnlyVaults />
-      </VaultsProvider>
-    </AuthProvider>
+    <VaultsProvider>
+      <ClientOnlyVaults />
+    </VaultsProvider>
   );
 }

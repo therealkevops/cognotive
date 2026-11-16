@@ -6,10 +6,10 @@ async function connectRepo(page: Page) {
   await expect(page.locator(".cm-content")).toBeVisible();
   await page.getByRole("button", { name: "Settings" }).click();
   const dialog = page.getByRole("dialog", { name: "Settings" });
-  await dialog.getByRole("button", { name: "GitHub account" }).click();
-  await expect(dialog.getByText("Signed in as @tester")).toBeVisible();
   await dialog.getByRole("button", { name: "Repositories & sync" }).click();
   await dialog.getByRole("button", { name: "Connect a GitHub repository" }).click();
+  await dialog.getByLabel("GitHub token").fill("github_pat_test");
+  await dialog.getByRole("button", { name: "Continue" }).click();
   await dialog.getByRole("combobox", { name: /^Repository/ }).selectOption("me/notes");
   await dialog.getByRole("button", { name: "Connect and open" }).click();
   // Opening the new vault replaces the workspace, which closes the dialog.
@@ -55,16 +55,22 @@ test("connects a repository, clones it, and syncs edits both ways", async ({ pag
   await expect(tree.getByRole("treeitem", { name: "Welcome" })).toBeVisible();
 });
 
-test("a GitHub repository asks to sign in when the session has ended", async ({ page }) => {
+test("a device without the token asks for one, and the notes stay readable", async ({ page }) => {
   const github = new FakeGitHub({ "Hello.md": "hi" });
   await github.install(page);
   await connectRepo(page);
   await expect(page.getByRole("tree", { name: "Repository files" }).getByRole("treeitem", { name: "Hello" })).toBeVisible();
 
-  await page.unroute("**/api/auth/token");
-  await page.route("**/api/auth/token", (route) => route.fulfill({ status: 401, json: { error: "signed_out" } }));
+  // Forget the saved token, as on a device that never had it.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        const req = indexedDB.deleteDatabase("noted-ai:tokens");
+        req.onsuccess = req.onerror = req.onblocked = () => resolve();
+      }),
+  );
   await page.reload();
-  await expect(page.getByRole("button", { name: /^Sign in to sync/ })).toBeVisible();
-  // The cloned notes are still readable offline from the browser copy.
+  await expect(page.getByRole("button", { name: /^Add token/ })).toBeVisible();
+  // The cloned notes are still readable from the browser copy.
   await expect(page.getByRole("tree", { name: "Repository files" }).getByRole("treeitem", { name: "Hello" })).toBeVisible();
 });

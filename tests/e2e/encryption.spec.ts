@@ -8,6 +8,8 @@ async function startConnecting(page: Page) {
   const dialog = page.getByRole("dialog", { name: "Settings" });
   await dialog.getByRole("button", { name: "Repositories & sync" }).click();
   await dialog.getByRole("button", { name: "Connect a GitHub repository" }).click();
+  await dialog.getByLabel("GitHub token").fill("github_pat_test");
+  await dialog.getByRole("button", { name: "Continue" }).click();
   await dialog.getByRole("combobox", { name: /^Repository/ }).selectOption("me/notes");
   return dialog;
 }

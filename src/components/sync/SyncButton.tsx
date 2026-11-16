@@ -1,8 +1,7 @@
 "use client";
 
-import { CloudAlert, CloudCheck, CloudOff, CloudUpload, KeyRound, Lock, LogIn, RefreshCw } from "lucide-react";
+import { CloudAlert, CloudCheck, CloudOff, CloudUpload, KeyRound, Lock, RefreshCw } from "lucide-react";
 import { useState } from "react";
-import { useAuth } from "../auth/useAuth";
 import { UnlockDialog } from "./EncryptionFields";
 import { TokenDialog } from "./TokenFields";
 import { useSync } from "./useSync";
@@ -18,7 +17,6 @@ function ago(ts: number | null): string {
 /** Sync state for a GitHub vault; click to sync now (or sign in). */
 export function SyncButton() {
   const { status, syncNow, history } = useSync();
-  const auth = useAuth();
   const [unlocking, setUnlocking] = useState(false);
   const [askToken, setAskToken] = useState(false);
   if (status.kind === "local") return null;
@@ -43,13 +41,6 @@ export function SyncButton() {
       icon = <RefreshCw size={16} aria-hidden className="animate-spin" />;
       label = "Syncing…";
       title = "Syncing with GitHub";
-      break;
-    case "signed_out":
-      icon = <LogIn size={16} aria-hidden />;
-      label = "Sign in to sync";
-      title = "Sign in with GitHub to sync this repository. Your edits are kept in this browser meanwhile.";
-      tone = "text-accent";
-      onClick = auth.signIn;
       break;
     case "locked":
       icon = <Lock size={16} aria-hidden />;

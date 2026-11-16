@@ -57,20 +57,8 @@ export class FakeGitHub {
   /** When the personal access token expires (sent in GitHub's header), or null. */
   tokenExpiry: string | null = "2027-02-01 00:00:00 UTC";
 
-  /**
-   * Serves the fake API. With `app: false` the GitHub App sign-in is left alone
-   * (the test server has none), as for repositories connected with a token.
-   */
-  async install(page: Page, { app = true }: { app?: boolean } = {}) {
-    if (!app) {
-      await page.route("https://api.github.com/**", (route) => this.handle(route));
-      return;
-    }
-    await page.route("**/api/auth/token", (route) =>
-      route.fulfill({
-        json: { token: "ghu_test", expiresAt: Date.now() + 8 * 3600_000, user: { id: 1, login: "tester" }, installUrl: null },
-      }),
-    );
+  /** Serves the fake API to the page. */
+  async install(page: Page) {
     await page.route("https://api.github.com/**", (route) => this.handle(route));
   }
 

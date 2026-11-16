@@ -105,8 +105,9 @@ access token** limited to the notes repository (Contents: read & write), pasted 
 and stored in IndexedDB (`noted-ai:tokens`). No server routes or environment variables are
 involved. The trade-off is that the token is readable by code running in the page, unlike the
 App's httpOnly refresh token, so the instructions keep it to one repository and an expiry; the
-app warns a week before expiry and asks for a new token on a 401. GitHub App sign-in remains as
-an option (`auth: "app"` on a repository's config, the default for older connections).
+app warns a week before expiry and asks for a new token on a 401. GitHub App sign-in, its server
+routes (`/api/auth/*`), the setup page and the Vercel automation were then removed altogether:
+the app has no server routes for GitHub, and the sections below describe the original design.
 
 ### Why a GitHub App (not a classic OAuth App or a pasted token)
 - Fine-grained: the user grants access to specific repositories only, with
