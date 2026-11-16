@@ -52,16 +52,25 @@ test("Repository health lists broken links, orphans and hubs, and creates missin
   await expect(dialog.getByTestId("health-verdict")).not.toBeEmpty();
   await expect(dialog.getByRole("region", { name: "Summary" })).toContainText("Connected");
   await expect(dialog.getByRole("img", { name: /last changed in the past 26 weeks/ })).toBeVisible();
+  await expect(dialog.getByRole("img", { name: /^Link map: 2 notes, \d+ links?, 1 missing note$/ })).toBeVisible();
   await expect(list).toContainText("Ideas");
   await expect(list).toContainText("Linked from Linking notes");
 
   await dialog.getByRole("tab", { name: /Hubs/ }).click();
   await expect(dialog.getByRole("tabpanel", { name: "Hubs" })).toContainText("Nothing here");
   await dialog.getByRole("tab", { name: /Broken links/ }).click();
-  await dialog.getByRole("button", { name: "Create Ideas" }).click();
+  await dialog.getByRole("tabpanel").getByRole("button", { name: "Create Ideas" }).click();
   await expect(dialog).toBeHidden();
   await page.getByRole("dialog", { name: "Create note" }).getByRole("button", { name: "Create" }).click();
   await expect(title(page)).toHaveValue("Ideas");
+
+  // The link map shows notes and the missing note; clicking a note opens it.
+  await page.getByRole("button", { name: "Repository health" }).click();
+  const map = dialog.getByRole("region", { name: "Link map" });
+  await expect(map.getByRole("img", { name: /^Link map: 3 notes, \d+ links, 0 missing notes$/ })).toBeVisible();
+  await map.getByRole("button", { name: "Open Welcome" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(title(page)).toHaveValue("Welcome");
 
   // The new note is linked from Linking notes, but doesn't link anywhere itself: a dead end.
   await page.getByRole("button", { name: "Repository health" }).click();

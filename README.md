@@ -34,8 +34,10 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   **Link** button). **Map as canvas** lays a note and its connections out on a canvas
 - Tags (`#tag`, `#nested/tag`, or `tags:` in properties) with a Tags pane; search `tag:name`
 - Properties (YAML frontmatter) shown at the top of the reading view; `aliases:` count as names
-- Repository health: a score out of 100 with totals and a heatmap of recent changes, and cards for
-  broken links, orphans, dead ends, hubs and stale hubs that open lists to act on
+- Repository health: a score out of 100 with totals and a heatmap of recent changes; a link map
+  of the whole repository (hubs large, orphans loose, missing notes as dashed stubs; hover to see a
+  note's links, click to open it or create a missing one); and cards for broken links, orphans,
+  dead ends, hubs and stale hubs that open lists to act on
 - Canvases (`.canvas`, the JSON Canvas format Obsidian uses): cards for text, notes, images,
   drawings and web links, groups, and labelled arrows, which become typed relations
 - Excalidraw drawings (`.excalidraw` files): create with the pen button in the file tree, edit

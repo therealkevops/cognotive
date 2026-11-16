@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { activityWeeks, scoreVerdict, vaultHealth } from "@/lib/links/health";
 import { displayName, dirname, isWithin } from "@/lib/vault/paths";
 import { useVault } from "../vault/useVault";
+import { LinkMap } from "./LinkMap";
 
 type Tab = "broken" | "orphans" | "deadEnds" | "hubs" | "stale";
 
@@ -40,6 +41,19 @@ export function HealthDialog({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
   }, [vault.links, vault.indexVersion, vault.entries, vault.settings]);
+
+  const graph = useMemo(() => {
+    const s = vault.settings;
+    const ignored = (p: string) =>
+      (!!s.dailyFolder && isWithin(p, s.dailyFolder)) || (!!s.templateFolder && isWithin(p, s.templateFolder));
+    const g = vault.links.graph({ includeUnresolved: true });
+    const nodes = g.nodes.filter((n) => n.unresolved || !ignored(n.id));
+    const ids = new Set(nodes.map((n) => n.id));
+    return { nodes, edges: g.edges.filter((e) => ids.has(e.source) && ids.has(e.target)) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
+  }, [vault.links, vault.indexVersion, vault.settings]);
+  const hubSet = useMemo(() => new Set(health.hubs.map((h) => h.path)), [health]);
+  const orphanSet = useMemo(() => new Set(health.orphans), [health]);
 
   const open = (p: string) => {
     onClose();
@@ -144,6 +158,17 @@ export function HealthDialog({
             </div>
             <Activity weeks={weeks} />
           </section>
+
+          <LinkMap
+            graph={graph}
+            hubs={hubSet}
+            orphans={orphanSet}
+            onOpen={open}
+            onCreate={(target, from) => {
+              onClose();
+              onCreate(target, from);
+            }}
+          />
 
           <div role="tablist" aria-label="Checks" className="grid grid-cols-2 gap-2 px-5 sm:grid-cols-5">
             {tabs.map((t) => (

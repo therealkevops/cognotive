@@ -781,8 +781,37 @@ mark {
 .health-day.level-2 { background: color-mix(in srgb, var(--accent) 52%, transparent); }
 .health-day.level-3 { background: color-mix(in srgb, var(--accent) 76%, transparent); }
 .health-day.level-4 { background: var(--accent); }
+.link-map {
+  height: 15rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background:
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 70%),
+    color-mix(in srgb, var(--foreground) 2%, transparent);
+  overflow: hidden;
+}
+.map-edge { stroke: color-mix(in srgb, var(--foreground) 22%, transparent); stroke-width: 1; transition: opacity 120ms; }
+.map-edge-missing { stroke: color-mix(in srgb, #d2463c 65%, transparent); stroke-dasharray: 3 3; }
+.map-edge-on { stroke: var(--accent); stroke-width: 1.6; }
+.map-node { cursor: pointer; transition: opacity 120ms; animation: map-pop 500ms cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 5ms); }
+@keyframes map-pop { from { opacity: 0; } }
+.map-dot { stroke: var(--raised); stroke-width: 1.5; transition: r 120ms; }
+.map-hub .map-dot { fill: #3f9d63; }
+.map-note .map-dot { fill: color-mix(in srgb, var(--accent) 75%, var(--foreground)); }
+.map-orphan .map-dot { fill: #d9a21b; }
+.map-missing .map-dot { fill: transparent; stroke: #d2463c; stroke-width: 1.5; stroke-dasharray: 2 2; }
+.map-node:hover .map-dot { stroke: var(--foreground); }
+.map-label {
+  font-size: 11px;
+  font-family: var(--font-sans), sans-serif;
+  fill: var(--foreground);
+  paint-order: stroke;
+  stroke: var(--raised);
+  stroke-width: 3px;
+  pointer-events: none;
+}
 @media (prefers-reduced-motion: reduce) {
-  .health-ring-value { animation: none; }
+  .health-ring-value, .map-node { animation: none; }
   .health-bar > span { transition: none; }
 }
 
