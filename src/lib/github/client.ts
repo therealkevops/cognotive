@@ -263,6 +263,24 @@ export class GitHubClient {
     }
   }
 
+  /**
+   * The repositories in `repos` the token can write to (or can't be checked,
+   * like empty ones), checking a few at a time. Public repositories show up for
+   * every token but are read-only unless it was given them.
+   */
+  async writableRepos(repos: RepoSummary[], concurrency = 6): Promise<RepoSummary[]> {
+    const ok = new Array<boolean>(repos.length).fill(false);
+    let next = 0;
+    const worker = async () => {
+      while (next < repos.length) {
+        const i = next++;
+        ok[i] = (await this.canWrite(repos[i].owner, repos[i].name).catch(() => false)) !== false;
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrency, repos.length) }, worker));
+    return repos.filter((_, i) => ok[i]);
+  }
+
   async createTree(
     owner: string,
     repo: string,

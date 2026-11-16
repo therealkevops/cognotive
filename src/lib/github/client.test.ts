@@ -124,3 +124,17 @@ describe("canWrite", () => {
     expect(await client(409).canWrite("me", "new")).toBeNull();
   });
 });
+
+describe("writableRepos", () => {
+  it("keeps repositories the token can write to, and empty ones it can't check", async () => {
+    const fetchFn = (async (url: string) => {
+      if (url.includes("/repos/me/notes/")) return Response.json({ sha: "e69de29" }, { status: 201 });
+      if (url.includes("/repos/me/new/")) return Response.json({ message: "Git Repository is empty." }, { status: 409 });
+      return Response.json({ message: "Resource not accessible by personal access token" }, { status: 403 });
+    }) as unknown as typeof fetch;
+    const repo = (name: string) => ({ owner: "me", name, fullName: `me/${name}`, defaultBranch: "main", private: false });
+    const client = new GitHubClient(async () => "t", fetchFn);
+    const out = await client.writableRepos([repo("site"), repo("notes"), repo("new"), repo("blog")]);
+    expect(out.map((r) => r.name)).toEqual(["notes", "new"]);
+  });
+});

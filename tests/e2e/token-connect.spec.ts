@@ -21,12 +21,9 @@ test("connects with a GitHub token, with nothing set up on the deployment, and s
   await form.getByLabel("GitHub token").fill("github_pat_test");
   await form.getByRole("button", { name: "Continue" }).click();
   await expect(form).toContainText("Token for @tester, expires");
-  // A public repository the token can only read is refused before connecting.
-  await form.getByRole("combobox", { name: /^Repository/ }).selectOption("me/website");
-  await expect(form.getByRole("alert")).toContainText("This token can only read me/website");
-  await expect(form.getByRole("button", { name: "Connect and open" })).toBeDisabled();
+  // Public repositories the token can only read aren't offered.
+  await expect(form.getByRole("combobox", { name: /^Repository/ }).locator("option", { hasText: "me/website" })).toHaveCount(0);
   await form.getByRole("combobox", { name: /^Repository/ }).selectOption("me/notes");
-  await expect(form.getByRole("alert")).toBeHidden();
   await form.getByRole("button", { name: "Connect and open" }).click();
   await expect(dialog).toBeHidden();
 

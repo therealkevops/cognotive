@@ -862,10 +862,15 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
     setError(null);
     verifyToken(patText)
       .then(async (t) => {
-        const list = await new GitHubClient(async () => t.token).listUserRepos();
+        const gh = new GitHubClient(async () => t.token);
+        const list = await gh.writableRepos(await gh.listUserRepos());
         setPat(t);
         setRepos(list);
-        if (!list.length) setError("That token can't reach any repositories yet. Give it access to your notes repository.");
+        if (!list.length) {
+          setError(
+            "This token can't write to any repository yet. Open it on GitHub (Settings → Developer settings → Fine-grained tokens), add your notes repository under Repository access, and set Contents to Read and write. Then use the token again.",
+          );
+        }
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setCheckingPat(false));
@@ -1034,7 +1039,7 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
                 disabled={!patText.trim() || checkingPat}
                 onClick={checkPat}
               >
-                {checkingPat ? "Checking…" : "Continue"}
+                {checkingPat ? "Checking access…" : "Continue"}
               </button>
             </div>
           </>
@@ -1047,7 +1052,7 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
           hint={
             writable === false
               ? undefined
-              : "Repositories the token can reach. GitHub lets every token read public repositories, so yours are listed too."
+              : "Repositories this token can write to."
           }
         >
           <select
