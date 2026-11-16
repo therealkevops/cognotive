@@ -47,6 +47,11 @@ test("Repository health lists broken links, orphans and hubs, and creates missin
   await page.getByRole("button", { name: "Repository health" }).click();
   const dialog = page.getByRole("dialog", { name: "Repository health" });
   const list = dialog.getByRole("tabpanel");
+  // The summary: a score with a verdict, totals and recent activity.
+  await expect(dialog.getByRole("img", { name: /^Health score \d+ out of 100$/ })).toBeVisible();
+  await expect(dialog.getByTestId("health-verdict")).not.toBeEmpty();
+  await expect(dialog.getByRole("region", { name: "Summary" })).toContainText("Connected");
+  await expect(dialog.getByRole("img", { name: /last changed in the past 26 weeks/ })).toBeVisible();
   await expect(list).toContainText("Ideas");
   await expect(list).toContainText("Linked from Linking notes");
 

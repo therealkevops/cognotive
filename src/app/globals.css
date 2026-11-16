@@ -708,6 +708,84 @@ mark {
   .cm-table-add-row, .cm-table-add-col, .cm-table-options { opacity: 0.7; }
 }
 
+/* Repository health dashboard (HealthDialog.tsx). */
+.tone-good { --tone: #3f9d63; }
+.tone-fair { --tone: #c3951b; }
+.tone-poor { --tone: #d9772b; }
+.tone-bad { --tone: #d2463c; }
+.tone-old { --tone: #8a6fd1; }
+[data-theme="dark"] .tone-good { --tone: #5cc285; }
+[data-theme="dark"] .tone-fair { --tone: #e2b84a; }
+[data-theme="dark"] .tone-poor { --tone: #f0975a; }
+[data-theme="dark"] .tone-bad { --tone: #f07167; }
+[data-theme="dark"] .tone-old { --tone: #a994ec; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .tone-good { --tone: #5cc285; }
+  :root:not([data-theme="light"]) .tone-fair { --tone: #e2b84a; }
+  :root:not([data-theme="light"]) .tone-poor { --tone: #f0975a; }
+  :root:not([data-theme="light"]) .tone-bad { --tone: #f07167; }
+  :root:not([data-theme="light"]) .tone-old { --tone: #a994ec; }
+}
+.health-ring { position: relative; width: 108px; height: 108px; flex-shrink: 0; }
+.health-ring svg { transform: rotate(-90deg); }
+.health-ring circle { fill: none; stroke-width: 10; }
+.health-ring-track { stroke: color-mix(in srgb, var(--foreground) 8%, transparent); }
+.health-ring-value {
+  stroke: var(--tone);
+  stroke-linecap: round;
+  animation: health-ring-fill 900ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes health-ring-fill { from { stroke-dashoffset: var(--ring-full); } }
+.health-ring-score {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-serif-face), Georgia, serif;
+  font-size: 2rem;
+  color: var(--tone);
+  font-variant-numeric: tabular-nums;
+}
+.health-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  text-align: left;
+  background: color-mix(in srgb, var(--tone) 4%, transparent);
+  transition: border-color 120ms, background-color 120ms, box-shadow 120ms;
+}
+.health-card:hover { background: color-mix(in srgb, var(--tone) 9%, transparent); }
+.health-card[aria-selected="true"] {
+  border-color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 11%, transparent);
+  box-shadow: 0 0 0 1px var(--tone);
+}
+.health-count { font-size: 1.6rem; line-height: 1.1; font-weight: 600; color: var(--tone); font-variant-numeric: tabular-nums; }
+.health-bar {
+  display: block;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  overflow: hidden;
+}
+.health-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--tone); transition: width 600ms ease-out; }
+.health-heatmap { display: flex; gap: 3px; overflow-x: auto; padding-bottom: 2px; }
+.health-day { width: 10px; height: 10px; border-radius: 2.5px; background: color-mix(in srgb, var(--foreground) 7%, transparent); }
+.health-day.level-1 { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.health-day.level-2 { background: color-mix(in srgb, var(--accent) 52%, transparent); }
+.health-day.level-3 { background: color-mix(in srgb, var(--accent) 76%, transparent); }
+.health-day.level-4 { background: var(--accent); }
+@media (prefers-reduced-motion: reduce) {
+  .health-ring-value { animation: none; }
+  .health-bar > span { transition: none; }
+}
+
 /* ---------- Touch screens ---------- */
 
 @media (hover: none) {
