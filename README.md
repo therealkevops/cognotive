@@ -34,6 +34,9 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   **Link** button). **Map as canvas** lays a note and its connections out on a canvas
 - Tags (`#tag`, `#nested/tag`, or `tags:` in properties) with a Tags pane; search `tag:name`
 - Properties (YAML frontmatter) shown at the top of the reading view; `aliases:` count as names
+- Properties for new notes (Settings → This repository): tick the ones every new note starts with
+  (`created` with today's date, `tags`, `aliases`, `hub`, `reviewed`) and add your own (e.g.
+  `status`). Notes from templates keep the template's values; templates themselves are left alone
 - Repository health: a score out of 100 with totals and a heatmap of recent changes; a link map
   of the whole repository (hubs large, orphans loose, missing notes as dashed stubs; hover to see a
   note's links, click to open it or create a missing one); and cards for broken links, orphans,

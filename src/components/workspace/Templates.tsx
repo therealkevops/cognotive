@@ -173,8 +173,8 @@ export function UseTemplateDialog({
   /** Where a new note goes when the template doesn't say. */
   defaultFolder: string;
   onInsert(rendered: ReturnType<typeof renderTemplate>): void;
-  /** A note is about to be created at `path`: place the cursor at `cursor` once it opens. */
-  onCreating(path: string, cursor: number): void;
+  /** Called just before the note is created, with where the cursor goes, counted from the end of the note. */
+  onCreating(path: string, cursorFromEnd: number): void;
   onClose(): void;
 }) {
   const vault = useVault();
@@ -201,7 +201,7 @@ export function UseTemplateDialog({
     const target = uniquePath(joinPath(folder.trim().replace(/^\/+|\/+$/g, ""), `${finalName}.md`), vault.exists);
     const note = noteFromTemplate(renderTemplate(text, { ...ctx, title: noteTitle(target) }));
     onClose();
-    onCreating(target, note.cursor);
+    onCreating(target, note.content.length - note.cursor);
     await vault.createNoteWith(target, note.content);
   };
 

@@ -33,3 +33,17 @@ export function setFrontmatterProperty(markdown: string, key: string, value: str
   if (inner.every((l) => !l.trim())) return body;
   return ["---", ...inner, "---"].join(nl) + nl + body;
 }
+
+/**
+ * Adds `key: value` lines for the properties a note doesn't have yet (an empty
+ * value writes just `key:`), adding frontmatter if there is none. Existing
+ * properties and their values are left alone.
+ */
+export function addMissingProperties(markdown: string, entries: Array<[key: string, value: string]>): string {
+  const { frontmatter, body } = splitFrontmatter(markdown);
+  const lines = frontmatter ? frontmatter.replace(/\r?\n$/, "").split(/\r?\n/).slice(1, -1) : [];
+  const has = (key: string) => lines.some((l) => l.startsWith(`${key}:`));
+  const add = entries.filter(([key]) => !has(key)).map(([key, value]) => (value ? `${key}: ${value}` : `${key}:`));
+  if (add.length === 0) return markdown;
+  return ["---", ...lines, ...add, "---"].join("\n") + "\n" + body;
+}

@@ -4,6 +4,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { useEffect, useMemo, useRef } from "react";
 import { loadAppearance } from "@/lib/appearance";
+import { splitFrontmatter } from "@/lib/markdown/frontmatter";
 import {
   editorExtensions,
   livePreviewExtension,
@@ -101,6 +102,12 @@ export default function MarkdownEditor({
         }),
       }),
     );
+    // A note with only properties (a new note) starts below them, ready to type.
+    const { frontmatter, body } = splitFrontmatter(initial);
+    if (frontmatter && !body.trim()) {
+      const anchor = body ? initial.length : frontmatter.length;
+      v.dispatch({ selection: { anchor: Math.min(anchor, v.state.doc.length) } });
+    }
     // A new note starts at the top, not at the previous note's scroll position.
     v.dispatch({ effects: EditorView.scrollIntoView(0, { y: "start" }) });
     v.scrollDOM.scrollTop = 0;

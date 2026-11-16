@@ -34,6 +34,7 @@ import {
   extname,
   isBinary,
   isDrawing,
+  isMarkdown,
   isNote,
   isWithin,
   mimeType,
@@ -42,6 +43,7 @@ import {
   validateName,
 } from "@/lib/vault/paths";
 import type { VaultEntry, VaultStore } from "@/lib/vault/types";
+import { withNewNoteProperties } from "@/lib/vault/new-note-properties";
 import { WELCOME_NOTES } from "@/lib/vault/welcome";
 
 const SAVE_DELAY_MS = 400;
@@ -313,14 +315,24 @@ export function VaultProvider({
     return entriesRef.current.some((e) => e.path.toLowerCase() === lower);
   }, []);
 
+  /** A new note starts with the properties chosen in settings (not templates themselves). */
+  const newNoteContent = useCallback(
+    (path: string, content: string) =>
+      isMarkdown(path) && !(settings.templateFolder && isWithin(path, settings.templateFolder))
+        ? withNewNoteProperties(content, settings.newNoteProperties)
+        : content,
+    [settings.newNoteProperties, settings.templateFolder],
+  );
+
   const createNote = useCallback(
     async (folder = "", name = "Untitled") => {
       try {
         const err = validateName(name);
         if (err) throw new Error(err);
         const path = uniquePath(joinPath(folder, `${name.trim()}.md`), exists);
-        await store.write(path, "");
-        indexes.set(path, "");
+        const content = newNoteContent(path, "");
+        await store.write(path, content);
+        indexes.set(path, content);
         bumpIndex();
         await refresh();
         changed();
@@ -330,7 +342,7 @@ export function VaultProvider({
         fail(e);
       }
     },
-    [store, indexes, exists, refresh, open, bumpIndex, fail, changed],
+    [store, indexes, exists, refresh, open, bumpIndex, fail, changed, newNoteContent],
   );
 
   const createDrawing = useCallback(
@@ -645,6 +657,7 @@ export function VaultProvider({
           await open(path);
           return path;
         }
+        content = newNoteContent(path, content);
         await store.write(path, content);
         indexes.set(path, content);
         bumpIndex();
@@ -656,7 +669,7 @@ export function VaultProvider({
         fail(e);
       }
     },
-    [store, indexes, exists, refresh, open, bumpIndex, changed, fail],
+    [store, indexes, exists, refresh, open, bumpIndex, changed, fail, newNoteContent],
   );
 
   const writeNote = useCallback(

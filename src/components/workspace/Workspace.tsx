@@ -160,7 +160,11 @@ export function Workspace() {
   const [templatePicker, setTemplatePicker] = useState<"new" | "insert" | null>(null);
   const [usingTemplate, setUsingTemplate] = useState<{ path: string; mode: "new" | "insert" } | null>(null);
   // Where to put the cursor once a note created from a template opens.
-  const pendingCursor = useRef<{ path: string; pos: number } | null>(null);
+  /**
+   * Where to put the cursor once a new note opens, counted from the end of the
+   * note (new-note properties may be added at the top when it's created).
+   */
+  const pendingCursor = useRef<{ path: string; fromEnd: number } | null>(null);
   const [sidePath, setSidePath] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   /** A note about to be created from a link, waiting for the user to confirm its name and folder. */
@@ -317,7 +321,7 @@ export function Workspace() {
         cursor = note.cursor;
       }
     }
-    if (cursor !== null) pendingCursor.current = { path, pos: cursor };
+    if (cursor !== null) pendingCursor.current = { path, fromEnd: content.length - cursor };
     await vault.createNoteWith(path, content);
   };
   useEffect(() => {
@@ -705,7 +709,7 @@ export function Workspace() {
     const p = pendingCursor.current;
     if (!p || !view || activePathNow !== p.path || kind !== "note") return;
     pendingCursor.current = null;
-    view.dispatch({ selection: { anchor: Math.min(p.pos, view.state.doc.length) }, scrollIntoView: true });
+    view.dispatch({ selection: { anchor: Math.max(0, view.state.doc.length - p.fromEnd) }, scrollIntoView: true });
     view.focus();
   });
 
@@ -1303,8 +1307,8 @@ export function Workspace() {
           mode={usingTemplate.mode}
           defaultFolder={newNoteFromLink("x", activePathNow, vault.settings).folder}
           onInsert={insertRendered}
-          onCreating={(path, pos) => {
-            pendingCursor.current = { path, pos };
+          onCreating={(path, fromEnd) => {
+            pendingCursor.current = { path, fromEnd };
           }}
           onClose={() => setUsingTemplate(null)}
         />

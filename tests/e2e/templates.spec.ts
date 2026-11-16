@@ -1,3 +1,4 @@
+import { strToU8, zipSync } from "fflate";
 import { expect, test, type Page } from "@playwright/test";
 
 const editor = (page: Page) => page.locator(".cm-content");
@@ -102,4 +103,49 @@ test("a template with prompts can be inserted into the open note", async ({ page
   expect(text).toContain("Intro");
   expect(text).toContain("# Alex");
   expect(text).toContain("**Role:** Designer");
+});
+
+test("new notes start with the properties chosen in settings", async ({ page }) => {
+  await page.goto("/");
+  await expect(editor(page)).toBeVisible();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "This repository" }).click();
+  const section = page.getByRole("region", { name: "This repository" });
+  await section.getByLabel(/^created/).check();
+  await section.getByLabel(/^tags/).check();
+  await section.getByLabel("Add a property").fill("bad name");
+  await section.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(section.getByRole("alert")).toContainText("letters, numbers");
+  await section.getByLabel("Add a property").fill("status");
+  await section.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(section.getByRole("list", { name: "Your properties" })).toContainText("status");
+  await expect(section.getByLabel("New notes start with")).toContainText("tags: []\nstatus:");
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "New note", exact: true }).click();
+  await expect(title(page)).toHaveValue("Untitled");
+  await page.getByRole("radio", { name: "Source" }).click();
+  await editor(page).locator(".cm-line").last().click();
+  await page.keyboard.type("Hello");
+  const today = new Date();
+  const stamp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  await expect(editor(page)).toHaveText(`---created: ${stamp}tags: []status:---Hello`);
+
+  // A note from a template keeps the template's tags, gains the rest, and the cursor still lands at {{cursor}}.
+  await page.getByRole("radio", { name: "Live preview" }).click();
+  const zip = zipSync({ "V/Templates/Idea.md": strToU8("---\ntags: [idea]\n---\n# {{title}}\n\n{{cursor}}\n\nend\n") });
+  await page.getByLabel("Choose a zip to import").setInputFiles({ name: "t.zip", mimeType: "application/zip", buffer: Buffer.from(zip) });
+  await expect(page.getByRole("status").filter({ hasText: "Imported 1 file" })).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+p");
+  await page.getByRole("dialog", { name: "Command palette" }).getByRole("combobox").fill("new note from template");
+  await page.keyboard.press("Enter");
+  await page.getByRole("dialog", { name: "New note from template" }).getByRole("option", { name: /Idea/ }).click();
+  const create = page.getByRole("dialog", { name: "New note from Idea" });
+  await create.getByLabel(/Name/).fill("Plan");
+  await create.getByRole("button", { name: "Create" }).click();
+  await expect(title(page)).toHaveValue("Plan");
+  await expect(editor(page)).toBeFocused();
+  await page.keyboard.type("typed here");
+  await page.getByRole("radio", { name: "Source" }).click();
+  await expect(editor(page)).toHaveText(`---tags: [idea]created: ${stamp}status:---# Plantyped hereend`);
 });
