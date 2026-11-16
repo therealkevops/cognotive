@@ -141,6 +141,21 @@ Vercel's invocation and transfer budgets.
   backs off on `403`/`429` and shows sync status.
 - **Offline:** works naturally. Edits stay in IndexedDB and are committed when back online.
 
+### End-to-end encryption (optional, per repository)
+Offered when connecting an empty repository. `EncryptedRemote` wraps the GitHub remote, so the
+sync engine is unchanged apart from asking the remote for a content id (`contentId`) instead of
+hashing plaintext itself:
+- Files are stored at `encrypted/<base32 of the encrypted path>` (long names split into folders
+  of 200 characters) with AES-256-GCM content. The IV is an HMAC of the plaintext, so encryption
+  is deterministic and git blob ids stay meaningful for change detection and three-way merges.
+- A random repository key is wrapped with a PBKDF2 passphrase key in `.noted/encryption.json`;
+  the recovery key is the repository key itself. Devices keep non-extractable working keys in
+  IndexedDB (`noted-ai:keys`).
+- Commit messages are neutral. A plain remote refuses to sync a repository that has
+  `.noted/encryption.json`, so nothing is pushed there unencrypted.
+- Not yet: changing the passphrase, and encrypting an existing repository in place (its history
+  would stay readable).
+
 ### Private-repo images
 Images in a private repo can't be loaded by URL in `<img>`. The client fetches the blob
 through the API and renders it as an object URL, cached by SHA.

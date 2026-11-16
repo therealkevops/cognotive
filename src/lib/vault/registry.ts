@@ -1,3 +1,4 @@
+import { forgetKeys } from "../crypto/key-store";
 import { readPref, writePref } from "../prefs";
 
 export type SyncMode = "auto" | "manual";
@@ -21,6 +22,8 @@ export interface GitHubVaultConfig extends VaultBase {
   syncMode: SyncMode;
   /** Auto mode: commit this many seconds after the last edit. */
   idleSeconds: number;
+  /** End-to-end encrypted: GitHub only stores ciphertext. Keys live in each browser. */
+  encrypted?: boolean;
 }
 
 export type VaultConfig = LocalVaultConfig | GitHubVaultConfig;
@@ -58,11 +61,11 @@ export async function deleteVaultData(id: string): Promise<void> {
       const req = indexedDB.deleteDatabase(name);
       req.onsuccess = req.onerror = req.onblocked = () => resolve();
     });
-  await Promise.all([del(`noted-ai:vault:${id}`), del(`noted-ai:sync:${id}`)]);
+  await Promise.all([del(`noted-ai:vault:${id}`), del(`noted-ai:sync:${id}`), forgetKeys(id).catch(() => {})]);
   for (const key of ["last", "seeded", "expanded"]) writePref(`vault:${id}:${key}`, null);
 }
 
 export function describeVault(v: VaultConfig): string {
   if (v.kind === "local") return "Stored in this browser";
-  return `${v.owner}/${v.repo}${v.folder ? `/${v.folder}` : ""} · ${v.branch}`;
+  return `${v.owner}/${v.repo}${v.folder ? `/${v.folder}` : ""} · ${v.branch}${v.encrypted ? " · encrypted" : ""}`;
 }

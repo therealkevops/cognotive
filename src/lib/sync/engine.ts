@@ -64,6 +64,11 @@ export class SyncEngine {
     private now: () => Date = () => new Date(),
   ) {}
 
+  /** The id the remote gives this content: what `files` would list for it. */
+  private id(content: Content): Promise<string> {
+    return this.remote.contentId ? this.remote.contentId(content) : gitBlobSha(content);
+  }
+
   private toRepo(path: string) {
     return joinPath(this.folder, path);
   }
@@ -73,7 +78,7 @@ export class SyncEngine {
     for (const e of await this.local.list()) {
       if (e.kind !== "file" || !isSyncable(e.path)) continue;
       const content = isBinary(e.path) ? await this.local.readBinary(e.path) : (await this.local.read(e.path))?.content;
-      if (content !== undefined) out.set(e.path, { content, sha: await gitBlobSha(content) });
+      if (content !== undefined) out.set(e.path, { content, sha: await this.id(content) });
     }
     return out;
   }
@@ -204,7 +209,7 @@ export class SyncEngine {
             ? mergeText(l.content, (await this.read(path, b)) as string, theirs)
             : null;
         if (merged !== null) {
-          const sha = await gitBlobSha(merged);
+          const sha = await this.id(merged);
           writes.push({ path, expected: l.content, content: merged, baseSha: sha });
           pushes.push({ path: this.toRepo(path), content: merged });
           // Until the local write lands, the base is what the remote will hold.

@@ -1,7 +1,9 @@
 "use client";
 
-import { CloudAlert, CloudCheck, CloudOff, CloudUpload, LogIn, RefreshCw } from "lucide-react";
+import { CloudAlert, CloudCheck, CloudOff, CloudUpload, Lock, LogIn, RefreshCw } from "lucide-react";
+import { useState } from "react";
 import { useAuth } from "../auth/useAuth";
+import { UnlockDialog } from "./EncryptionFields";
 import { useSync } from "./useSync";
 
 function ago(ts: number | null): string {
@@ -16,6 +18,7 @@ function ago(ts: number | null): string {
 export function SyncButton() {
   const { status, syncNow } = useSync();
   const auth = useAuth();
+  const [unlocking, setUnlocking] = useState(false);
   if (status.kind === "local") return null;
 
   let icon = <CloudCheck size={16} aria-hidden />;
@@ -46,6 +49,13 @@ export function SyncButton() {
       tone = "text-accent";
       onClick = auth.signIn;
       break;
+    case "locked":
+      icon = <Lock size={16} aria-hidden />;
+      label = "Locked";
+      title = "This repository is encrypted. Enter its passphrase to sync it on this device.";
+      tone = "text-accent";
+      onClick = () => setUnlocking(true);
+      break;
     case "offline":
       icon = <CloudOff size={16} aria-hidden />;
       label = "Offline";
@@ -60,18 +70,21 @@ export function SyncButton() {
   }
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={status.kind === "syncing"}
-      title={title}
-      aria-label={`${label}. ${title}`}
-      className={`flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs hover:bg-foreground/5 ${tone}`}
-    >
-      {icon}
-      <span className="hidden sm:inline" aria-hidden>
-        {label}
-      </span>
-    </button>
+    <>
+      {unlocking && <UnlockDialog onClose={() => setUnlocking(false)} />}
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={status.kind === "syncing"}
+        title={title}
+        aria-label={`${label}. ${title}`}
+        className={`flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs hover:bg-foreground/5 ${tone}`}
+      >
+        {icon}
+        <span className="hidden sm:inline" aria-hidden>
+          {label}
+        </span>
+      </button>
+    </>
   );
 }

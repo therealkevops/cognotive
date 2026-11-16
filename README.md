@@ -155,7 +155,8 @@ URLs, so sign-in on a preview needs that URL added too; local repositories work 
   30 seconds (configurable) after you stop typing, when you leave the tab, and when you switch
   repositories; it also checks GitHub for changes when you come back to the tab and every 5 minutes.
   **Manual** sync commits only when you press the sync button.
-- All pending edits go up as one commit, e.g. `noted-ai: update Groceries, Plan`.
+- All pending edits go up as one commit, e.g. `noted-ai: update Groceries, Plan` (or
+  `noted-ai: update 2 files` in an encrypted repository).
 - Changes from elsewhere (Obsidian, GitHub's editor, another device) come down on the next sync.
   If the same note changed in both places, edits to different lines are merged. If the same
   lines changed, GitHub's version stays and yours is saved next to it as
@@ -165,6 +166,35 @@ URLs, so sign-in on a preview needs that URL added too; local repositories work 
   folders such as `.obsidian/` and other file types are left untouched in the repo.
 - Drawings and attachments are never line-merged: if one changed in both places, you get a
   conflict copy.
+
+### Encrypted repositories
+
+When you connect a **new, empty** repository, noted-ai offers to encrypt it end to end. Notes,
+attachments and their names are encrypted in the browser before they reach GitHub, so GitHub
+(and anyone who gets into your GitHub account) sees only scrambled files under `encrypted/`.
+
+- You choose a passphrase and get a **recovery key**, shown once. Save it: if both are lost,
+  the notes can't be recovered by anyone.
+- Each device asks for the passphrase (or recovery key) once and keeps the key in the browser.
+  *Settings → Repositories & sync → Edit → Forget key* removes it from a device.
+- `.noted/encryption.json` holds the encryption settings and the repository key locked with your
+  passphrase; it never holds the key itself. A README explains what the repository is.
+- Commit messages don't name notes (`noted-ai: update 2 files`). Version history still works.
+- Search, links, Connections and canvases work as usual: the browser works on its decrypted copy.
+- Encrypted files can't be read on GitHub's website or in Obsidian, and GitHub's diffs show nothing
+  useful.
+- Repositories that already hold unencrypted notes can't be switched over, because older versions
+  stay readable in the git history. To encrypt existing notes, connect a new empty repository with
+  encryption on and copy the notes in (with the commands *Export repository as zip* and *Import notes from a zip…*).
+- Notes you send to Claude (once the AI features arrive) go through the app's proxy unencrypted;
+  encryption protects what's stored on GitHub.
+
+How it works: a random 256-bit repository key, locked with a key derived from your passphrase
+(PBKDF2-SHA256, 600,000 iterations). Files and names are encrypted with AES-256-GCM using an IV
+derived from an HMAC of the content (a synthetic-IV construction), so the same content always
+encrypts to the same bytes. That keeps git's blob ids stable, so sync can still tell what changed
+without downloading everything and can fetch old versions for three-way merges. It reveals only
+which files are identical, which git shows anyway.
 
 ## Layout
 

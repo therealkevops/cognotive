@@ -25,6 +25,11 @@ export interface RemoteRepo {
   readBlobBytes(sha: string): Promise<Uint8Array>;
   /** Commits `changes` on top of `parent` and moves the branch. */
   commit(parent: Head | null, changes: Change[], message: string): Promise<Head>;
+  /**
+   * The id `files` reports for this content. Defaults to its git blob sha; a
+   * remote that transforms content (encryption) reports the stored blob's id.
+   */
+  contentId?(content: string | Uint8Array): Promise<string>;
 }
 
 export class GitHubRemote implements RemoteRepo {

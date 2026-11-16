@@ -11,7 +11,11 @@ import {
   type ReactNode,
 } from "react";
 import { GitHubClient, GitHubError, type FileCommit } from "@/lib/github/client";
+import { loadKeys, saveKeys } from "@/lib/crypto/key-store";
+import { unlockWithPassphrase, unlockWithRecoveryKey, type RepoKeys } from "@/lib/crypto/repo-crypto";
+import { EncryptedRemote, PlainRemote } from "@/lib/sync/encrypted-remote";
 import { SyncEngine } from "@/lib/sync/engine";
+import { probeRepo } from "@/lib/sync/encryption-setup";
 import { GitHubRemote } from "@/lib/sync/remote";
 import { IdbSyncState } from "@/lib/sync/state";
 import type { LocalStore } from "@/lib/vault/local-store";
@@ -25,6 +29,8 @@ export type SyncStatus =
   | { kind: "idle"; pending: number; lastSyncedAt: number | null }
   | { kind: "syncing" }
   | { kind: "signed_out" }
+  /** Encrypted, and this browser doesn't have the key yet. */
+  | { kind: "locked" }
   | { kind: "offline"; pending: number }
   | { kind: "error"; message: string; pending: number };
 
@@ -35,6 +41,8 @@ interface SyncApi {
   /** Messages about conflicts from the last sync, until dismissed. */
   notices: string[];
   dismissNotices(): void;
+  /** Unlocks an encrypted repository on this device. Throws WrongKeyError. */
+  unlock?(secret: string, kind: "passphrase" | "recovery key"): Promise<void>;
   /** Version history from GitHub, for synced vaults. */
   history?: {
     commits(path: string): Promise<FileCommit[]>;
@@ -76,10 +84,37 @@ export function SyncProvider({
   const [notices, setNotices] = useState<string[]>([]);
 
   const client = useMemo(() => new GitHubClient(auth.getToken), [auth.getToken]);
-  const engine = useMemo(() => {
-    const remote = new GitHubRemote(client, config.owner, config.repo, config.branch);
-    return new SyncEngine(store, new IdbSyncState(config.id), remote, config.folder);
-  }, [client, config.id, config.owner, config.repo, config.branch, config.folder, store]);
+  const github = useMemo(
+    () => new GitHubRemote(client, config.owner, config.repo, config.branch),
+    [client, config.owner, config.repo, config.branch],
+  );
+
+  // Encrypted repositories need this device's key: undefined while loading, null if locked.
+  const encrypted = !!config.encrypted;
+  const [keys, setKeys] = useState<RepoKeys | null | undefined>(undefined);
+  useEffect(() => {
+    if (!encrypted) return;
+    let live = true;
+    void loadKeys(config.id)
+      .catch(() => undefined)
+      .then((k) => {
+        if (!live) return;
+        setKeys(k ?? null);
+        if (!k) setStatus({ kind: "locked" });
+      });
+    return () => {
+      live = false;
+    };
+  }, [encrypted, config.id]);
+
+  const remote = useMemo(
+    () => (!encrypted ? new PlainRemote(github) : keys ? new EncryptedRemote(github, keys) : null),
+    [encrypted, github, keys],
+  );
+  const engine = useMemo(
+    () => (remote ? new SyncEngine(store, new IdbSyncState(config.id), remote, config.folder) : null),
+    [remote, config.id, config.folder, store],
+  );
 
   const running = useRef(false);
   const again = useRef(false);
@@ -89,6 +124,7 @@ export function SyncProvider({
   }, [vault]);
 
   const run = useCallback(async () => {
+    if (!engine) return;
     if (running.current) {
       again.current = true;
       return;
@@ -135,18 +171,19 @@ export function SyncProvider({
   // First sync once the vault has loaded, and again when the user signs in.
   const signedIn = auth.state.status === "signed_in";
   useEffect(() => {
+    if (!engine) return;
     if (vault.ready && signedIn) void run();
     else if (vault.ready && auth.state.status === "signed_out") {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors external auth state
       setStatus({ kind: "signed_out" });
     }
-  }, [vault.ready, signedIn, auth.state.status, run]);
+  }, [vault.ready, signedIn, auth.state.status, run, engine]);
 
   // Auto mode: commit after the user stops editing.
   const idleMs = config.idleSeconds * 1000;
   const auto = config.syncMode === "auto";
   useEffect(() => {
-    if (!vault.changeCounter) return;
+    if (!vault.changeCounter || !engine) return;
     let cancelled = false;
     void engine.pendingChanges().then((pending) => {
       if (!cancelled) setStatus((s) => (s.kind === "idle" ? { ...s, pending } : s));
@@ -179,23 +216,53 @@ export function SyncProvider({
   // Switching away from the vault: push what's left (auto mode).
   useEffect(() => {
     return () => {
-      if (auto && signedIn) void vaultRef.current.flush().then(() => engine.sync().catch(() => {}));
+      if (auto && signedIn && engine) void vaultRef.current.flush().then(() => engine.sync().catch(() => {}));
     };
   }, [auto, signedIn, engine]);
 
-  const api = useMemo<SyncApi>(
-    () => ({
+  const unlock = useCallback(
+    async (secret: string, kind: "passphrase" | "recovery key") => {
+      const probe = await probeRepo(github);
+      if (probe.kind !== "encrypted") throw new Error("This repository isn't encrypted any more.");
+      const k =
+        kind === "passphrase"
+          ? await unlockWithPassphrase(probe.header, secret)
+          : await unlockWithRecoveryKey(probe.header, secret);
+      await saveKeys(config.id, k);
+      setKeys(k);
+      setStatus({ kind: "idle", pending: 0, lastSyncedAt: null });
+    },
+    [github, config.id],
+  );
+
+  const api = useMemo<SyncApi>(() => {
+    const repoPath = (path: string) => joinPath(config.folder, path);
+    const enc = remote instanceof EncryptedRemote ? remote : null;
+    return {
       status,
       syncNow: () => void run(),
       notices,
       dismissNotices: () => setNotices([]),
-      history: {
-        commits: (path) => client.fileHistory(config.owner, config.repo, config.branch, joinPath(config.folder, path)),
-        contentAt: (sha, path) => client.fileAt(config.owner, config.repo, sha, joinPath(config.folder, path)),
-        repoLabel: `${config.owner}/${config.repo}`,
-      },
-    }),
-    [status, run, notices, client, config.owner, config.repo, config.branch, config.folder],
-  );
+      unlock: encrypted ? unlock : undefined,
+      history:
+        encrypted && !enc
+          ? undefined
+          : {
+              commits: async (path) =>
+                client.fileHistory(
+                  config.owner,
+                  config.repo,
+                  config.branch,
+                  enc ? await enc.storedPath(repoPath(path)) : repoPath(path),
+                ),
+              contentAt: async (sha, path) => {
+                if (!enc) return client.fileAt(config.owner, config.repo, sha, repoPath(path));
+                const data = await client.fileAt(config.owner, config.repo, sha, await enc.storedPath(repoPath(path)));
+                return data && enc.decrypt(data);
+              },
+              repoLabel: `${config.owner}/${config.repo}`,
+            },
+    };
+  }, [status, run, notices, client, config.owner, config.repo, config.branch, config.folder, encrypted, remote, unlock]);
   return <SyncContext.Provider value={api}>{children}</SyncContext.Provider>;
 }

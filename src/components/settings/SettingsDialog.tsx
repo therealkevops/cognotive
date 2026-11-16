@@ -1,9 +1,13 @@
 "use client";
 
-import { Check, FolderGit2, HardDrive, Monitor, Moon, Sun, X } from "lucide-react";
+import { Check, FolderGit2, HardDrive, Lock, Monitor, Moon, Sun, X } from "lucide-react";
 import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { ACCENTS, loadAppearance, saveAppearance, type Appearance } from "@/lib/appearance";
+import { forgetKeys, saveKeys } from "@/lib/crypto/key-store";
+import { createEncryption, unlockWithPassphrase, unlockWithRecoveryKey } from "@/lib/crypto/repo-crypto";
 import { GitHubClient, type RepoSummary } from "@/lib/github/client";
+import { probeRepo, writeEncryptionHeader, type RepoProbe } from "@/lib/sync/encryption-setup";
+import { GitHubRemote } from "@/lib/sync/remote";
 import { formatDate, type VaultSettings } from "@/lib/vault/settings";
 import { normalizePath } from "@/lib/vault/paths";
 import {
@@ -16,6 +20,7 @@ import {
 } from "@/lib/vault/registry";
 import { isIOS, useInstall } from "@/lib/install";
 import { useAuth } from "../auth/useAuth";
+import { MIN_PASSPHRASE, newPassphraseError, RecoveryKeyStep, UnlockFields, type SecretKind } from "../sync/EncryptionFields";
 import { useVault } from "../vault/useVault";
 import { useVaults } from "../vault/useVaults";
 
@@ -698,6 +703,27 @@ function EditVault({
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
       </Field>
       {vault.kind === "github" && <SyncFields mode={syncMode} setMode={setSyncMode} idle={idle} setIdle={setIdle} />}
+      {vault.kind === "github" && vault.encrypted && (
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-xs text-muted">
+            <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <Lock size={14} aria-hidden /> Encrypted
+            </span>
+            This browser holds the key. Forget it to require the passphrase again here.
+          </p>
+          <button
+            type="button"
+            className="button-secondary shrink-0"
+            onClick={() => {
+              if (window.confirm("Forget the key on this device? Syncing stops until you enter the passphrase again.")) {
+                void forgetKeys(vault.id).then(() => window.location.reload());
+              }
+            }}
+          >
+            Forget key
+          </button>
+        </div>
+      )}
       <div className="flex justify-between gap-2">
         <button
           type="button"
@@ -799,6 +825,15 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
   const [name, setName] = useState("");
   const [syncMode, setSyncMode] = useState<SyncMode>("auto");
   const [idle, setIdle] = useState(DEFAULT_IDLE_SECONDS);
+  // Encryption: what the chosen branch holds, and the secrets typed for it.
+  const [probe, setProbe] = useState<RepoProbe | "checking" | null>(null);
+  const [encrypt, setEncrypt] = useState(true);
+  const [pass, setPass] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [secretKind, setSecretKind] = useState<SecretKind>("passphrase");
+  const [secret, setSecret] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [recovery, setRecovery] = useState<{ key: string; config: GitHubVaultConfig } | null>(null);
 
   const signedIn = auth.state.status === "signed_in";
   useEffect(() => {
@@ -810,6 +845,22 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
   }, [client, signedIn]);
 
   const repo = repos?.find((r) => r.fullName === repoName);
+  useEffect(() => {
+    if (!repo || !branch) return;
+    let live = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- shows the check while GitHub answers
+    setProbe("checking");
+    probeRepo(new GitHubRemote(client, repo.owner, repo.name, branch))
+      .then((p) => live && setProbe(p))
+      .catch((e: unknown) => {
+        if (!live) return;
+        setProbe(null);
+        setError(e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      live = false;
+    };
+  }, [client, repo, branch]);
   const pickRepo = (fullName: string) => {
     setRepoName(fullName);
     const r = repos?.find((x) => x.fullName === fullName);
@@ -822,6 +873,19 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
       .then((b) => setBranches(b.length ? b : [r.defaultBranch]))
       .catch(() => {});
   };
+
+  if (recovery) {
+    return (
+      <RecoveryKeyStep
+        recoveryKey={recovery.key}
+        repoLabel={`${recovery.config.owner}/${recovery.config.repo}`}
+        onDone={() => {
+          add(recovery.config);
+          onDone();
+        }}
+      />
+    );
+  }
 
   if (!signedIn) {
     return (
@@ -841,6 +905,10 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
     );
   }
 
+  const probeKind = probe && typeof probe === "object" ? probe.kind : null;
+  const passError = probeKind === "empty" && encrypt ? newPassphraseError(pass, confirm) : null;
+  const ready = probe !== "checking" && (probeKind === "encrypted" ? !!secret.trim() : !passError);
+
   let folderError: string | null = null;
   let cleanFolder = "";
   try {
@@ -856,7 +924,7 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
       className="space-y-4 rounded-xl border border-border p-5"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!repo || !branch || folderError) return;
+        if (!repo || !branch || folderError || !ready || busy) return;
         const config: GitHubVaultConfig = {
           id: newVaultId("github"),
           kind: "github",
@@ -868,8 +936,35 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
           syncMode,
           idleSeconds: idle,
         };
-        add(config);
-        onDone();
+        if (!probeKind || probeKind === "plain" || (probeKind === "empty" && !encrypt)) {
+          add(config);
+          onDone();
+          return;
+        }
+        setBusy(true);
+        setError(null);
+        void (async () => {
+          try {
+            if (probe && typeof probe === "object" && probe.kind === "encrypted") {
+              const keys =
+                secretKind === "passphrase"
+                  ? await unlockWithPassphrase(probe.header, secret)
+                  : await unlockWithRecoveryKey(probe.header, secret);
+              await saveKeys(config.id, keys);
+              add({ ...config, encrypted: true });
+              onDone();
+            } else {
+              const { header, keys, recoveryKey } = await createEncryption(pass);
+              await writeEncryptionHeader(new GitHubRemote(client, repo.owner, repo.name, branch), header);
+              await saveKeys(config.id, keys);
+              setRecovery({ key: recoveryKey, config: { ...config, encrypted: true } });
+            }
+          } catch (err) {
+            setError(err instanceof Error ? err.message : String(err));
+          } finally {
+            setBusy(false);
+          }
+        })();
       }}
     >
       <h4 className="font-serif text-lg">Connect a GitHub repository</h4>
@@ -921,14 +1016,56 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
             <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <SyncFields mode={syncMode} setMode={setSyncMode} idle={idle} setIdle={setIdle} />
+          <fieldset className="space-y-3 rounded-lg bg-surface p-4" aria-label="Encryption">
+            {probe === "checking" && <p className="text-sm text-muted">Checking the repository…</p>}
+            {probeKind === "encrypted" && (
+              <>
+                <p className="flex items-center gap-2 text-sm font-medium">
+                  <Lock size={15} aria-hidden /> This repository is encrypted
+                </p>
+                <UnlockFields kind={secretKind} setKind={setSecretKind} secret={secret} setSecret={setSecret} />
+              </>
+            )}
+            {probeKind === "empty" && (
+              <>
+                <label className="flex items-start gap-2 text-sm">
+                  <input type="checkbox" className="mt-1" checked={encrypt} onChange={(e) => setEncrypt(e.target.checked)} />
+                  <span>
+                    <span className="font-medium">Encrypt this repository</span>
+                    <span className="block text-xs text-muted">
+                      Notes and their names are encrypted in this browser before they reach GitHub. GitHub, and anyone
+                      who gets into your account, sees only scrambled files.
+                    </span>
+                  </span>
+                </label>
+                {encrypt && (
+                  <>
+                    <Field label="Passphrase" hint={`At least ${MIN_PASSPHRASE} characters. You'll need it once on each device.`}>
+                      <input className="input" type="password" autoComplete="new-password" value={pass} onChange={(e) => setPass(e.target.value)} />
+                    </Field>
+                    <Field label="Confirm passphrase">
+                      <input className="input" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+                    </Field>
+                    {pass && passError && <p className="text-xs text-muted">{passError}</p>}
+                  </>
+                )}
+              </>
+            )}
+            {probeKind === "plain" && (
+              <p className="text-xs text-muted">
+                This repository already has unencrypted files, so it will sync without encryption. To encrypt, use a new,
+                empty repository: older versions stay readable in a repository&apos;s history.
+              </p>
+            )}
+          </fieldset>
         </>
       )}
       <div className="flex justify-end gap-2">
         <button type="button" className="button-secondary" onClick={onDone}>
           Cancel
         </button>
-        <button type="submit" className="button-primary" disabled={!repo || !!folderError}>
-          Connect and open
+        <button type="submit" className="button-primary" disabled={!repo || !!folderError || !ready || busy}>
+          {busy ? (probeKind === "encrypted" ? "Unlocking…" : "Encrypting…") : "Connect and open"}
         </button>
       </div>
     </form>
