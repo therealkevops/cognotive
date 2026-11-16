@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- The browser-tab icon: a bold "n" that stays readable at 16px. It flips to
+       ivory in dark browser themes so it doesn't vanish on a dark tab bar. -->
+  <style>
+    .bg { fill: #1f1e1d; }
+    .n { stroke: #faf9f5; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #faf9f5; }
+      .n { stroke: #1f1e1d; }
+    }
+  </style>
+  <rect class="bg" width="64" height="64" rx="14"/>
+  <path class="n" d="M20 48 V18 M20 29 C20 22 25 17 33 17 C41 17 45 22 45 30 V48" fill="none" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -23,7 +23,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "noted-ai",
   description: "Markdown notes with a knowledge graph, drawings and GitHub sync.",
-  icons: { icon: "/icons/icon.svg", apple: "/icons/apple-touch-icon.png" },
+  icons: {
+    // A bold mark for browser tabs; the detailed app icon is for installs and home screens.
+    icon: [
+      { url: "/icons/favicon.svg", type: "image/svg+xml" },
+      { url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: "/icons/apple-touch-icon.png",
+  },
   appleWebApp: { capable: true, title: "noted-ai", statusBarStyle: "default" },
 };
 

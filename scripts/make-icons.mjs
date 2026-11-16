@@ -30,5 +30,11 @@ for (const t of targets) {
   );
   await page.screenshot({ path: new URL(`../public/icons/${t.file}`, import.meta.url).pathname, omitBackground: !(t.maskable || t.full) });
 }
+// The browser-tab icon's PNG fallback (light version), from favicon.svg.
+const fav = readFileSync(new URL("../public/icons/favicon.svg", import.meta.url), "utf8").replace(/@media[\s\S]*?\}\s*\}/, "");
+await page.emulateMedia({ colorScheme: "light" });
+await page.setViewportSize({ width: 32, height: 32 });
+await page.setContent(`<html><body style="margin:0">${fav.replace("<svg ", '<svg width="32" height="32" ')}</body></html>`);
+await page.screenshot({ path: new URL("../public/icons/favicon-32.png", import.meta.url).pathname, omitBackground: true });
 await browser.close();
 console.log("icons written");
