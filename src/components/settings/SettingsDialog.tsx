@@ -523,10 +523,16 @@ function AccountSection() {
           </Row>
         )}
         {state.status === "not_configured" && (
-          <p className="py-4 text-sm text-muted">
-            GitHub sign-in isn&apos;t set up on this deployment yet. Add the GitHub App settings described in the README,
-            then redeploy.
-          </p>
+          <Row
+            label="GitHub isn't set up yet"
+            description="Create a GitHub App for this deployment in one click, then add its details in Vercel."
+          >
+            <div className="flex sm:justify-end">
+              <a href="/github-setup" className="button-primary">
+                Set up GitHub
+              </a>
+            </div>
+          </Row>
         )}
         {state.status === "offline" && <p className="py-4 text-sm text-muted">Offline. Can&apos;t reach the sign-in service.</p>}
       </Group>

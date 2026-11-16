@@ -104,7 +104,16 @@ later phases keep server functions to GitHub login and a thin Claude proxy. See
 ## Set up GitHub storage
 
 Syncing with GitHub needs a **GitHub App**, which is how the app signs you in and gets access to
-only the repositories you choose. One-time setup:
+only the repositories you choose.
+
+**The quick way:** open your deployment, go to **Settings → GitHub account → Set up GitHub**
+(or `/github-setup`). It creates the app with the right settings in one click, using GitHub's
+[app manifest flow](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest),
+then shows the five environment variables to add in Vercel (step 4 below), with a generated
+`SESSION_SECRET` and your user id already filled in. Then redeploy, install the app on a
+repository and sign in. Run it on the Vercel address, not localhost, so the callback URL matches.
+
+**By hand,** if you prefer:
 
 1. **Create the app** at <https://github.com/settings/apps/new>:
    - **GitHub App name:** anything unique, e.g. `noted-ai-<you>`

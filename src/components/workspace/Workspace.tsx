@@ -1289,7 +1289,7 @@ function EmptyState({ onCreate, onFind }: { onCreate(): void; onFind(): void }) 
 }
 
 const AUTH_ERRORS: Record<string, string> = {
-  not_configured: "GitHub sign-in isn't set up on this deployment yet.",
+  not_configured: "GitHub isn't set up on this deployment yet. Settings → GitHub account → Set up GitHub.",
   denied: "GitHub sign-in was cancelled.",
   bad_state: "Sign-in expired or came from another tab. Please try again.",
   not_allowed: "This GitHub account isn't allowed to use this app.",
