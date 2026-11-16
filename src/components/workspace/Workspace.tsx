@@ -22,6 +22,7 @@ import {
   Search,
   Settings,
   Tags,
+  LayoutTemplate,
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -52,7 +53,6 @@ import {
   isDrawing,
   isImage,
   isNote,
-  isWithin,
   joinPath,
   noteTitle,
 } from "@/lib/vault/paths";
@@ -60,7 +60,8 @@ import { drawingJson, isObsidianDrawing, replaceScene } from "@/lib/drawing/obsi
 import { drawingName } from "@/lib/vault/paths";
 import type { CanvasVault } from "./CanvasView";
 import type { DrawingVault } from "./DrawingView";
-import { fillTemplate, formatDate, newNoteFromLink } from "@/lib/vault/settings";
+import { formatDate, newNoteFromLink } from "@/lib/vault/settings";
+import { insertIntoNote, noteFromTemplate, renderTemplate, type Rendered } from "@/lib/templates/templates";
 import { SettingsDialog, type SettingsSection } from "../settings/SettingsDialog";
 import { HistoryDialog } from "../sync/HistoryDialog";
 import { SyncButton } from "../sync/SyncButton";
@@ -81,6 +82,7 @@ import { Outline } from "./Outline";
 import { QuickSwitcher } from "./QuickSwitcher";
 import { SearchPanel } from "./SearchPanel";
 import { TagsPanel } from "./TagsPanel";
+import { addStarterTemplates, needsDialog, TemplatesPanel, UseTemplateDialog, useTemplatePaths } from "./Templates";
 import { Toolbar } from "./Toolbar";
 
 const MarkdownEditor = dynamic(() => import("./MarkdownEditor"), { ssr: false });
@@ -100,7 +102,7 @@ const ReadingView = dynamic(() => import("./ReadingView"), {
 });
 
 type Mode = "live" | "source" | "reading";
-type SidebarTab = "files" | "search" | "tags";
+type SidebarTab = "files" | "search" | "tags" | "templates";
 type PanelTab = "outline" | "links";
 
 const MODES: Array<{ id: Mode; label: string; icon: typeof Pencil }> = [
@@ -151,7 +153,11 @@ export function Workspace() {
   const [view, setView] = useState<EditorView | null>(null);
   const readingRef = useRef<HTMLDivElement>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [templatesOpen, setTemplatesOpen] = useState(false);
+  // Choosing a template (from the command palette), then using it.
+  const [templatePicker, setTemplatePicker] = useState<"new" | "insert" | null>(null);
+  const [usingTemplate, setUsingTemplate] = useState<{ path: string; mode: "new" | "insert" } | null>(null);
+  // Where to put the cursor once a note created from a template opens.
+  const pendingCursor = useRef<{ path: string; pos: number } | null>(null);
   const [sidePath, setSidePath] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   /** A note about to be created from a link, waiting for the user to confirm its name and folder. */
@@ -168,6 +174,18 @@ export function Workspace() {
   useEffect(() => writePref(tabsKey, tabs), [tabsKey, tabs]);
   const sync = useSync();
   const vaults = useVaults();
+
+  // Starter templates chosen when the repository was created: added once it's ready. A GitHub
+  // repository gets them after its first sync, next to whatever is already there.
+  const seedingTemplates = useRef(false);
+  const repo = vaults.active;
+  const firstSyncDone = sync.status.kind === "idle" && sync.status.lastSyncedAt !== null;
+  useEffect(() => {
+    if (!repo.starterTemplates || !vault.ready || seedingTemplates.current) return;
+    if (repo.kind === "github" && !firstSyncDone) return;
+    seedingTemplates.current = true;
+    void addStarterTemplates(vault).finally(() => vaults.update(repo.id, { starterTemplates: undefined }));
+  }, [repo, vault, vaults, firstSyncDone]);
   /** Latest openDaily, for the keyboard shortcut handler. */
   const openDailyRef = useRef<() => Promise<void>>(async () => {});
   /** Back/Forward through visited notes. */
@@ -280,10 +298,18 @@ export function Workspace() {
     const name = formatDate(date, s.dailyFormat || "YYYY-MM-DD");
     const path = joinPath(s.dailyFolder, `${name}.md`);
     let content = "";
-    if (s.dailyTemplate) {
+    let cursor: number | null = null;
+    if (s.dailyTemplate && !vault.exists(path)) {
       const t = vault.links.resolve(s.dailyTemplate.replace(/\.md$/i, ""));
-      if (t) content = fillTemplate(vault.links.content(t) ?? "", { title: basename(name), now: date });
+      if (t) {
+        const note = noteFromTemplate(
+          renderTemplate(vault.links.content(t) ?? "", { title: basename(name), now: date, folder: s.dailyFolder, inputs: {} }),
+        );
+        content = note.content;
+        cursor = note.cursor;
+      }
     }
+    if (cursor !== null) pendingCursor.current = { path, pos: cursor };
     await vault.createNoteWith(path, content);
   };
   useEffect(() => {
@@ -630,6 +656,51 @@ export function Workspace() {
   );
 
 
+  const activePathNow = vault.active?.path ?? null;
+  const kind = !activePathNow
+    ? null
+    : isNote(activePathNow)
+      ? "note"
+      : isDrawing(activePathNow)
+        ? "drawing"
+        : isCanvas(activePathNow)
+          ? "canvas"
+          : "file";
+  const editing = kind === "note" && mode !== "reading" && !!view;
+
+  const templates = useTemplatePaths();
+
+  /** Puts a filled template into the open note at the cursor. */
+  const insertRendered = (r: Rendered) => {
+    if (!view) return;
+    const doc = view.state.doc.toString();
+    const out = insertIntoNote(doc, view.state.selection.main.head, r);
+    view.dispatch({ changes: { from: 0, to: doc.length, insert: out.text }, selection: { anchor: out.cursor } });
+    view.focus();
+  };
+  /** Starts a note from a template, or inserts one; asks for its prompts first if it has any. */
+  const applyTemplate = (path: string, mode: "new" | "insert") => {
+    if (mode === "insert" && !editing) return;
+    if (needsDialog(vault, path, mode)) setUsingTemplate({ path, mode });
+    else
+      insertRendered(
+        renderTemplate(vault.links.content(path) ?? "", {
+          title: noteTitle(activePathNow ?? ""),
+          now: new Date(),
+          folder: dirname(activePathNow ?? ""),
+          inputs: {},
+        }),
+      );
+  };
+  // Once a note made from a template is open in the editor, put the cursor where the template says.
+  useEffect(() => {
+    const p = pendingCursor.current;
+    if (!p || !view || activePathNow !== p.path || kind !== "note") return;
+    pendingCursor.current = null;
+    view.dispatch({ selection: { anchor: Math.min(p.pos, view.state.doc.length) }, scrollIntoView: true });
+    view.focus();
+  });
+
   const sidebar = (
     <>
       <div className="flex items-start gap-1">
@@ -647,12 +718,13 @@ export function Workspace() {
         </button>
       </div>
       <div className="mb-3 flex items-center gap-1 px-0.5">
-      <div role="tablist" aria-label="Sidebar" className="segmented flex-1">
+      <div role="tablist" aria-label="Sidebar" className="segmented min-w-0 flex-1">
         {(
           [
             ["files", "Files", Files],
             ["search", "Search", Search],
             ["tags", "Tags", Tags],
+            ["templates", "Templates", LayoutTemplate],
           ] as const
         ).map(([id, label, Icon]) => (
           <button
@@ -660,10 +732,13 @@ export function Workspace() {
             role="tab"
             type="button"
             aria-selected={tab === id}
+            title={label}
+            className={tab === id ? "" : "!flex-none"}
             onClick={() => setTab(id)}
           >
             <Icon size={14} aria-hidden />
-            {label}
+            {/* Four tabs don't fit with labels: only the open one shows its name. */}
+            <span className={tab === id ? "" : "sr-only"}>{label}</span>
           </button>
         ))}
       </div>
@@ -681,8 +756,10 @@ export function Workspace() {
           <FileTree />
         ) : tab === "search" ? (
           <SearchPanel query={searchQuery} onQuery={setSearchQuery} autoFocus />
-        ) : (
+        ) : tab === "tags" ? (
           <TagsPanel onTag={showTag} />
+        ) : (
+          <TemplatesPanel onUse={applyTemplate} canInsert={editing} />
         )}
       </div>
       <div className="mt-2 flex flex-col gap-0.5 border-t border-border pt-2">
@@ -741,6 +818,9 @@ export function Workspace() {
       <RailButton label="Tags" onClick={() => openSidebarTab("tags")}>
         <Tags size={18} aria-hidden />
       </RailButton>
+      <RailButton label="Templates" onClick={() => openSidebarTab("templates")}>
+        <LayoutTemplate size={18} aria-hidden />
+      </RailButton>
       <span className="my-1 h-px w-6 bg-border" aria-hidden />
       <RailButton label="Today" onClick={() => void openDaily()}>
         <CalendarDays size={18} aria-hidden />
@@ -774,30 +854,6 @@ export function Workspace() {
       </RailButton>
     </>
   );
-
-  const activePathNow = vault.active?.path ?? null;
-  const kind = !activePathNow
-    ? null
-    : isNote(activePathNow)
-      ? "note"
-      : isDrawing(activePathNow)
-        ? "drawing"
-        : isCanvas(activePathNow)
-          ? "canvas"
-          : "file";
-  const editing = kind === "note" && mode !== "reading" && !!view;
-
-  const templates = vault.links
-    .paths()
-    .filter((p) => isNote(p) && vault.settings.templateFolder && isWithin(p, vault.settings.templateFolder))
-    .sort();
-
-  const insertTemplate = (path: string) => {
-    if (!view || !activePathNow) return;
-    const text = fillTemplate(vault.links.content(path) ?? "", { title: noteTitle(activePathNow), now: new Date() });
-    view.dispatch(view.state.replaceSelection(text));
-    view.focus();
-  };
 
   const exportZip = async () => {
     const bytes = await vault.exportZip();
@@ -873,6 +929,7 @@ export function Workspace() {
       label: "Open yesterday's daily note",
     },
     { id: "template", label: "Insert template…", when: editing },
+    { id: "templateNote", label: "New note from template…" },
     { id: "link-selection", label: "Link selection to a note…", hint: "Ctrl/Cmd+Shift+K", when: editing },
     { id: "links-to-markdown", label: "Convert links in this note to markdown links", when: kind === "note" },
     { id: "links-to-wikilinks", label: "Convert links in this note to wikilinks", when: kind === "note" },
@@ -922,7 +979,8 @@ export function Workspace() {
     "new-canvas": () => void vault.createCanvas(),
     daily: () => void openDaily(),
     "daily-yesterday": () => void openDaily(new Date(Date.now() - 86_400_000)),
-    template: () => setTemplatesOpen(true),
+    template: () => setTemplatePicker("insert"),
+    templateNote: () => setTemplatePicker("new"),
     "link-selection": () => setLinkPickerOpen(true),
     "links-to-markdown": () => convertActiveLinks("markdown"),
     "links-to-wikilinks": () => convertActiveLinks("wikilink"),
@@ -1190,14 +1248,26 @@ export function Workspace() {
           </button>
         </div>
       )}
-      {templatesOpen && (
+      {templatePicker && (
         <Picker
-          title="Insert template"
+          title={templatePicker === "new" ? "New note from template" : "Insert template"}
           placeholder="Choose a template…"
           items={templates.map((p) => ({ id: p, label: noteTitle(p), hint: dirname(p) }))}
-          empty={`No templates yet. Add notes to the “${vault.settings.templateFolder}” folder (Settings → This repository).`}
-          onPick={(item) => insertTemplate(item.id)}
-          onClose={() => setTemplatesOpen(false)}
+          empty={`No templates yet. Open the Templates tab in the sidebar to add some.`}
+          onPick={(item) => applyTemplate(item.id, templatePicker)}
+          onClose={() => setTemplatePicker(null)}
+        />
+      )}
+      {usingTemplate && (
+        <UseTemplateDialog
+          path={usingTemplate.path}
+          mode={usingTemplate.mode}
+          defaultFolder={newNoteFromLink("x", activePathNow, vault.settings).folder}
+          onInsert={insertRendered}
+          onCreating={(path, pos) => {
+            pendingCursor.current = { path, pos };
+          }}
+          onClose={() => setUsingTemplate(null)}
         />
       )}
       {linkPickerOpen && (

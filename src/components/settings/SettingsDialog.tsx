@@ -806,21 +806,59 @@ function Field({ label, children, hint }: { label: string; children: React.React
   );
 }
 
+/** "Add starter templates", offered when a repository is created. */
+function StarterTemplatesOption({ checked, onChange }: { checked: boolean; onChange(v: boolean): void }) {
+  return (
+    <label className="flex items-start gap-2 text-sm">
+      <input type="checkbox" className="mt-1" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span>
+        <span className="font-medium">Add starter templates</span>
+        <span className="block text-xs text-muted">
+          Meeting, Project, Person, Weekly review and Daily, in a Templates folder. Edit or delete them any time.
+        </span>
+      </span>
+    </label>
+  );
+}
+
 function AddButtons({ onGitHub }: { onGitHub(): void }) {
   const { add } = useVaults();
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("New repository");
+  const [starters, setStarters] = useState(true);
+  if (creating) {
+    return (
+      <form
+        aria-label="New local repository"
+        className="space-y-4 rounded-xl border border-border p-5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!name.trim()) return;
+          add({ id: newVaultId("local"), name: name.trim(), kind: "local", ...(starters ? { starterTemplates: true } : {}) });
+        }}
+      >
+        <h4 className="font-serif text-lg">New local repository</h4>
+        <Field label="Name">
+          <input className="input" value={name} autoFocus onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <StarterTemplatesOption checked={starters} onChange={setStarters} />
+        <div className="flex justify-end gap-2">
+          <button type="button" className="button-secondary" onClick={() => setCreating(false)}>
+            Cancel
+          </button>
+          <button type="submit" className="button-primary" disabled={!name.trim()}>
+            Create and open
+          </button>
+        </div>
+      </form>
+    );
+  }
   return (
     <section aria-label="Add a repository" className="flex flex-wrap gap-2">
       <button type="button" className="button-primary" onClick={onGitHub}>
         Connect a GitHub repository
       </button>
-      <button
-        type="button"
-        className="button-secondary"
-        onClick={() => {
-          const name = window.prompt("Name for the new repository", "New repository");
-          if (name?.trim()) add({ id: newVaultId("local"), name: name.trim(), kind: "local" });
-        }}
-      >
+      <button type="button" className="button-secondary" onClick={() => setCreating(true)}>
         New local repository
       </button>
     </section>
@@ -854,6 +892,8 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
   const [secret, setSecret] = useState("");
   const [busy, setBusy] = useState(false);
   const [recovery, setRecovery] = useState<{ key: string; config: GitHubVaultConfig } | null>(null);
+  // Starter templates: suggested for a new, empty repository; off when it already has notes. null: follow that.
+  const [starters, setStarters] = useState<boolean | null>(null);
   // Can the token write to the chosen repository? Public ones are listed even when it can only read.
   const [writable, setWritable] = useState<boolean | "checking">(true);
 
@@ -934,6 +974,7 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
 
   const probeKind = probe && typeof probe === "object" ? probe.kind : null;
   const passError = probeKind === "empty" && encrypt ? newPassphraseError(pass, confirm) : null;
+  const wantStarters = starters ?? probeKind === "empty";
   const ready = writable === true && probe !== "checking" && (probeKind === "encrypted" ? !!secret.trim() : !passError);
 
   let folderError: string | null = null;
@@ -962,6 +1003,7 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
           folder: cleanFolder,
           syncMode,
           idleSeconds: idle,
+          ...(wantStarters ? { starterTemplates: true } : {}),
         };
         setBusy(true);
         setError(null);
@@ -1100,6 +1142,7 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
             <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <SyncFields mode={syncMode} setMode={setSyncMode} idle={idle} setIdle={setIdle} />
+          <StarterTemplatesOption checked={wantStarters} onChange={setStarters} />
           <fieldset className="space-y-3 rounded-lg bg-surface p-4" aria-label="Encryption">
             {probe === "checking" && <p className="text-sm text-muted">Checking the repository…</p>}
             {probeKind === "encrypted" && (

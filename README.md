@@ -47,8 +47,16 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 - Live preview renders tables and `![[Note]]` embeds in place, and highlights `#tags`;
   `[[Note#^block]]` links scroll to the block
 - Command palette (Ctrl/Cmd+P) for every action
-- Daily notes (the **Today** button, or Ctrl/Cmd+Shift+D) and templates with `{{title}}`,
-  `{{date}}`, `{{time}}` and `{{date:FORMAT}}`, inserted from the palette
+- Daily notes (the **Today** button, or Ctrl/Cmd+Shift+D), from a template if you choose one
+- Templates: notes in the `Templates` folder, listed in the sidebar's **Templates** tab. Start a
+  note from one (it asks for the name and any prompts) or insert one into the open note.
+  - Fields: `{{title}}`, `{{date}}`, `{{time}}`, `{{date:FORMAT}}`, `{{folder}}`, `{{cursor}}`
+    (where typing starts), `{{input:Question}}` and `{{input:Question|default}}` (asked when used)
+  - Properties `template-folder` (where new notes go) and `template-name` (e.g.
+    `"{{date}} {{input:Topic}}"`) are the template's own settings; other properties, such as
+    tags, are copied into the note
+  - Starter templates (Meeting, Project, Person, Weekly review, Daily) can be added when a
+    repository is created, or later from the Templates tab
 - Tabs for open files, and a side pane to read one note while writing another (the columns
   button in the file tree, or Shift+Enter in the quick switcher)
 - Version history for repositories synced with GitHub: see how a note changed and restore an older version

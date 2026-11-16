@@ -86,18 +86,6 @@ export function formatDate(date: Date, format: string): string {
 }
 
 /**
- * Fills a template: {{title}}, {{date}}, {{time}}, and {{date:FORMAT}} /
- * {{time:FORMAT}} with custom formats.
- */
-export function fillTemplate(template: string, vars: { title: string; now: Date }): string {
-  return template.replace(/\{\{\s*(title|date|time)(?::([^}]*))?\s*\}\}/g, (_, name: string, fmt?: string) => {
-    if (name === "title") return vars.title;
-    if (name === "date") return formatDate(vars.now, fmt?.trim() || "YYYY-MM-DD");
-    return formatDate(vars.now, fmt?.trim() || "HH:mm");
-  });
-}
-
-/**
  * Where to create the note a link points to: a folder written in the link
  * ("Projects/Idea") wins; otherwise the vault's setting decides, relative to
  * the note the link is in.

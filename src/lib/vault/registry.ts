@@ -7,6 +7,8 @@ export type SyncMode = "auto" | "manual";
 interface VaultBase {
   id: string;
   name: string;
+  /** Add the starter templates once the repository is ready (chosen when it was created). */
+  starterTemplates?: boolean;
 }
 
 export interface LocalVaultConfig extends VaultBase {
