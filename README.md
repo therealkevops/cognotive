@@ -38,8 +38,9 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   of the whole repository (hubs large, orphans loose, missing notes as dashed stubs; hover to see a
   note's links, click to open it or create a missing one); and cards for broken links, orphans,
   dead ends, hubs and stale hubs that open lists to act on. Hubs are notes well above average in
-  links in, index notes linking out to many, and notes marked `hub: true` (or with the command
-  *Mark this note as a hub*; `hub: false` opts a note out); missing notes linked from three or more
+  links in, index notes linking out to many, and notes pinned with `hub: true` (with the command
+  *Pin this note to the sidebar as a hub*, or **Pin** in the Hubs list; `hub: false` opts a note
+  out). Pinned hubs are listed at the top of the sidebar's Files tab; missing notes linked from three or more
   notes are listed as hubs waiting to be written. Quick fixes: create a missing note,
   link an orphan from a note that mentions it, link a dead end to a note it mentions, or ignore a
   note (kept in `.noted/settings.json`); the score updates as you go, with a count of what you fixed

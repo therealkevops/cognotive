@@ -74,6 +74,7 @@ import { VaultSwitcher } from "../vault/VaultSwitcher";
 import { CreateNoteDialog } from "./CreateNoteDialog";
 import { DeleteDialog } from "./DeleteDialog";
 import { FileTree } from "./FileTree";
+import { PinnedHubs } from "./PinnedHubs";
 import { HealthDialog } from "./HealthDialog";
 import { FileView } from "./FileView";
 import { LinksPanel } from "./LinksPanel";
@@ -760,7 +761,12 @@ export function Workspace() {
       </div>
       <div className="min-h-0 flex-1">
         {tab === "files" ? (
-          <FileTree />
+          <div className="flex h-full flex-col">
+            <PinnedHubs />
+            <div className="min-h-0 flex-1">
+              <FileTree />
+            </div>
+          </div>
         ) : tab === "search" ? (
           <SearchPanel query={searchQuery} onQuery={setSearchQuery} autoFocus />
         ) : tab === "tags" ? (
@@ -965,7 +971,7 @@ export function Workspace() {
     { id: "map-canvas", label: "Map this note as a canvas", when: kind === "note" },
     {
       id: "hub-toggle",
-      label: activeIsMarkedHub ? "Unmark this note as a hub" : "Mark this note as a hub",
+      label: activeIsMarkedHub ? "Unpin this hub from the sidebar" : "Pin this note to the sidebar as a hub",
       when: kind === "note",
     },
     { id: "mode-live", label: "Live preview", when: kind === "note" },

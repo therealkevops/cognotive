@@ -71,8 +71,8 @@ A hub is a note that holds an area together, like a contents page. Give each are
 *Map of content* starter template makes one), link new notes to their hub as you write, and let
 the hub collect links rather than content. Repository health finds hubs (notes many others link
 to, and index notes that link out to many) and lists missing notes that already have enough links
-to be one. Mark a note yourself with \`hub: true\` in its properties, or the command
-*Mark this note as a hub*.
+to be one. Pin a note as a hub with \`hub: true\` in its properties, or the command
+*Pin this note to the sidebar as a hub*: pinned hubs are listed at the top of the sidebar.
 
 Embed part of another note with \`![[Note#Heading]]\`:
 

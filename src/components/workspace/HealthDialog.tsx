@@ -146,7 +146,7 @@ export function HealthDialog({
       label: "Hubs",
       count: health.hubs.length,
       hint:
-        "The notes that hold the repository together: ones many notes link to, index notes linking out to a topic, and notes marked with hub: true. Link new notes to their hub as you write.",
+        "The notes that hold the repository together: ones many notes link to, index notes linking out to a topic, and notes pinned with hub: true (shown in the sidebar). Link new notes to their hub as you write.",
       tone: "good",
       detail: health.hubCandidates.length
         ? `${health.hubCandidates.length} waiting to be written`
@@ -358,15 +358,28 @@ export function HealthDialog({
                   <span className={`hub-badge hub-badge-${h.kind}`}>{HUB_KIND[h.kind]}</span>
                 </>,
                 `${h.links} ${h.links === 1 ? "note links" : "notes link"} here · links to ${h.out}`,
-                <button
-                  type="button"
-                  className="button-secondary shrink-0 px-2.5 py-1 text-xs text-muted"
-                  aria-label={h.kind === "marked" ? `Unmark ${displayName(h.path)} as a hub` : `${displayName(h.path)} is not a hub`}
-                  title={h.kind === "marked" ? "Remove hub: true from the note" : "Add hub: false to the note, so it isn't counted"}
-                  onClick={() => void markHub(h.path, h.kind === "marked" ? undefined : false)}
-                >
-                  {h.kind === "marked" ? "Unmark" : "Not a hub"}
-                </button>,
+                <div className="flex shrink-0 gap-1.5">
+                  {h.kind !== "marked" && (
+                    <button
+                      type="button"
+                      className="button-secondary px-2.5 py-1 text-xs"
+                      aria-label={`Pin ${displayName(h.path)} to the sidebar`}
+                      title="Add hub: true to the note, so it's listed under Hubs in the sidebar"
+                      onClick={() => void markHub(h.path, true)}
+                    >
+                      Pin
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="button-secondary px-2.5 py-1 text-xs text-muted"
+                    aria-label={h.kind === "marked" ? `Unpin ${displayName(h.path)}` : `${displayName(h.path)} is not a hub`}
+                    title={h.kind === "marked" ? "Remove hub: true from the note" : "Add hub: false to the note, so it isn't counted"}
+                    onClick={() => void markHub(h.path, h.kind === "marked" ? undefined : false)}
+                  >
+                    {h.kind === "marked" ? "Unpin" : "Not a hub"}
+                  </button>
+                </div>,
               ),
             )}
           {tab === "stale" &&
@@ -402,7 +415,7 @@ export function HealthDialog({
   );
 }
 
-const HUB_KIND = { marked: "marked", linked: "many links in", index: "index" } as const;
+const HUB_KIND = { marked: "pinned", linked: "many links in", index: "index" } as const;
 
 type Tone = "good" | "fair" | "poor" | "bad" | "old";
 

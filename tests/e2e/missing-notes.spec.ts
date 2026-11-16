@@ -125,9 +125,9 @@ test("a note can be marked as a hub, and missing notes many link to are hubs wai
   await page.getByLabel("Choose a zip to import").setInputFiles({ name: "v.zip", mimeType: "application/zip", buffer: Buffer.from(zip) });
   await expect(page.getByRole("status").filter({ hasText: "Imported 3 files" })).toBeVisible();
 
-  // Welcome is open: mark it from the command palette.
+  // Welcome is open: pin it from the command palette.
   await page.keyboard.press("ControlOrMeta+p");
-  await page.getByRole("dialog", { name: "Command palette" }).getByRole("combobox").fill("mark this note as a hub");
+  await page.getByRole("dialog", { name: "Command palette" }).getByRole("combobox").fill("pin this note");
   await page.keyboard.press("Enter");
   await page.getByRole("radio", { name: "Source" }).click();
   await expect(editor(page).locator(".cm-line").first()).toHaveText("---");
@@ -138,12 +138,33 @@ test("a note can be marked as a hub, and missing notes many link to are hubs wai
   await dialog.getByRole("tab", { name: /Hubs/ }).click();
   const hubs = dialog.getByRole("tabpanel", { name: "Hubs" });
   await expect(hubs).toContainText("Recipeswaiting to be written");
-  await expect(hubs).toContainText("Welcomemarked");
-  await hubs.getByRole("button", { name: "Unmark Welcome as a hub" }).click();
-  await expect(hubs).not.toContainText("Welcomemarked");
+  await expect(hubs).toContainText("Welcomepinned");
+  await hubs.getByRole("button", { name: "Unpin Welcome" }).click();
+  await expect(hubs).not.toContainText("Welcomepinned");
   await hubs.getByRole("button", { name: "Create hub Recipes" }).click();
   await page.getByRole("dialog", { name: "Create note" }).getByRole("button", { name: "Create" }).click();
   await expect(title(page)).toHaveValue("Recipes");
+});
+
+test("pinned hubs are listed in the sidebar", async ({ page }) => {
+  await openApp(page);
+  const pinned = page.getByRole("region", { name: "Hubs" });
+  await expect(pinned).toHaveCount(0); // nothing pinned yet
+  await page.keyboard.press("ControlOrMeta+p");
+  await page.getByRole("dialog", { name: "Command palette" }).getByRole("combobox").fill("pin this note");
+  await page.keyboard.press("Enter");
+  await expect(pinned.getByRole("button", { name: "Welcome", exact: true })).toBeVisible();
+
+  await tree(page).getByRole("treeitem", { name: "Linking notes" }).click();
+  await pinned.getByRole("button", { name: "Welcome", exact: true }).click();
+  await expect(title(page)).toHaveValue("Welcome");
+  // It stays pinned after a reload, and can be unpinned from the sidebar.
+  await page.reload();
+  await pinned.getByRole("button", { name: "Welcome", exact: true }).hover();
+  await pinned.getByRole("button", { name: "Unpin Welcome" }).click();
+  await expect(pinned).toHaveCount(0);
+  await page.getByRole("radio", { name: "Source" }).click();
+  await expect(editor(page)).not.toContainText("hub:");
 });
 
 test("deleting a linked note warns, and can turn the links into text", async ({ page }) => {
