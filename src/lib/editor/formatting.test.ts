@@ -109,6 +109,8 @@ describe("insertLink", () => {
 
 describe("insertTable", () => {
   it("starts the table on its own line", () => {
-    expect(run(insertTable, "text|")).toBe("text\n| |Column 1 | Column 2 |\n| --- | --- |\n|  |  |");
+    expect(run(insertTable, "text|")).toBe(
+      "text\n| |Column 1 | Column 2 |\n| -------- | -------- |\n|          |          |\n|          |          |",
+    );
   });
 });

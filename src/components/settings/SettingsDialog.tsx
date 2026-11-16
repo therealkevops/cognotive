@@ -358,6 +358,7 @@ function EditorSection() {
   const [a, set] = useAppearance();
   const clickId = useId();
   const hoverId = useId();
+  const tablesId = useId();
   return (
     <section aria-label="Editor">
       <SectionHeader title="Editor" description="How writing and links behave. These apply to this browser only." />
@@ -391,6 +392,21 @@ function EditorSection() {
           >
             <option value="always">Show</option>
             <option value="mod">Only while holding Ctrl/Cmd</option>
+          </select>
+        </Row>
+        <Row
+          label="Tables in live preview"
+          description="As a grid you type in cells; Tab moves on, and right-click adds, moves, sorts or deletes rows and columns. Notes still store ordinary markdown tables."
+          id={tablesId}
+        >
+          <select
+            id={tablesId}
+            className="input"
+            value={a.tables}
+            onChange={(e) => set({ tables: e.target.value as Appearance["tables"] })}
+          >
+            <option value="grid">Edit as a grid</option>
+            <option value="markdown">Edit as markdown</option>
           </select>
         </Row>
       </Group>

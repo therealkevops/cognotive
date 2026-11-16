@@ -29,6 +29,8 @@ import { FrontmatterSyntax } from "./frontmatter-syntax";
 import { highlightTag, HighlightSyntax } from "./highlight-syntax";
 import { liveBlocks } from "./live-blocks";
 import { livePreview } from "./live-preview";
+import { tableGridExtensions, tableGridOn } from "./table-grid";
+import { tableEditing } from "./table-keys";
 import { tagHighlighter } from "./tags";
 import { linkHost, livePreviewOn, WikiLinkSyntax, wikilinkExtensions, type LinkHost } from "./wikilinks";
 
@@ -120,14 +122,22 @@ export function spellcheckExtension(on: boolean): Extension {
 /** Live preview on or off. Reconfigure with `livePreviewMode.reconfigure(...)`. */
 export const livePreviewMode = new Compartment();
 
-export function livePreviewExtension(on: boolean): Extension {
+/** Live preview, with tables edited as grids unless `tables` is "markdown". */
+export function livePreviewExtension(on: boolean, tables: "grid" | "markdown" = "grid"): Extension {
   return on
-    ? [livePreview, liveBlocks, livePreviewOn.of(true), EditorView.contentAttributes.of({ class: "cm-live-preview" })]
+    ? [
+        livePreview,
+        liveBlocks,
+        livePreviewOn.of(true),
+        tableGridOn.of(tables === "grid"),
+        EditorView.contentAttributes.of({ class: "cm-live-preview" }),
+      ]
     : [];
 }
 
 export function editorExtensions(opts: {
   livePreview: boolean;
+  tables?: "grid" | "markdown";
   onChange: (doc: string) => void;
   links?: LinkHost;
   spellcheck?: boolean;
@@ -147,6 +157,8 @@ export function editorExtensions(opts: {
     syntaxHighlighting(markdownHighlight),
     tagHighlighter,
     ...(opts.links ? [linkHost.of(opts.links), wikilinkExtensions()] : []),
+    tableGridExtensions(),
+    tableEditing(),
     keymap.of([
       ...completionKeymap,
       ...formattingKeymap,
@@ -156,7 +168,7 @@ export function editorExtensions(opts: {
       indentWithTab,
       ...defaultKeymap,
     ]),
-    livePreviewMode.of(livePreviewExtension(opts.livePreview)),
+    livePreviewMode.of(livePreviewExtension(opts.livePreview, opts.tables)),
     spellcheckMode.of(spellcheckExtension(opts.spellcheck ?? true)),
     theme,
     EditorView.updateListener.of((u) => {

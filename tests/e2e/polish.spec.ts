@@ -96,11 +96,11 @@ test("appearance settings apply and persist", async ({ page }) => {
   expect(bg).toBe("rgb(38, 38, 36)");
 });
 
-test("live preview renders tables and highlights tags", async ({ page }) => {
+test("live preview shows tables as grids and highlights tags", async ({ page }) => {
   await openApp(page);
   await editor(page).click();
   await page.keyboard.press("ControlOrMeta+End");
-  await expect(editor(page).locator(".cm-rendered-table table")).toBeVisible();
+  await expect(editor(page).locator(".cm-table-grid table")).toBeVisible();
   // Switching to another note starts it at the top (not at Welcome's scroll position).
   await tree(page).getByRole("treeitem", { name: "Linking notes" }).click();
   await expect(editor(page).locator(".cm-tag").first()).toHaveText("#guide");

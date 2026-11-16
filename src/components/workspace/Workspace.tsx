@@ -32,6 +32,7 @@ import { isDark, loadAppearance } from "@/lib/appearance";
 import type { OpenHow } from "@/lib/links/open";
 import { EMPTY_HISTORY, goBack, goForward, renameInHistory, visit, type NavHistory } from "@/lib/nav/history";
 import { readPref, writePref } from "@/lib/prefs";
+import { editTableSource } from "@/lib/editor/table-keys";
 import type { LinkHost } from "@/lib/editor/wikilinks";
 import type { LinkContext } from "@/lib/markdown/remark-links";
 import { serializeCanvas } from "@/lib/canvas/format";
@@ -930,6 +931,9 @@ export function Workspace() {
     },
     { id: "template", label: "Insert template…", when: editing },
     { id: "templateNote", label: "New note from template…" },
+    { id: "table-format", label: "Format table", hint: "Ctrl/Cmd+Alt+T", when: editing },
+    { id: "table-from-lines", label: "Convert selected lines (CSV) to a table", when: editing },
+    { id: "table-to-lines", label: "Convert table to CSV lines", when: editing },
     { id: "link-selection", label: "Link selection to a note…", hint: "Ctrl/Cmd+Shift+K", when: editing },
     { id: "links-to-markdown", label: "Convert links in this note to markdown links", when: kind === "note" },
     { id: "links-to-wikilinks", label: "Convert links in this note to wikilinks", when: kind === "note" },
@@ -981,6 +985,9 @@ export function Workspace() {
     "daily-yesterday": () => void openDaily(new Date(Date.now() - 86_400_000)),
     template: () => setTemplatePicker("insert"),
     templateNote: () => setTemplatePicker("new"),
+    "table-format": () => view && editTableSource(view, "format"),
+    "table-from-lines": () => view && editTableSource(view, "from-lines"),
+    "table-to-lines": () => view && editTableSource(view, "to-lines"),
     "link-selection": () => setLinkPickerOpen(true),
     "links-to-markdown": () => convertActiveLinks("markdown"),
     "links-to-wikilinks": () => convertActiveLinks("wikilink"),

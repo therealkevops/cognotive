@@ -44,8 +44,22 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 - Attachments: paste or drop images into a note (saved to `attachments/` and embedded as
   `![[Pasted image ….png]]`), add files with the upload button or by dropping them on a folder,
   and open images, PDFs, audio and video. `![[pic.png|300]]` sets an image's width
-- Live preview renders tables and `![[Note]]` embeds in place, and highlights `#tags`;
+- Live preview renders `![[Note]]` embeds in place, and highlights `#tags`;
   `[[Note#^block]]` links scroll to the block
+- Tables: in live preview a table is a grid you type in (notes still store ordinary markdown
+  tables, with the columns lined up)
+  - Tab and Shift+Tab move between cells (Tab after the last cell adds a row), Enter goes down a
+    row, Shift+Enter adds a line break (`<br>`), and the arrow keys or Escape leave the table
+  - Right-click a cell (or the ⋯ button above the table) to insert, move or delete rows and
+    columns, align a column, sort by it, or delete the table; Alt+arrows move a row or column; the
+    + buttons add a row or column
+  - The toolbar's table button picks a size; cells copied from a spreadsheet paste as a table, and
+    a block pasted into a cell spreads across the cells
+  - Settings → Editor → *Tables in live preview* can show tables as markdown instead. There (and in
+    source mode) Tab and Enter still move between cells and line the columns up, and Ctrl/Cmd+Alt+T
+    tidies a table. The commands *Convert selected lines (CSV) to a table* and *Convert table to CSV
+    lines* convert both ways
+  - Markdown tables can't merge cells or hold lists or other blocks in a cell
 - Command palette (Ctrl/Cmd+P) for every action
 - Daily notes (the **Today** button, or Ctrl/Cmd+Shift+D), from a template if you choose one
 - Templates: notes in the `Templates` folder, listed in the sidebar's **Templates** tab. Start a

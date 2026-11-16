@@ -94,6 +94,7 @@ export default function MarkdownEditor({
         doc: initial,
         extensions: editorExtensions({
           livePreview: livePreviewRef.current,
+          tables: loadAppearance().tables,
           onChange: (text) => onChangeRef.current(text),
           links: linkHostProxy,
           spellcheck: loadAppearance().spellcheck,
@@ -111,14 +112,21 @@ export default function MarkdownEditor({
   useEffect(() => {
     livePreviewRef.current = livePreview;
     view.current?.dispatch({
-      effects: livePreviewMode.reconfigure(livePreviewExtension(livePreview)),
+      effects: livePreviewMode.reconfigure(livePreviewExtension(livePreview, loadAppearance().tables)),
     });
   }, [livePreview]);
 
-  // Follow the spell-check setting when it changes in Settings.
+  // Follow the spell-check and table settings when they change in Settings.
   useEffect(() => {
-    const apply = () =>
-      view.current?.dispatch({ effects: spellcheckMode.reconfigure(spellcheckExtension(loadAppearance().spellcheck)) });
+    const apply = () => {
+      const a = loadAppearance();
+      view.current?.dispatch({
+        effects: [
+          spellcheckMode.reconfigure(spellcheckExtension(a.spellcheck)),
+          livePreviewMode.reconfigure(livePreviewExtension(livePreviewRef.current, a.tables)),
+        ],
+      });
+    };
     window.addEventListener("noted-appearance", apply);
     return () => window.removeEventListener("noted-appearance", apply);
   }, []);

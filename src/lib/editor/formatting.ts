@@ -1,4 +1,5 @@
 import { EditorSelection, type ChangeSpec, type EditorState, type Line } from "@codemirror/state";
+import { emptyTable, formatTable } from "./table-model";
 
 /** A CodeMirror state command: works with an EditorView or any {state, dispatch}. */
 export type Command = (target: {
@@ -204,10 +205,11 @@ export const insertCodeBlock = insertBlock((sel) => ({
   cursor: 3,
 }));
 
-export const insertTable = insertBlock(() => {
-  const text = "| Column 1 | Column 2 |\n| --- | --- |\n|  |  |";
-  return { text, cursor: 2 };
-});
+/** Inserts a table with `cols` columns and `rows` empty rows below the headings. */
+export const insertTableOf = (rows: number, cols: number) =>
+  insertBlock(() => ({ text: formatTable(emptyTable(rows, cols)), cursor: 2 }));
+
+export const insertTable = insertTableOf(2, 2);
 
 export const insertHorizontalRule = insertBlock(() => ({ text: "\n---\n", cursor: 5 }));
 

@@ -124,6 +124,7 @@ describe("live preview", () => {
       selection: EditorSelection.cursor(doc.length),
       extensions: editorExtensions({
         livePreview: true,
+        tables: "markdown",
         onChange: () => {},
         links: {
           resolve: () => "Other.md",

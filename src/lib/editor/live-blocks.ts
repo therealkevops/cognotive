@@ -1,6 +1,7 @@
 import { ensureSyntaxTree } from "@codemirror/language";
 import { StateField, type EditorState, type Range } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, WidgetType } from "@codemirror/view";
+import { TableWidget, tableGridOn, typingText } from "./table-grid";
 import { fillAssets, linkHost, livePreviewOn } from "./wikilinks";
 
 /**
@@ -63,6 +64,7 @@ const EMBED_LINE = /^!\[\[([^\]\n]+?)\]\]\s*$/;
 function build(state: EditorState): DecorationSet {
   if (!state.facet(livePreviewOn)) return Decoration.none;
   const host = state.facet(linkHost);
+  const grid = state.facet(tableGridOn);
   const out: Range<Decoration>[] = [];
   const tree = ensureSyntaxTree(state, state.doc.length, 50);
   tree?.iterate({
@@ -70,7 +72,9 @@ function build(state: EditorState): DecorationSet {
       if (n.name !== "Table") return;
       const from = state.doc.lineAt(n.from).from;
       const to = state.doc.lineAt(n.to).to;
-      if (!touched(state, from, to)) {
+      if (grid && !(state.field(typingText, false) && touched(state, from, to))) {
+        out.push(Decoration.replace({ widget: new TableWidget(state.sliceDoc(from, to), from), block: true }).range(from, to));
+      } else if (!grid && !touched(state, from, to)) {
         out.push(
           Decoration.replace({ widget: new RenderedBlock(state.sliceDoc(from, to), from, "table"), block: true }).range(from, to),
         );
@@ -98,7 +102,7 @@ function build(state: EditorState): DecorationSet {
   return Decoration.set(out, true);
 }
 
-/** Tables and note embeds rendered in place while editing in live preview. */
+/** Tables (rendered, or as editable grids) and note embeds in place while editing in live preview. */
 export const liveBlocks = StateField.define<DecorationSet>({
   create: build,
   update(value, tr) {

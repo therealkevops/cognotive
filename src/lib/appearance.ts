@@ -15,6 +15,8 @@ export interface Appearance {
   noteFont: "serif" | "sans" | "system";
   /** Link previews on hover: always, or only while Ctrl/Cmd is held. */
   hoverPreview: "always" | "mod";
+  /** Tables in live preview: edited as a grid of cells, or as markdown. */
+  tables: "grid" | "markdown";
 }
 
 export const ACCENTS = {
@@ -49,6 +51,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   hoverPreview: "always",
   noteFont: "serif",
   spellcheck: true,
+  tables: "grid",
 };
 
 export function loadAppearance(): Appearance {
@@ -58,6 +61,7 @@ export function loadAppearance(): Appearance {
   if (typeof a.spellcheck !== "boolean") a.spellcheck = true;
   if (a.linkClick !== "edit" && a.linkClick !== "follow") a.linkClick = "edit";
   if (a.hoverPreview !== "always" && a.hoverPreview !== "mod") a.hoverPreview = "always";
+  if (a.tables !== "grid" && a.tables !== "markdown") a.tables = "grid";
   return a;
 }
 
