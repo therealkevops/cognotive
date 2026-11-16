@@ -56,6 +56,7 @@ export function HealthDialog({
   }, [vault.links, vault.indexVersion, ignored]);
   const hubSet = useMemo(() => new Set(health.hubs.map((h) => h.path)), [health]);
   const orphanSet = useMemo(() => new Set(health.orphans), [health]);
+  const candidateSet = useMemo(() => new Set(health.hubCandidates.map((c) => c.target.toLowerCase())), [health]);
 
   const open = (p: string) => {
     onClose();
@@ -232,6 +233,7 @@ export function HealthDialog({
             graph={graph}
             hubs={hubSet}
             orphans={orphanSet}
+            candidates={candidateSet}
             onOpen={open}
             onCreate={(target, from) => {
               onClose();

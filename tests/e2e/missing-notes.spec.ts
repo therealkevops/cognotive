@@ -138,6 +138,11 @@ test("a note can be marked as a hub, and missing notes many link to are hubs wai
   await dialog.getByRole("tab", { name: /Hubs/ }).click();
   const hubs = dialog.getByRole("tabpanel", { name: "Hubs" });
   await expect(hubs).toContainText("Recipeswaiting to be written");
+  // The link map shows it as a hub to write.
+  const map = dialog.getByRole("region", { name: "Link map" });
+  await expect(map.getByRole("img", { name: /1 hub waiting to be written$/ })).toBeVisible();
+  await expect(map).toContainText("Hubs to write (1)");
+  await expect(map.getByRole("button", { name: "Create Recipes" })).toBeVisible();
   await expect(hubs).toContainText("Welcomepinned");
   await hubs.getByRole("button", { name: "Unpin Welcome" }).click();
   await expect(hubs).not.toContainText("Welcomepinned");
