@@ -1,9 +1,10 @@
 "use client";
 
-import { CloudAlert, CloudCheck, CloudOff, CloudUpload, Lock, LogIn, RefreshCw } from "lucide-react";
+import { CloudAlert, CloudCheck, CloudOff, CloudUpload, KeyRound, Lock, LogIn, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "../auth/useAuth";
 import { UnlockDialog } from "./EncryptionFields";
+import { TokenDialog } from "./TokenFields";
 import { useSync } from "./useSync";
 
 function ago(ts: number | null): string {
@@ -16,9 +17,10 @@ function ago(ts: number | null): string {
 
 /** Sync state for a GitHub vault; click to sync now (or sign in). */
 export function SyncButton() {
-  const { status, syncNow } = useSync();
+  const { status, syncNow, history } = useSync();
   const auth = useAuth();
   const [unlocking, setUnlocking] = useState(false);
+  const [askToken, setAskToken] = useState(false);
   if (status.kind === "local") return null;
 
   let icon = <CloudCheck size={16} aria-hidden />;
@@ -56,6 +58,16 @@ export function SyncButton() {
       tone = "text-accent";
       onClick = () => setUnlocking(true);
       break;
+    case "needs_token":
+      icon = <KeyRound size={16} aria-hidden />;
+      label = status.reason === "rejected" ? "Token expired" : "Add token";
+      title =
+        status.reason === "rejected"
+          ? "GitHub no longer accepts this repository's token. Click to add a new one."
+          : "This device needs a GitHub token to sync this repository. Click to add one.";
+      tone = "text-accent";
+      onClick = () => setAskToken(true);
+      break;
     case "offline":
       icon = <CloudOff size={16} aria-hidden />;
       label = "Offline";
@@ -72,6 +84,9 @@ export function SyncButton() {
   return (
     <>
       {unlocking && <UnlockDialog onClose={() => setUnlocking(false)} />}
+      {askToken && status.kind === "needs_token" && (
+        <TokenDialog reason={status.reason} repo={history?.repoLabel ?? "this repository"} onClose={() => setAskToken(false)} />
+      )}
       <button
         type="button"
         onClick={onClick}

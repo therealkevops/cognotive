@@ -1,4 +1,5 @@
 import { forgetKeys } from "../crypto/key-store";
+import { forgetToken } from "../github/token-store";
 import { readPref, writePref } from "../prefs";
 
 export type SyncMode = "auto" | "manual";
@@ -24,6 +25,11 @@ export interface GitHubVaultConfig extends VaultBase {
   idleSeconds: number;
   /** End-to-end encrypted: GitHub only stores ciphertext. Keys live in each browser. */
   encrypted?: boolean;
+  /**
+   * How it reaches GitHub: a personal access token saved in this browser, or
+   * the deployment's GitHub App sign-in (the default for older connections).
+   */
+  auth?: "token" | "app";
 }
 
 export type VaultConfig = LocalVaultConfig | GitHubVaultConfig;
@@ -61,7 +67,7 @@ export async function deleteVaultData(id: string): Promise<void> {
       const req = indexedDB.deleteDatabase(name);
       req.onsuccess = req.onerror = req.onblocked = () => resolve();
     });
-  await Promise.all([del(`noted-ai:vault:${id}`), del(`noted-ai:sync:${id}`), forgetKeys(id).catch(() => {})]);
+  await Promise.all([del(`noted-ai:vault:${id}`), del(`noted-ai:sync:${id}`), forgetKeys(id).catch(() => {}), forgetToken(id).catch(() => {})]);
   for (const key of ["last", "seeded", "expanded"]) writePref(`vault:${id}:${key}`, null);
 }
 

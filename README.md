@@ -103,8 +103,21 @@ later phases keep server functions to GitHub login and a thin Claude proxy. See
 
 ## Set up GitHub storage
 
-Syncing with GitHub needs a **GitHub App**, which is how the app signs you in and gets access to
-only the repositories you choose.
+**With a token (nothing to set up on the deployment).** In the app, go to **Settings →
+Repositories & sync → Connect a GitHub repository** and follow the steps: create a
+[fine-grained personal access token](https://github.com/settings/personal-access-tokens/new)
+that can only reach your notes repository, with **Contents: Read and write**, and paste it in.
+The browser talks to GitHub directly with it.
+
+- The token is saved in that browser only (IndexedDB), so each device needs it pasted once.
+- It can expire (90 days is a good balance). noted-ai reminds you a week ahead, and asks for a
+  new one if GitHub stops accepting it; *Edit → Replace token* swaps it any time.
+- Keep the token limited to your notes repository: anything that could run inside the app could
+  read it.
+
+**With GitHub App sign-in (optional).** The alternative is a GitHub App, which signs you in and
+keeps its long-lived credential in an httpOnly cookie on the server. It needs settings on the
+deployment, which the app can add for you:
 
 **The quick way:** open your deployment (the Vercel production address, not localhost) and go to
 **Settings → GitHub account → Set up GitHub** (or `/github-setup`):

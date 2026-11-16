@@ -42,6 +42,15 @@ export interface TreeEntry {
 
 type TokenProvider = () => Promise<string>;
 
+/** GitHub's token expiry header, e.g. "2026-12-01 00:00:00 UTC" or "… -0700", as a timestamp. */
+export function parseTokenExpiry(header: string | null): number | null {
+  const m = header?.trim().match(/^(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d) (UTC|[+-]\d{4})$/);
+  if (!m) return null;
+  const zone = m[3] === "UTC" ? "Z" : `${m[3].slice(0, 3)}:${m[3].slice(3)}`;
+  const t = Date.parse(`${m[1]}T${m[2]}${zone}`);
+  return Number.isFinite(t) ? t : null;
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let bin = "";
   for (let i = 0; i < bytes.length; i += 0x8000) {
@@ -129,6 +138,48 @@ export class GitHubClient {
         }
         if (r.repositories.length < 100) break;
       }
+    }
+    return repos.sort((a, b) => a.fullName.localeCompare(b.fullName));
+  }
+
+  /**
+   * Checks a personal access token: who it belongs to, and when it expires
+   * (from GitHub's expiration header; null for tokens that don't expire).
+   */
+  async checkToken(): Promise<{ login: string; id: number; expiresAt: number | null }> {
+    const res = await this.fetchFn(`${API}/user`, {
+      headers: {
+        Authorization: `Bearer ${await this.token()}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      throw new GitHubError(
+        res.status,
+        res.status === 401 ? "GitHub didn't accept that token. Check it was copied in full and hasn't expired." : `GitHub returned an error (${res.status}).`,
+      );
+    }
+    const user = (await res.json()) as { login: string; id: number };
+    return {
+      login: user.login,
+      id: user.id,
+      expiresAt: parseTokenExpiry(res.headers.get("github-authentication-token-expiration")),
+    };
+  }
+
+  /** Repositories a personal access token can reach. */
+  async listUserRepos(): Promise<RepoSummary[]> {
+    const repos: RepoSummary[] = [];
+    for (let page = 1; page <= 10; page++) {
+      const r = await this.request<
+        Array<{ name: string; full_name: string; owner: { login: string }; default_branch: string; private: boolean }>
+      >("GET", `/user/repos?per_page=100&page=${page}&sort=updated`);
+      for (const x of r) {
+        repos.push({ owner: x.owner.login, name: x.name, fullName: x.full_name, defaultBranch: x.default_branch, private: x.private });
+      }
+      if (r.length < 100) break;
     }
     return repos.sort((a, b) => a.fullName.localeCompare(b.fullName));
   }

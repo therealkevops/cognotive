@@ -11,6 +11,8 @@ import {
   type ReactNode,
 } from "react";
 import { GitHubClient, GitHubError, type FileCommit } from "@/lib/github/client";
+import { daysLeft, loadToken, saveToken, type StoredToken } from "@/lib/github/token-store";
+import { verifyToken } from "@/lib/github/verify-token";
 import { loadKeys, saveKeys } from "@/lib/crypto/key-store";
 import { unlockWithPassphrase, unlockWithRecoveryKey, type RepoKeys } from "@/lib/crypto/repo-crypto";
 import { EncryptedRemote, PlainRemote } from "@/lib/sync/encrypted-remote";
@@ -31,6 +33,8 @@ export type SyncStatus =
   | { kind: "signed_out" }
   /** Encrypted, and this browser doesn't have the key yet. */
   | { kind: "locked" }
+  /** Connected with a token, and this browser has none, or GitHub stopped accepting it. */
+  | { kind: "needs_token"; reason: "missing" | "rejected" }
   | { kind: "offline"; pending: number }
   | { kind: "error"; message: string; pending: number };
 
@@ -41,6 +45,8 @@ interface SyncApi {
   /** Messages about conflicts from the last sync, until dismissed. */
   notices: string[];
   dismissNotices(): void;
+  /** For repositories connected with a token: checks a new token and saves it. */
+  setToken?(token: string): Promise<void>;
   /** Unlocks an encrypted repository on this device. Throws WrongKeyError. */
   unlock?(secret: string, kind: "passphrase" | "recovery key"): Promise<void>;
   /** Version history from GitHub, for synced vaults. */
@@ -83,7 +89,46 @@ export function SyncProvider({
   const [status, setStatus] = useState<SyncStatus>({ kind: "idle", pending: 0, lastSyncedAt: null });
   const [notices, setNotices] = useState<string[]>([]);
 
-  const client = useMemo(() => new GitHubClient(auth.getToken), [auth.getToken]);
+  // Connected with a personal access token: it lives in this browser. undefined while loading.
+  const tokenMode = config.auth === "token";
+  const [stored, setStored] = useState<StoredToken | null | undefined>(undefined);
+  useEffect(() => {
+    if (!tokenMode) return;
+    let live = true;
+    void loadToken(config.id)
+      .catch(() => undefined)
+      .then((t) => {
+        if (!live) return;
+        setStored(t ?? null);
+        if (!t) {
+          setStatus({ kind: "needs_token", reason: "missing" });
+          return;
+        }
+        const days = daysLeft(t.expiresAt);
+        if (days !== null && days <= 7) {
+          setNotices((n) => [
+            ...n,
+            days < 0
+              ? "The GitHub token for this repository has expired."
+              : `The GitHub token for this repository expires ${days === 0 ? "today" : `in ${days} ${days === 1 ? "day" : "days"}`}. Replace it in Settings → Repositories & sync → Edit.`,
+          ]);
+        }
+      });
+    return () => {
+      live = false;
+    };
+  }, [tokenMode, config.id]);
+  const getToken = useMemo(
+    () =>
+      tokenMode
+        ? async () => {
+            if (!stored) throw new AuthRequiredError();
+            return stored.token;
+          }
+        : auth.getToken,
+    [tokenMode, stored, auth.getToken],
+  );
+  const client = useMemo(() => new GitHubClient(getToken), [getToken]);
   const github = useMemo(
     () => new GitHubRemote(client, config.owner, config.repo, config.branch),
     [client, config.owner, config.repo, config.branch],
@@ -150,12 +195,14 @@ export function SyncProvider({
           setStatus({ kind: "idle", pending, lastSyncedAt: Date.now() });
         } catch (e) {
           const pending = await engine.pendingChanges().catch(() => 0);
-          if (e instanceof AuthRequiredError) setStatus({ kind: "signed_out" });
+          if (tokenMode && (e instanceof AuthRequiredError || (e instanceof GitHubError && e.status === 401))) {
+            setStatus({ kind: "needs_token", reason: e instanceof GitHubError ? "rejected" : "missing" });
+          } else if (e instanceof AuthRequiredError) setStatus({ kind: "signed_out" });
           else if (!navigator.onLine || e instanceof TypeError) setStatus({ kind: "offline", pending });
           else {
             const message =
               e instanceof GitHubError && e.status === 404
-                ? `Can't reach ${config.owner}/${config.repo}. Check the GitHub App can access it.`
+                ? `Can't reach ${config.owner}/${config.repo}. Check the ${tokenMode ? "token" : "GitHub App"} can access it.`
                 : e instanceof Error
                   ? e.message
                   : String(e);
@@ -166,18 +213,18 @@ export function SyncProvider({
     } finally {
       running.current = false;
     }
-  }, [engine, config.owner, config.repo]);
+  }, [engine, config.owner, config.repo, tokenMode]);
 
   // First sync once the vault has loaded, and again when the user signs in.
-  const signedIn = auth.state.status === "signed_in";
+  const signedIn = tokenMode ? !!stored : auth.state.status === "signed_in";
   useEffect(() => {
     if (!engine) return;
     if (vault.ready && signedIn) void run();
-    else if (vault.ready && auth.state.status === "signed_out") {
+    else if (vault.ready && !tokenMode && auth.state.status === "signed_out") {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors external auth state
       setStatus({ kind: "signed_out" });
     }
-  }, [vault.ready, signedIn, auth.state.status, run, engine]);
+  }, [vault.ready, signedIn, auth.state.status, run, engine, tokenMode]);
 
   // Auto mode: commit after the user stops editing.
   const idleMs = config.idleSeconds * 1000;
@@ -235,6 +282,16 @@ export function SyncProvider({
     [github, config.id],
   );
 
+  const setToken = useCallback(
+    async (token: string) => {
+      const next = await verifyToken(token, { owner: config.owner, repo: config.repo });
+      await saveToken(config.id, next);
+      setStored(next);
+      setStatus({ kind: "idle", pending: 0, lastSyncedAt: null });
+    },
+    [config.id, config.owner, config.repo],
+  );
+
   const api = useMemo<SyncApi>(() => {
     const repoPath = (path: string) => joinPath(config.folder, path);
     const enc = remote instanceof EncryptedRemote ? remote : null;
@@ -244,6 +301,7 @@ export function SyncProvider({
       notices,
       dismissNotices: () => setNotices([]),
       unlock: encrypted ? unlock : undefined,
+      setToken: tokenMode ? setToken : undefined,
       history:
         encrypted && !enc
           ? undefined
@@ -263,6 +321,6 @@ export function SyncProvider({
               repoLabel: `${config.owner}/${config.repo}`,
             },
     };
-  }, [status, run, notices, client, config.owner, config.repo, config.branch, config.folder, encrypted, remote, unlock]);
+  }, [status, run, notices, client, config.owner, config.repo, config.branch, config.folder, encrypted, remote, unlock, tokenMode, setToken]);
   return <SyncContext.Provider value={api}>{children}</SyncContext.Provider>;
 }

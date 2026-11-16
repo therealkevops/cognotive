@@ -52,7 +52,20 @@ export class FakeGitHub {
     return sha ? this.blobs.get(sha) : undefined;
   }
 
-  async install(page: Page) {
+  /** Authorization headers seen, to check which credential the app used. */
+  auth = new Set<string>();
+  /** When the personal access token expires (sent in GitHub's header), or null. */
+  tokenExpiry: string | null = "2027-02-01 00:00:00 UTC";
+
+  /**
+   * Serves the fake API. With `app: false` the GitHub App sign-in is left alone
+   * (the test server has none), as for repositories connected with a token.
+   */
+  async install(page: Page, { app = true }: { app?: boolean } = {}) {
+    if (!app) {
+      await page.route("https://api.github.com/**", (route) => this.handle(route));
+      return;
+    }
     await page.route("**/api/auth/token", (route) =>
       route.fulfill({
         json: { token: "ghu_test", expiresAt: Date.now() + 8 * 3600_000, user: { id: 1, login: "tester" }, installUrl: null },
@@ -79,6 +92,23 @@ export class FakeGitHub {
           "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT",
         },
       });
+    }
+    const authz = req.headers()["authorization"];
+    if (authz) this.auth.add(authz);
+    if (authz === "Bearer revoked") return ok({ message: "Bad credentials" }, 401);
+    if (path === "/user") {
+      return route.fulfill({
+        status: 200,
+        json: { login: "tester", id: 1 },
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Expose-Headers": "github-authentication-token-expiration",
+          ...(this.tokenExpiry ? { "github-authentication-token-expiration": this.tokenExpiry } : {}),
+        },
+      });
+    }
+    if (path === "/user/repos") {
+      return ok([{ name: "notes", full_name: "me/notes", owner: { login: "me" }, default_branch: "main", private: true }]);
     }
     if (path === "/user/installations") return ok({ installations: [{ id: 1 }] });
     if (path === "/user/installations/1/repositories") {

@@ -98,6 +98,16 @@ App-wide preferences (theme, editor mode) live in `localStorage`. Vault-level se
 (attachment folder, daily-note format, ignored paths) live in the repo at
 `.noted/settings.json` so they follow the vault across devices.
 
+### Update: connecting with a token is now the default
+Setting up the GitHub App meant creating an app and configuring the deployment, which was too
+much friction for a personal app. Repositories can now connect with a **fine-grained personal
+access token** limited to the notes repository (Contents: read & write), pasted once per device
+and stored in IndexedDB (`noted-ai:tokens`). No server routes or environment variables are
+involved. The trade-off is that the token is readable by code running in the page, unlike the
+App's httpOnly refresh token, so the instructions keep it to one repository and an expiry; the
+app warns a week before expiry and asks for a new token on a 401. GitHub App sign-in remains as
+an option (`auth: "app"` on a repository's config, the default for older connections).
+
 ### Why a GitHub App (not a classic OAuth App or a pasted token)
 - Fine-grained: the user grants access to specific repositories only, with
   `Contents: read & write` and `Metadata: read`.

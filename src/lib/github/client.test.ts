@@ -72,3 +72,39 @@ describe("GitHubClient", () => {
     expect(err).toMatchObject({ status: 422, message: "Update is not a fast forward" });
   });
 });
+
+describe("personal access tokens", () => {
+  it("parses GitHub's expiry header", async () => {
+    const { parseTokenExpiry } = await import("./client");
+    expect(parseTokenExpiry("2026-12-01 00:00:00 UTC")).toBe(Date.parse("2026-12-01T00:00:00Z"));
+    expect(parseTokenExpiry("2026-12-01 12:00:00 -0700")).toBe(Date.parse("2026-12-01T19:00:00Z"));
+    expect(parseTokenExpiry(null)).toBeNull();
+    expect(parseTokenExpiry("soon")).toBeNull();
+  });
+
+  it("checks a token and reads its expiry", async () => {
+    const fetchFn = vi.fn(async () =>
+      Response.json(
+        { login: "kev", id: 7 },
+        { headers: { "github-authentication-token-expiration": "2027-01-01 00:00:00 UTC" } },
+      ),
+    );
+    const client = new GitHubClient(async () => "github_pat_x", fetchFn as unknown as typeof fetch);
+    expect(await client.checkToken()).toEqual({ login: "kev", id: 7, expiresAt: Date.parse("2027-01-01T00:00:00Z") });
+  });
+
+  it("explains a rejected token", async () => {
+    const client = new GitHubClient(async () => "bad", (async () => new Response("", { status: 401 })) as typeof fetch);
+    await expect(client.checkToken()).rejects.toThrow(/didn't accept that token/);
+  });
+
+  it("lists the repositories a token can reach", async () => {
+    const fetchFn = vi.fn(async () =>
+      Response.json([{ name: "notes", full_name: "kev/notes", owner: { login: "kev" }, default_branch: "main", private: true }]),
+    );
+    const client = new GitHubClient(async () => "t", fetchFn as unknown as typeof fetch);
+    expect(await client.listUserRepos()).toEqual([
+      { owner: "kev", name: "notes", fullName: "kev/notes", defaultBranch: "main", private: true },
+    ]);
+  });
+});

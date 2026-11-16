@@ -35,7 +35,8 @@ test("an encrypted repository stores only ciphertext, and another device unlocks
   await expect(dialog).toBeHidden();
 
   // Write a note and sync it.
-  await page.getByRole("button", { name: "New note", exact: true }).click();
+  // The empty repository shows its own "New note" button too; use the sidebar's.
+  await page.getByRole("complementary", { name: "Repository" }).getByRole("button", { name: "New note", exact: true }).click();
   const title = page.getByRole("textbox", { name: "Note title" });
   await title.fill("Therapy notes");
   await title.press("Enter");

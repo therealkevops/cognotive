@@ -6,6 +6,8 @@ import { ACCENTS, loadAppearance, saveAppearance, type Appearance } from "@/lib/
 import { forgetKeys, saveKeys } from "@/lib/crypto/key-store";
 import { createEncryption, unlockWithPassphrase, unlockWithRecoveryKey } from "@/lib/crypto/repo-crypto";
 import { GitHubClient, type RepoSummary } from "@/lib/github/client";
+import { saveToken, type StoredToken } from "@/lib/github/token-store";
+import { verifyToken } from "@/lib/github/verify-token";
 import { probeRepo, writeEncryptionHeader, type RepoProbe } from "@/lib/sync/encryption-setup";
 import { GitHubRemote } from "@/lib/sync/remote";
 import { formatDate, type VaultSettings } from "@/lib/vault/settings";
@@ -21,6 +23,7 @@ import {
 import { isIOS, useInstall } from "@/lib/install";
 import { useAuth } from "../auth/useAuth";
 import { MIN_PASSPHRASE, newPassphraseError, RecoveryKeyStep, UnlockFields, type SecretKind } from "../sync/EncryptionFields";
+import { TokenInstructions } from "../sync/TokenFields";
 import { useVault } from "../vault/useVault";
 import { useVaults } from "../vault/useVaults";
 
@@ -506,7 +509,10 @@ function AccountSection() {
   const { state, signIn, signOut } = useAuth();
   return (
     <section aria-label="GitHub account">
-      <SectionHeader title="GitHub account" description="Signing in lets repositories sync with GitHub." />
+      <SectionHeader
+        title="GitHub account"
+        description="Optional. Repositories connected with a GitHub token don't need this; signing in with a GitHub App is an alternative that needs setting up on the deployment."
+      />
       <Group>
         {state.status === "loading" && <p className="py-4 text-sm text-muted">Checking…</p>}
         {state.status === "signed_in" && (
@@ -529,11 +535,11 @@ function AccountSection() {
         )}
         {state.status === "not_configured" && (
           <Row
-            label="GitHub isn't set up yet"
-            description="Create a GitHub App for this deployment in one click, then add its details in Vercel."
+            label="GitHub App sign-in isn't set up"
+            description="Not needed to sync: connect repositories with a token in Repositories & sync. To use sign-in instead, create a GitHub App for this deployment."
           >
             <div className="flex sm:justify-end">
-              <a href="/github-setup" className="button-primary">
+              <a href="/github-setup" className="button-secondary">
                 Set up GitHub
               </a>
             </div>
@@ -703,6 +709,7 @@ function EditVault({
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
       </Field>
       {vault.kind === "github" && <SyncFields mode={syncMode} setMode={setSyncMode} idle={idle} setIdle={setIdle} />}
+      {vault.kind === "github" && vault.auth === "token" && <ReplaceToken vault={vault} />}
       {vault.kind === "github" && vault.encrypted && (
         <div className="flex items-start justify-between gap-3">
           <p className="text-xs text-muted">
@@ -739,6 +746,63 @@ function EditVault({
         </button>
       </div>
     </form>
+  );
+}
+
+/** Swaps the GitHub token a repository syncs with on this device. */
+function ReplaceToken({ vault }: { vault: GitHubVaultConfig }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const label = `${vault.owner}/${vault.repo}`;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs text-muted">
+          <span className="block text-sm font-medium text-foreground">GitHub token</span>
+          Saved in this browser only.
+        </p>
+        {!open && (
+          <button type="button" className="button-secondary shrink-0" onClick={() => setOpen(true)}>
+            Replace token
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="space-y-2">
+          <TokenInstructions repo={label} />
+          <div className="flex flex-wrap items-end gap-2">
+            <input
+              className="input min-w-0 flex-1 font-mono"
+              type="password"
+              autoComplete="off"
+              aria-label="New GitHub token"
+              placeholder="github_pat_…"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+            />
+            <button
+              type="button"
+              className="button-primary"
+              disabled={!text.trim() || busy}
+              onClick={() => {
+                setBusy(true);
+                setError(null);
+                verifyToken(text, { owner: vault.owner, repo: vault.repo })
+                  .then((t) => saveToken(vault.id, t))
+                  .then(() => window.location.reload())
+                  .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+                  .finally(() => setBusy(false));
+              }}
+            >
+              {busy ? "Checking…" : "Save token"}
+            </button>
+          </div>
+          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -815,7 +879,16 @@ function AddButtons({ onGitHub }: { onGitHub(): void }) {
 function ConnectRepoForm({ onDone }: { onDone(): void }) {
   const auth = useAuth();
   const { add } = useVaults();
-  const client = useMemo(() => new GitHubClient(auth.getToken), [auth.getToken]);
+  // A personal access token by default; the deployment's GitHub App sign-in if you're already signed in.
+  const appAvailable = auth.state.status !== "not_configured";
+  const [via, setVia] = useState<"token" | "app">(() => (auth.state.status === "signed_in" ? "app" : "token"));
+  const [patText, setPatText] = useState("");
+  const [pat, setPat] = useState<StoredToken | null>(null);
+  const [checkingPat, setCheckingPat] = useState(false);
+  const client = useMemo(
+    () => new GitHubClient(via === "token" ? async () => pat?.token ?? "" : auth.getToken),
+    [via, pat, auth.getToken],
+  );
   const [repos, setRepos] = useState<RepoSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [repoName, setRepoName] = useState("");
@@ -837,12 +910,33 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
 
   const signedIn = auth.state.status === "signed_in";
   useEffect(() => {
-    if (!signedIn) return;
+    if (via !== "app" || !signedIn) return;
     client
       .listRepos()
       .then(setRepos)
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  }, [client, signedIn]);
+  }, [client, signedIn, via]);
+
+  const checkPat = () => {
+    setCheckingPat(true);
+    setError(null);
+    verifyToken(patText)
+      .then(async (t) => {
+        const list = await new GitHubClient(async () => t.token).listUserRepos();
+        setPat(t);
+        setRepos(list);
+        if (!list.length) setError("That token can't reach any repositories yet. Give it access to your notes repository.");
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setCheckingPat(false));
+  };
+  const switchTo = (v: "token" | "app") => {
+    setVia(v);
+    setRepos(null);
+    setRepoName("");
+    setProbe(null);
+    setError(null);
+  };
 
   const repo = repos?.find((r) => r.fullName === repoName);
   useEffect(() => {
@@ -887,16 +981,19 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
     );
   }
 
-  if (!signedIn) {
+  if (via === "app" && !signedIn) {
     return (
       <section aria-label="Connect a GitHub repository" className="rounded-xl border border-border p-4 text-sm">
         <p className="mb-2">Sign in with GitHub first.</p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {auth.state.status === "signed_out" && (
             <button type="button" className="button-primary" onClick={auth.signIn}>
               Sign in with GitHub
             </button>
           )}
+          <button type="button" className="button-secondary" onClick={() => switchTo("token")}>
+            Use a token instead
+          </button>
           <button type="button" className="button-secondary" onClick={onDone}>
             Cancel
           </button>
@@ -935,17 +1032,17 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
           folder: cleanFolder,
           syncMode,
           idleSeconds: idle,
+          auth: via,
         };
-        if (!probeKind || probeKind === "plain" || (probeKind === "empty" && !encrypt)) {
-          add(config);
-          onDone();
-          return;
-        }
         setBusy(true);
         setError(null);
         void (async () => {
           try {
-            if (probe && typeof probe === "object" && probe.kind === "encrypted") {
+            if (via === "token" && pat) await saveToken(config.id, pat);
+            if (!probeKind || probeKind === "plain" || (probeKind === "empty" && !encrypt)) {
+              add(config);
+              onDone();
+            } else if (probe && typeof probe === "object" && probe.kind === "encrypted") {
               const keys =
                 secretKind === "passphrase"
                   ? await unlockWithPassphrase(probe.header, secret)
@@ -968,10 +1065,83 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
       }}
     >
       <h4 className="font-serif text-lg">Connect a GitHub repository</h4>
+      {via === "token" ? (
+        <div className="space-y-3">
+          <p className="text-sm text-muted">
+            noted-ai syncs with a GitHub token that can only reach the repositories you pick.{" "}
+            {appAvailable && (
+              <button type="button" className="underline hover:text-accent" onClick={() => switchTo("app")}>
+                Sign in with the GitHub App instead
+              </button>
+            )}
+          </p>
+          {pat ? (
+            <p className="flex items-center justify-between gap-2 text-sm">
+              <span>
+                Token for <strong>@{pat.login}</strong>
+                {pat.expiresAt ? `, expires ${new Date(pat.expiresAt).toLocaleDateString()}` : ", doesn't expire"}
+              </span>
+              <button
+                type="button"
+                className="text-xs text-muted underline hover:text-accent"
+                onClick={() => {
+                  setPat(null);
+                  setPatText("");
+                  switchTo("token");
+                }}
+              >
+                Use another token
+              </button>
+            </p>
+          ) : (
+            <>
+              <TokenInstructions />
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-sm">
+                  <span className="font-medium">GitHub token</span>
+                  <input
+                    className="input font-mono"
+                    type="password"
+                    autoComplete="off"
+                    placeholder="github_pat_…"
+                    value={patText}
+                    onChange={(e) => setPatText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (patText.trim() && !checkingPat) checkPat();
+                      }
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="button-primary"
+                  disabled={!patText.trim() || checkingPat}
+                  onClick={checkPat}
+                >
+                  {checkingPat ? "Checking…" : "Continue"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm text-muted">
+          Using the GitHub App sign-in.{" "}
+          <button type="button" className="underline hover:text-accent" onClick={() => switchTo("token")}>
+            Use a token instead
+          </button>
+        </p>
+      )}
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {(via === "app" || pat) && (
       <Field
         label="Repository"
         hint={
+          via === "token" ? (
+            "Only repositories the token can reach are listed."
+          ) : (
           <>
             Only repositories the noted-ai GitHub App is installed on are listed.{" "}
             {auth.state.status === "signed_in" && auth.state.installUrl && (
@@ -980,6 +1150,7 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
               </a>
             )}
           </>
+          )
         }
       >
         <select
@@ -998,6 +1169,7 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
           ))}
         </select>
       </Field>
+      )}
       {repo && (
         <>
           <Field label="Branch">
