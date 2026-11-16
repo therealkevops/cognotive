@@ -71,7 +71,7 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
     tags, are copied into the note
   - Starter templates (Meeting, Project, Person, Weekly review, Daily) can be added when a
     repository is created, or later from the Templates tab
-- Tabs for open files, and a side pane to read one note while writing another (the columns
+- Tabs for open files (the button at the end of the tab bar, or the command *Close all tabs*, closes them all), and a side pane to read one note while writing another (the columns
   button in the file tree, or Shift+Enter in the quick switcher)
 - Version history for repositories synced with GitHub: see how a note changed and restore an older version
 - Export a repository as a zip, and import notes from one (e.g. a zipped Obsidian vault)

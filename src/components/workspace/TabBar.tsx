@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Image as ImageIcon, LayoutDashboard, PenTool, X } from "lucide-react";
+import { FileText, Image as ImageIcon, LayoutDashboard, PenTool, X, XSquare } from "lucide-react";
 import { basename, canvasName, drawingName, extname, isCanvas, isDrawing, isImage, isMarkdown } from "@/lib/vault/paths";
 
 function label(path: string) {
@@ -11,21 +11,24 @@ function label(path: string) {
   return isMarkdown(path) ? name.slice(0, -ext.length) : name;
 }
 
-/** Open notes as tabs. Middle-click or × closes one. */
+/** Open notes as tabs. Middle-click or × closes one; the button at the end closes them all. */
 export function TabBar({
   tabs,
   active,
   onSelect,
   onClose,
+  onCloseAll,
 }: {
   tabs: string[];
   active: string | null;
   onSelect(path: string): void;
   onClose(path: string): void;
+  onCloseAll(): void;
 }) {
   if (tabs.length < 2) return null;
   return (
-    <div role="tablist" aria-label="Open notes" className="flex gap-1 overflow-x-auto px-3 pt-1.5 pb-1">
+    <div className="flex items-center pr-2">
+    <div role="tablist" aria-label="Open notes" className="flex min-w-0 flex-1 gap-1 overflow-x-auto px-3 pt-1.5 pb-1">
       {tabs.map((path) => {
         const Icon = isDrawing(path) ? PenTool : isCanvas(path) ? LayoutDashboard : isImage(path) ? ImageIcon : FileText;
         const selected = path === active;
@@ -62,6 +65,16 @@ export function TabBar({
           </div>
         );
       })}
+    </div>
+      <button
+        type="button"
+        aria-label="Close all tabs"
+        title="Close all tabs"
+        className="icon-button h-7 w-7 shrink-0"
+        onClick={onCloseAll}
+      >
+        <XSquare size={15} aria-hidden />
+      </button>
     </div>
   );
 }

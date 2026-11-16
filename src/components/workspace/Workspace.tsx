@@ -293,6 +293,11 @@ export function Workspace() {
     if (path === activePath) void vault.open(rest[Math.min(i, rest.length - 1)] ?? null);
   };
 
+  const closeAllTabs = () => {
+    setTabs([]);
+    void vault.open(null);
+  };
+
   /** Opens (or creates) the daily note for a date, from the vault's daily-note settings. */
   const openDaily = async (date = new Date()) => {
     const s = vault.settings;
@@ -961,6 +966,7 @@ export function Workspace() {
       hint: "Ctrl/Cmd+Shift+\\",
     },
     { id: "tab-close", label: "Close this tab", when: !!activePathNow },
+    { id: "tab-close-all", label: "Close all tabs", when: visibleTabs.length > 0 },
     {
       id: "delete",
       label: "Delete this file",
@@ -1006,6 +1012,7 @@ export function Workspace() {
     "toggle-left": () => setLeftCollapsed(!leftCollapsed),
     "toggle-right": () => setRightCollapsed(!rightCollapsed),
     "tab-close": () => activePathNow && closeTab(activePathNow),
+    "tab-close-all": closeAllTabs,
     delete: () => activePathNow && setDeleting(activePathNow),
     sync: sync.syncNow,
     history: () => setHistoryOpen(true),
@@ -1134,7 +1141,7 @@ export function Workspace() {
               </div>
             )}
           </header>
-          <TabBar tabs={visibleTabs} active={activePathNow} onSelect={(p) => void vault.open(p)} onClose={closeTab} />
+          <TabBar tabs={visibleTabs} active={activePathNow} onSelect={(p) => void vault.open(p)} onClose={closeTab} onCloseAll={closeAllTabs} />
           {kind === "note" && mode !== "reading" && (
             <div className="border-y border-border px-3 py-1">
               <Toolbar view={view} />

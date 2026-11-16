@@ -227,7 +227,8 @@ export function VaultProvider({
       if (!path) {
         setActive(null);
         setActiveText("");
-        writePref(`vault:${vaultId}:last`, null);
+        // "" (not null): nothing open, so a reload doesn't reopen Welcome.
+        writePref(`vault:${vaultId}:last`, "");
         return;
       }
       const file = await store.read(path);
@@ -269,9 +270,9 @@ export function VaultProvider({
       const last = readPref<string | null>(`vault:${vaultId}:last`, null);
       const notes = list.filter((e) => e.kind === "file" && isNote(e.path));
       const start =
-        notes.find((f) => f.path === last) ??
-        notes.find((f) => f.path === "Welcome.md") ??
-        notes[0];
+        last === ""
+          ? null
+          : (notes.find((f) => f.path === last) ?? notes.find((f) => f.path === "Welcome.md") ?? notes[0]);
       await open(start?.path ?? null);
       if (!cancelled) setReady(true);
     })().catch(fail);
@@ -693,9 +694,10 @@ export function VaultProvider({
       bumpIndex();
       const current = activePath.current;
       if (!current) {
-        // An empty vault just received its first notes: open one.
-        const first = list.find((e) => e.kind === "file" && isNote(e.path));
-        if (first) await open(first.path);
+        // An empty vault just received its first notes: open one. (If notes were
+        // already there, nothing is open because the user closed every tab.)
+        const notes = list.filter((e) => e.kind === "file" && isNote(e.path));
+        if (notes.length > 0 && notes.every((n) => paths.includes(n.path))) await open(notes[0].path);
         return;
       }
       if (!paths.includes(current)) return;

@@ -83,6 +83,20 @@ test("tabs keep opened notes, and the side pane shows another note", async ({ pa
   await expect(title(page)).toHaveValue("Welcome");
 });
 
+test("Close all tabs closes every open file", async ({ page }) => {
+  await openApp(page);
+  await tree(page).getByRole("treeitem", { name: "Linking notes" }).click();
+  const tabs = page.getByRole("tablist", { name: "Open notes" });
+  await expect(tabs.getByRole("tab")).toHaveCount(2);
+  await page.getByRole("button", { name: "Close all tabs" }).click();
+  await expect(tabs).toBeHidden();
+  await expect(title(page)).toBeHidden();
+  // They stay closed after a reload.
+  await page.reload();
+  await expect(tree(page)).toBeVisible();
+  await expect(title(page)).toBeHidden();
+});
+
 test("appearance settings apply and persist", async ({ page }) => {
   await openApp(page);
   await page.getByRole("button", { name: "Settings" }).click();
