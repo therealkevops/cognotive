@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const editor = (page: Page) => page.locator(".cm-content");
 const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
-const tree = (page: Page) => page.getByRole("tree", { name: "Vault files" });
+const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
 const card = (page: Page) => page.getByRole("dialog", { name: "Link preview" });
 
 async function openApp(page: Page) {

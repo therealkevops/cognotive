@@ -702,7 +702,7 @@ export function Workspace() {
           title="Broken links, orphans, dead ends and hubs"
         >
           <Activity size={15} aria-hidden />
-          Vault health
+          Repository health
         </button>
       </div>
       <div>
@@ -745,7 +745,7 @@ export function Workspace() {
       <RailButton label="Today" onClick={() => void openDaily()}>
         <CalendarDays size={18} aria-hidden />
       </RailButton>
-      <RailButton label="Vault health" onClick={() => setHealthOpen(true)}>
+      <RailButton label="Repository health" onClick={() => setHealthOpen(true)}>
         <Activity size={18} aria-hidden />
       </RailButton>
       <div className="mt-auto">
@@ -882,7 +882,7 @@ export function Workspace() {
       label: "Search all notes",
       hint: "Ctrl/Cmd+Shift+F",
     },
-    { id: "health", label: "Open vault health" },
+    { id: "health", label: "Open repository health" },
     { id: "map-canvas", label: "Map this note as a canvas", when: kind === "note" },
     { id: "mode-live", label: "Live preview", when: kind === "note" },
     { id: "mode-source", label: "Source mode", when: kind === "note" },
@@ -911,7 +911,7 @@ export function Workspace() {
       label: "Show version history of this file",
       when: !!sync.history && !!activePathNow,
     },
-    { id: "export", label: "Export vault as zip" },
+    { id: "export", label: "Export repository as zip" },
     { id: "import", label: "Import notes from a zip…" },
     { id: "settings", label: "Open settings" },
     { id: "install", label: "Install noted-ai as an app" },
@@ -1087,7 +1087,7 @@ export function Workspace() {
               }}
             >
               {!vault.ready ? (
-                <p className="p-8 text-muted">Loading vault…</p>
+                <p className="p-8 text-muted">Loading repository…</p>
               ) : !vault.active ? (
                 <EmptyState onCreate={() => void vault.createNote()} onFind={() => setSwitcherOpen(true)} />
               ) : kind === "canvas" ? (
@@ -1195,7 +1195,7 @@ export function Workspace() {
           title="Insert template"
           placeholder="Choose a template…"
           items={templates.map((p) => ({ id: p, label: noteTitle(p), hint: dirname(p) }))}
-          empty={`No templates yet. Add notes to the “${vault.settings.templateFolder}” folder (Settings → This vault).`}
+          empty={`No templates yet. Add notes to the “${vault.settings.templateFolder}” folder (Settings → This repository).`}
           onPick={(item) => insertTemplate(item.id)}
           onClose={() => setTemplatesOpen(false)}
         />

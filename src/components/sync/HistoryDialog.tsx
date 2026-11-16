@@ -97,7 +97,7 @@ export function HistoryDialog({ path, onClose }: { path: string; onClose(): void
           </button>
         </div>
         {!history ? (
-          <p className="p-6 text-sm text-muted">Version history is available for vaults stored in GitHub.</p>
+          <p className="p-6 text-sm text-muted">Version history is available for repositories synced with GitHub.</p>
         ) : error ? (
           <p className="p-6 text-sm text-red-600 dark:text-red-400">{error}</p>
         ) : !commits ? (

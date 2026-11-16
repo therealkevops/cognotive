@@ -42,7 +42,7 @@ export function SyncButton() {
     case "signed_out":
       icon = <LogIn size={16} aria-hidden />;
       label = "Sign in to sync";
-      title = "Sign in with GitHub to sync this vault. Your edits are kept in this browser meanwhile.";
+      title = "Sign in with GitHub to sync this repository. Your edits are kept in this browser meanwhile.";
       tone = "text-accent";
       onClick = auth.signIn;
       break;

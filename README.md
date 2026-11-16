@@ -1,11 +1,12 @@
 # noted-ai
 
-Markdown notes with wikilinks, a knowledge graph, Excalidraw drawings and an LLM that can
-explore them. Notes are stored in a GitHub repository you choose (or locally in the browser).
+Markdown notes with links between them, Excalidraw drawings, canvases and (later) an LLM that
+can explore them. Each **repository** of notes lives in the browser, and can sync with a GitHub
+repository you choose.
 
 See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 
-**Status:** phases 1–4 and 6 are done; phase 5 (the LLM) is postponed. Vaults live in this browser or in GitHub repositories.
+**Status:** phases 1–4 and 6 are done; phase 5 (the LLM) is postponed. Repositories live in this browser and can sync with GitHub.
 
 ### What works
 - File tree: create, rename (double-click, F2 or the pencil), delete, and drag notes or
@@ -20,20 +21,26 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 - Links between notes, as in Obsidian:
   - `[[Note]]`, `[[Note#Heading]]`, `[[Note|text]]`, and markdown links to `.md` files
   - typing `[[` suggests notes, aliases and (after `#`) headings; hovering a link previews the note
-  - click a link in live preview (or Ctrl/Cmd-click anywhere) to follow it; links to missing
-    notes are dashed and create the note when followed
+  - in live preview a click edits a link; the ↗ after it, Alt+Enter, or Ctrl/Cmd-click follows
+    it (Settings → Editor can make a click follow). Ctrl/Cmd-click opens a new tab,
+    Ctrl/Cmd+Alt-click the side pane; Back and Forward retrace your steps
+  - links to missing notes are dashed; opening one asks where to create the note
+  - `[[Note#^` suggests blocks and adds the `^id` for you; links can be written as markdown
+    links instead (Settings → This repository) so they work on github.com
   - `![[Note]]` and `![[Note#Heading]]` embed another note in the reading view
   - renaming or moving a note rewrites every link to it
-- Links panel: backlinks with context, unlinked mentions (with a one-click **Link** button),
-  and outgoing links
+- Connections panel: backlinks with context, outgoing links, notes that share links with this
+  one, notes with the same tags, canvas relations, and unlinked mentions (with a one-click
+  **Link** button). **Map as canvas** lays a note and its connections out on a canvas
 - Tags (`#tag`, `#nested/tag`, or `tags:` in properties) with a Tags pane; search `tag:name`
 - Properties (YAML frontmatter) shown at the top of the reading view; `aliases:` count as names
-- Graph view (Ctrl/Cmd+G) of the whole vault with highlight, tag filter, unlinked notes and
-  not-yet-created notes; a local graph of the open note in the right panel
+- Repository health: broken links, orphans, dead ends, hubs and stale hubs
+- Canvases (`.canvas`, the JSON Canvas format Obsidian uses): cards for text, notes, images,
+  drawings and web links, groups, and labelled arrows, which become typed relations
 - Excalidraw drawings (`.excalidraw` files): create with the pen button in the file tree, edit
   full-screen, embed with `![[Drawing.excalidraw]]` (rendered as SVG, click to open). Element
   links like `[[Note]]` and links in drawing text count as links, so drawings appear in
-  backlinks and as squares in the graph; drawing text is searchable
+  backlinks; drawing text is searchable
 - Attachments: paste or drop images into a note (saved to `attachments/` and embedded as
   `![[Pasted image ….png]]`), add files with the upload button or by dropping them on a folder,
   and open images, PDFs, audio and video. `![[pic.png|300]]` sets an image's width
@@ -44,16 +51,18 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   `{{date}}`, `{{time}}` and `{{date:FORMAT}}`, inserted from the palette
 - Tabs for open files, and a side pane to read one note while writing another (the columns
   button in the file tree, or Shift+Enter in the quick switcher)
-- Version history for GitHub vaults: see how a note changed and restore an older version
-- Export a vault as a zip, and import notes from one (e.g. a zipped Obsidian vault)
-- Appearance settings per browser (theme, accent colour, text size, line width), and vault
+- Version history for repositories synced with GitHub: see how a note changed and restore an older version
+- Export a repository as a zip, and import notes from one (e.g. a zipped Obsidian vault)
+- Appearance settings per browser (theme, accent colour, text size, line width), and repository
   settings kept in `.noted/settings.json` (attachment folder, daily notes, templates, SVG
   copies of drawings)
 - Drawings also open from the Obsidian Excalidraw plugin's `.excalidraw.md` files; Excalidraw's
   fonts are served by the app itself, not a CDN
-- Installable as an app (desktop or phone) that opens offline; notes are kept in the browser
-- Several vaults, with a switcher at the top of the sidebar
-- GitHub vaults: sign in with GitHub, pick a repository, branch and optional subfolder.
+- Installable as an app (desktop or phone) that opens offline, with shortcuts on its icon;
+  notes are kept in the browser
+- Several repositories, with a switcher at the top of the sidebar; both sidebars collapse to
+  icon rails
+- Sync with GitHub: sign in with GitHub, pick a GitHub repository, branch and optional subfolder.
   Notes sync both ways; see [How sync works](#how-sync-works)
 
 ## Develop
@@ -94,7 +103,7 @@ later phases keep server functions to GitHub login and a thin Claude proxy. See
 
 ## Set up GitHub storage
 
-GitHub vaults need a **GitHub App**, which is how the app signs you in and gets access to
+Syncing with GitHub needs a **GitHub App**, which is how the app signs you in and gets access to
 only the repositories you choose. One-time setup:
 
 1. **Create the app** at <https://github.com/settings/apps/new>:
@@ -126,7 +135,7 @@ only the repositories you choose. One-time setup:
 5. **Redeploy**, open the app, go to **Settings → Connect a GitHub repository**.
 
 Sign-in works on the URLs listed as callback URLs. Vercel preview deployments have their own
-URLs, so sign-in on a preview needs that URL added too; local vaults work everywhere.
+URLs, so sign-in on a preview needs that URL added too; local repositories work everywhere.
 
 ### How sync works
 
@@ -135,7 +144,7 @@ URLs, so sign-in on a preview needs that URL added too; local vaults work everyw
   encrypted httpOnly cookie and hand the browser short-lived access tokens.
 - Edits are saved in the browser first, so the app works offline. **Automatic** sync commits
   30 seconds (configurable) after you stop typing, when you leave the tab, and when you switch
-  vaults; it also checks GitHub for changes when you come back to the tab and every 5 minutes.
+  repositories; it also checks GitHub for changes when you come back to the tab and every 5 minutes.
   **Manual** sync commits only when you press the sync button.
 - All pending edits go up as one commit, e.g. `noted-ai: update Groceries, Plan`.
 - Changes from elsewhere (Obsidian, GitHub's editor, another device) come down on the next sync.
@@ -152,9 +161,9 @@ URLs, so sign-in on a preview needs that URL added too; local vaults work everyw
 
 ```
 src/app/            routes (App Router); src/app/api/auth/* is GitHub sign-in
-src/components/     React components (workspace/ = the editor UI, vault/ = vault state)
+src/components/     React components (workspace/ = the editor UI, vault/ = repository state)
 src/lib/            framework-free logic with unit tests alongside:
-  vault/            VaultStore interface, LocalStore (IndexedDB), paths, folder tree
+  vault/            repository storage: VaultStore interface, LocalStore (IndexedDB), paths, folder tree
   editor/           CodeMirror setup, formatting commands, live preview
   markdown/         reading-view renderer (unified/remark/rehype), outline
   search/           keyword index (MiniSearch)

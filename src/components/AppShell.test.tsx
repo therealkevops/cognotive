@@ -9,7 +9,7 @@ describe("AppShell", () => {
         <p>editor</p>
       </AppShell>,
     );
-    expect(screen.getByRole("complementary", { name: "Vault" })).toHaveTextContent("files");
+    expect(screen.getByRole("complementary", { name: "Repository" })).toHaveTextContent("files");
     expect(screen.getByRole("main")).toHaveTextContent("editor");
     expect(screen.getByRole("complementary", { name: "Context" })).toHaveTextContent("outline");
   });
@@ -29,7 +29,7 @@ describe("AppShell rails", () => {
         <p>editor</p>
       </AppShell>,
     );
-    expect(screen.getByRole("navigation", { name: "Vault rail" })).toHaveTextContent("left icons");
+    expect(screen.getByRole("navigation", { name: "Repository rail" })).toHaveTextContent("left icons");
     expect(screen.getByRole("navigation", { name: "Context rail" })).toHaveTextContent("right icons");
     expect(screen.queryByRole("complementary", { name: "Context" })).toBeNull();
   });

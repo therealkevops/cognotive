@@ -734,7 +734,7 @@ function FileCard({ id, data, selected }: NodeProps<CardNode>) {
       </button>
       <div className="min-h-0 flex-1">
         {!exists ? (
-          <p className="p-3 text-sm text-muted">“{c.file}” isn&apos;t in this vault.</p>
+          <p className="p-3 text-sm text-muted">“{c.file}” isn&apos;t in this repository.</p>
         ) : picture ? (
           url && (
             // eslint-disable-next-line @next/next/no-img-element -- object URL of a vault file

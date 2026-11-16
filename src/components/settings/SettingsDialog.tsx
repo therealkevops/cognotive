@@ -24,8 +24,8 @@ export type SettingsSection = "appearance" | "editor" | "vault" | "vaults" | "ac
 const SECTIONS: Array<{ id: SettingsSection; label: string }> = [
   { id: "appearance", label: "Appearance" },
   { id: "editor", label: "Editor" },
-  { id: "vault", label: "This vault" },
-  { id: "vaults", label: "Vaults & sync" },
+  { id: "vault", label: "This repository" },
+  { id: "vaults", label: "Repositories & sync" },
   { id: "account", label: "GitHub account" },
   { id: "app", label: "Install app" },
 ];
@@ -409,12 +409,12 @@ function ThisVaultSection() {
     newNoteFolder: useId(),
   };
   return (
-    <section aria-label="This vault">
+    <section aria-label="This repository">
       <SectionHeader
-        title="This vault"
+        title="This repository"
         description={
           <>
-            Saved in the vault at <code className="text-[0.8em]">.noted/settings.json</code>, so they sync with it.
+            Saved in the repository at <code className="text-[0.8em]">.noted/settings.json</code>, so they sync with it.
           </>
         }
       />
@@ -442,7 +442,7 @@ function ThisVaultSection() {
             onChange={(e) => save({ newNoteLocation: e.target.value as VaultSettings["newNoteLocation"] })}
           >
             <option value="current">The linking note&apos;s folder</option>
-            <option value="root">The vault root</option>
+            <option value="root">The repository root</option>
             <option value="folder">A folder…</option>
           </select>
         </Row>
@@ -501,7 +501,7 @@ function AccountSection() {
   const { state, signIn, signOut } = useAuth();
   return (
     <section aria-label="GitHub account">
-      <SectionHeader title="GitHub account" description="Signing in lets vaults live in GitHub repositories." />
+      <SectionHeader title="GitHub account" description="Signing in lets repositories sync with GitHub." />
       <Group>
         {state.status === "loading" && <p className="py-4 text-sm text-muted">Checking…</p>}
         {state.status === "signed_in" && (
@@ -514,7 +514,7 @@ function AccountSection() {
           </Row>
         )}
         {state.status === "signed_out" && (
-          <Row label="Not signed in" description="Sign in to keep vaults in GitHub repositories.">
+          <Row label="Not signed in" description="Sign in to sync repositories with GitHub.">
             <div className="flex sm:justify-end">
               <button type="button" className="button-primary" onClick={signIn}>
                 Sign in with GitHub
@@ -592,7 +592,7 @@ function VaultsSection() {
   const [adding, setAdding] = useState(false);
   return (
     <>
-      <SectionHeader title="Vaults & sync" description="Each vault is a separate set of notes, in this browser or a GitHub repository." />
+      <SectionHeader title="Repositories & sync" description="Each repository is a separate set of notes, kept in this browser or synced with GitHub." />
       <VaultList />
       <div className="mt-4">
         {adding ? <ConnectRepoForm onDone={() => setAdding(false)} /> : <AddButtons onGitHub={() => setAdding(true)} />}
@@ -605,7 +605,7 @@ function VaultList() {
   const { vaults, active, switchTo, remove, update } = useVaults();
   const [editing, setEditing] = useState<string | null>(null);
   return (
-    <section aria-label="Vaults">
+    <section aria-label="Repositories">
       <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
         {vaults.map((v) => (
           <li key={v.id} className="px-4 py-3">
@@ -697,7 +697,7 @@ function EditVault({
           type="button"
           className="rounded-lg px-2 text-sm text-red-700 hover:bg-red-500/10 disabled:opacity-40 dark:text-red-400"
           disabled={!canRemove}
-          title={canRemove ? undefined : "Keep at least one vault"}
+          title={canRemove ? undefined : "Keep at least one repository"}
           onClick={onRemove}
         >
           Remove from this browser
@@ -762,7 +762,7 @@ function Field({ label, children, hint }: { label: string; children: React.React
 function AddButtons({ onGitHub }: { onGitHub(): void }) {
   const { add } = useVaults();
   return (
-    <section aria-label="Add a vault" className="flex flex-wrap gap-2">
+    <section aria-label="Add a repository" className="flex flex-wrap gap-2">
       <button type="button" className="button-primary" onClick={onGitHub}>
         Connect a GitHub repository
       </button>
@@ -770,11 +770,11 @@ function AddButtons({ onGitHub }: { onGitHub(): void }) {
         type="button"
         className="button-secondary"
         onClick={() => {
-          const name = window.prompt("Name for the new vault", "New vault");
+          const name = window.prompt("Name for the new repository", "New repository");
           if (name?.trim()) add({ id: newVaultId("local"), name: name.trim(), kind: "local" });
         }}
       >
-        New local vault
+        New local repository
       </button>
     </section>
   );
@@ -839,7 +839,7 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
   let cleanFolder = "";
   try {
     cleanFolder = normalizePath(folder);
-    if (cleanFolder.split("/").some((s) => s.startsWith("."))) folderError = "Hidden folders can't hold a vault.";
+    if (cleanFolder.split("/").some((s) => s.startsWith("."))) folderError = "Hidden folders can't hold a repository.";
   } catch {
     folderError = 'The folder can\'t contain "..".';
   }
@@ -908,7 +908,7 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
               ))}
             </select>
           </Field>
-          <Field label="Vault folder" hint={folderError ?? "Leave empty to use the whole repository, or name a subfolder such as notes."}>
+          <Field label="Folder in the GitHub repository" hint={folderError ?? "Leave empty to use the whole GitHub repository, or name a subfolder such as notes."}>
             <input className="input" value={folder} placeholder="(whole repository)" onChange={(e) => setFolder(e.target.value)} />
           </Field>
           <Field label="Name">

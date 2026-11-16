@@ -233,7 +233,7 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
                 type="button"
                 className="drawing-tool"
                 aria-label="Insert image or drawing"
-                title="Insert an image or drawing from the vault"
+                title="Insert an image or drawing from the repository"
                 onClick={() => setPicker("picture")}
               >
                 <ImagePlus size={16} aria-hidden />
@@ -294,7 +294,7 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
         <Picker
           title="Insert image or drawing"
           placeholder="Insert which image or drawing?"
-          empty="No images or other drawings in this vault yet."
+          empty="No images or other drawings in this repository yet."
           items={vault.pictures().map((p) => ({ id: p.path, label: p.title, hint: p.folder }))}
           onPick={(item) => void insertPicture(item.id)}
           onClose={() => setPicker(null)}

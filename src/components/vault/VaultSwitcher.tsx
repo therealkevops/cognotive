@@ -31,7 +31,7 @@ export function VaultSwitcher({ onManage }: { onManage(): void }) {
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Vault: ${active.name}. Switch vault`}
+        aria-label={`Repository: ${active.name}. Switch repository`}
         className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left font-serif text-[1.0625rem] hover:bg-foreground/[0.05]"
         onClick={() => setOpen((o) => !o)}
       >
@@ -42,7 +42,7 @@ export function VaultSwitcher({ onManage }: { onManage(): void }) {
       {open && (
         <div
           role="menu"
-          aria-label="Vaults"
+          aria-label="Repositories"
           className="menu-panel absolute inset-x-0 top-full z-20 mt-1 overflow-hidden p-1"
         >
           {vaults.map((v) => (
@@ -73,7 +73,7 @@ export function VaultSwitcher({ onManage }: { onManage(): void }) {
             }}
           >
             <Settings size={14} className="shrink-0 text-muted" aria-hidden />
-            Manage vaults…
+            Manage repositories…
           </button>
         </div>
       )}

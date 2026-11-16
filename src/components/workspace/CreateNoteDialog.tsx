@@ -6,7 +6,7 @@ import { Modal } from "./Modal";
 
 /**
  * Asks before creating the note a link points to, with the name and folder
- * filled in (from the link and the vault's "new notes from links" setting).
+ * filled in (from the link and the repository's "new notes from links" setting).
  */
 export function CreateNoteDialog({
   name: initialName,
@@ -48,7 +48,7 @@ export function CreateNoteDialog({
         <label className="block text-sm">
           <span className="mb-1 block font-medium">Folder</span>
           <select className="input w-full" value={folder} onChange={(e) => setFolder(e.target.value)}>
-            <option value="">Vault root</option>
+            <option value="">Repository root</option>
             {folders.map((f) => (
               <option key={f} value={f}>
                 {f}

@@ -2,7 +2,7 @@
 export const WELCOME_NOTES: Record<string, string> = {
   "Welcome.md": `# Welcome to noted-ai
 
-This vault lives in your browser. To keep notes in a GitHub repository instead, open
+This repository lives in your browser. To sync your notes with GitHub instead, open
 **Settings** at the bottom of the sidebar. Next, read [[Linking notes]].
 
 ## Formatting
@@ -62,7 +62,7 @@ like [[Ideas]], are shown dashed: open one to create the note.
 - Back and forward (the arrows by the title) retrace the notes you've followed.
 - Tag notes with #guide or nested tags like #area/home.
 - The **Connections** panel on the right shows links in and out, notes that share links, and unlinked mentions. **Map as canvas** lays them out on a board.
-- **Vault health** (bottom of the sidebar) lists broken links, orphans and hubs.
+- **Repository health** (bottom of the sidebar) lists broken links, orphans and hubs.
 - Renaming a note updates every link to it.
 
 Embed part of another note with \`![[Note#Heading]]\`:

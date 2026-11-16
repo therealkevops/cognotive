@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { FakeGitHub } from "./fake-github";
 
 const editor = (page: Page) => page.locator(".cm-content");
-const tree = (page: Page) => page.getByRole("tree", { name: "Vault files" });
+const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
 const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
 
 /** A small red PNG, made in the page so it is a real image. */
@@ -97,7 +97,7 @@ test("attachments sync to GitHub as binary files", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Settings" }).click();
   const dialog = page.getByRole("dialog", { name: "Settings" });
-  await dialog.getByRole("button", { name: "Vaults & sync" }).click();
+  await dialog.getByRole("button", { name: "Repositories & sync" }).click();
   await dialog.getByRole("button", { name: "Connect a GitHub repository" }).click();
   await dialog.getByRole("combobox", { name: /^Repository/ }).selectOption("me/notes");
   await dialog.getByRole("button", { name: "Connect and open" }).click();

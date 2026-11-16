@@ -150,7 +150,7 @@ export function FileTree() {
       </div>
       <div
         role="tree"
-        aria-label="Vault files"
+        aria-label="Repository files"
         className={`-mx-2 min-h-24 flex-1 overflow-y-auto rounded px-2 pb-8 ${dropTarget === "" ? "bg-accent/10" : ""}`}
         {...dropProps("")}
       >

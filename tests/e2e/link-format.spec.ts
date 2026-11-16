@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const editor = (page: Page) => page.locator(".cm-content");
 const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
-const tree = (page: Page) => page.getByRole("tree", { name: "Vault files" });
+const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
 const selected = (page: Page) => page.locator(".cm-tooltip-autocomplete [aria-selected=true]");
 
 async function openApp(page: Page) {
@@ -20,8 +20,8 @@ async function palette(page: Page, command: string) {
 
 async function useMarkdownLinks(page: Page) {
   await page.getByRole("button", { name: "Settings" }).click();
-  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "This vault" }).click();
-  const section = page.getByRole("region", { name: "This vault" });
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "This repository" }).click();
+  const section = page.getByRole("region", { name: "This repository" });
   // Settings save as soon as they change.
   await section.getByLabel("New links use").selectOption("markdown");
   await expect(section.getByLabel("New links use")).toHaveValue("markdown");

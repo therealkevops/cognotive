@@ -21,7 +21,7 @@ export type AuthState =
 
 export class AuthRequiredError extends Error {
   constructor() {
-    super("Sign in with GitHub to sync this vault.");
+    super("Sign in with GitHub to sync this repository.");
   }
 }
 

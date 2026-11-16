@@ -5,7 +5,7 @@ import { FakeGitHub } from "./fake-github";
 
 const editor = (page: Page) => page.locator(".cm-content");
 const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
-const tree = (page: Page) => page.getByRole("tree", { name: "Vault files" });
+const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
 
 async function openApp(page: Page) {
   await page.goto("/");
@@ -54,10 +54,10 @@ test("zip import brings in templates, which fill in when inserted", async ({ pag
   await expect(editor(page)).toContainText(`# UntitledDate: ${new Date().getFullYear()}`);
 });
 
-test("export downloads the vault as a zip", async ({ page }) => {
+test("export downloads the repository as a zip", async ({ page }) => {
   await openApp(page);
   const download = page.waitForEvent("download");
-  await palette(page, "export vault");
+  await palette(page, "export repository");
   const file = await (await download).path();
   const entries = Object.keys(unzipSync(new Uint8Array(readFileSync(file))));
   expect(entries).toEqual(expect.arrayContaining(["Welcome.md", "Linking notes.md"]));
@@ -114,7 +114,7 @@ test("version history shows past versions and restores one", async ({ page }) =>
   await page.goto("/");
   await page.getByRole("button", { name: "Settings" }).click();
   const dialog = page.getByRole("dialog", { name: "Settings" });
-  await dialog.getByRole("button", { name: "Vaults & sync" }).click();
+  await dialog.getByRole("button", { name: "Repositories & sync" }).click();
   await dialog.getByRole("button", { name: "Connect a GitHub repository" }).click();
   await dialog.getByRole("combobox", { name: /^Repository/ }).selectOption("me/notes");
   await dialog.getByRole("button", { name: "Connect and open" }).click();

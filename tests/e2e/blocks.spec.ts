@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const editor = (page: Page) => page.locator(".cm-content");
 const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
-const tree = (page: Page) => page.getByRole("tree", { name: "Vault files" });
+const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
 const selected = (page: Page) => page.locator(".cm-tooltip-autocomplete [aria-selected=true]");
 
 async function newNote(page: Page) {
@@ -23,8 +23,8 @@ async function pick(page: Page, text: string) {
 
 test("[[Note#^ suggests blocks and gives the chosen one an id", async ({ page }) => {
   await newNote(page);
-  await page.keyboard.type("See [[Welcome#^vault lives");
-  await pick(page, "This vault lives in your browser");
+  await page.keyboard.type("See [[Welcome#^repository lives");
+  await pick(page, "This repository lives in your browser");
   const text = (await editor(page).innerText()).trim();
   const id = /\[\[Welcome#\^([a-z0-9]{6})\]\]/.exec(text)?.[1];
   expect(id).toBeTruthy();

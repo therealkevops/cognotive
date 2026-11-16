@@ -8,7 +8,7 @@ async function connectRepo(page: Page) {
   const dialog = page.getByRole("dialog", { name: "Settings" });
   await dialog.getByRole("button", { name: "GitHub account" }).click();
   await expect(dialog.getByText("Signed in as @tester")).toBeVisible();
-  await dialog.getByRole("button", { name: "Vaults & sync" }).click();
+  await dialog.getByRole("button", { name: "Repositories & sync" }).click();
   await dialog.getByRole("button", { name: "Connect a GitHub repository" }).click();
   await dialog.getByRole("combobox", { name: /^Repository/ }).selectOption("me/notes");
   await dialog.getByRole("button", { name: "Connect and open" }).click();
@@ -26,7 +26,7 @@ test("connects a repository, clones it, and syncs edits both ways", async ({ pag
   await connectRepo(page);
 
   // Cloned: the repo's notes appear; hidden files don't.
-  const tree = page.getByRole("tree", { name: "Vault files" });
+  const tree = page.getByRole("tree", { name: "Repository files" });
   await expect(tree.getByRole("treeitem", { name: "Hello" })).toBeVisible();
   await expect(tree.getByRole("treeitem", { name: "Projects" })).toBeVisible();
   await expect(tree.getByRole("treeitem", { name: "Welcome" })).toBeHidden();
@@ -50,21 +50,21 @@ test("connects a repository, clones it, and syncs edits both ways", async ({ pag
   await expect(editor).toContainText("And edited on GitHub");
 
   // The vault list now has both vaults; switching back shows the local one.
-  await page.getByRole("button", { name: /Switch vault/ }).click();
+  await page.getByRole("button", { name: /Switch repository/ }).click();
   await page.getByRole("menuitemradio", { name: "My notes" }).click();
   await expect(tree.getByRole("treeitem", { name: "Welcome" })).toBeVisible();
 });
 
-test("a GitHub vault asks to sign in when the session has ended", async ({ page }) => {
+test("a GitHub repository asks to sign in when the session has ended", async ({ page }) => {
   const github = new FakeGitHub({ "Hello.md": "hi" });
   await github.install(page);
   await connectRepo(page);
-  await expect(page.getByRole("tree", { name: "Vault files" }).getByRole("treeitem", { name: "Hello" })).toBeVisible();
+  await expect(page.getByRole("tree", { name: "Repository files" }).getByRole("treeitem", { name: "Hello" })).toBeVisible();
 
   await page.unroute("**/api/auth/token");
   await page.route("**/api/auth/token", (route) => route.fulfill({ status: 401, json: { error: "signed_out" } }));
   await page.reload();
   await expect(page.getByRole("button", { name: /^Sign in to sync/ })).toBeVisible();
   // The cloned notes are still readable offline from the browser copy.
-  await expect(page.getByRole("tree", { name: "Vault files" }).getByRole("treeitem", { name: "Hello" })).toBeVisible();
+  await expect(page.getByRole("tree", { name: "Repository files" }).getByRole("treeitem", { name: "Hello" })).toBeVisible();
 });

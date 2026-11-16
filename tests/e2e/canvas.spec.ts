@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
-const tree = (page: Page) => page.getByRole("tree", { name: "Vault files" });
+const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
 const board = (page: Page) => page.getByTestId("canvas");
 const card = (page: Page, text: string) => board(page).locator(".react-flow__node", { hasText: text });
 

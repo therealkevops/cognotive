@@ -9,6 +9,10 @@ Semantic (embedding) search is deliberately deferred; see [Later](#later-semanti
 
 ---
 
+
+> **Terminology:** the app calls a set of notes a **repository** (Obsidian's "vault"). This
+> document and the code still say "vault" in places; they mean the same thing.
+
 ## 1. Guiding constraints
 
 ### Vercel Hobby limits that shape the design

@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const editor = (page: Page) => page.locator(".cm-content");
 const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
-const tree = (page: Page) => page.getByRole("tree", { name: "Vault files" });
+const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
 
 async function openApp(page: Page) {
   await page.goto("/");
@@ -42,10 +42,10 @@ test("cancelling the prompt creates nothing", async ({ page }) => {
   await expect(tree(page).getByRole("treeitem", { name: "Scratch" })).toHaveCount(0);
 });
 
-test("Vault health lists broken links, orphans and hubs, and creates missing notes", async ({ page }) => {
+test("Repository health lists broken links, orphans and hubs, and creates missing notes", async ({ page }) => {
   await openApp(page);
-  await page.getByRole("button", { name: "Vault health" }).click();
-  const dialog = page.getByRole("dialog", { name: "Vault health" });
+  await page.getByRole("button", { name: "Repository health" }).click();
+  const dialog = page.getByRole("dialog", { name: "Repository health" });
   const list = dialog.getByRole("tabpanel");
   await expect(list).toContainText("Ideas");
   await expect(list).toContainText("Linked from Linking notes");
@@ -59,7 +59,7 @@ test("Vault health lists broken links, orphans and hubs, and creates missing not
   await expect(title(page)).toHaveValue("Ideas");
 
   // The new note is linked from Linking notes, but doesn't link anywhere itself: a dead end.
-  await page.getByRole("button", { name: "Vault health" }).click();
+  await page.getByRole("button", { name: "Repository health" }).click();
   await dialog.getByRole("tab", { name: /Dead ends/ }).click();
   await expect(dialog.getByRole("tabpanel", { name: "Dead ends" }).getByRole("button", { name: "Ideas" })).toBeVisible();
   await dialog.getByRole("tabpanel", { name: "Dead ends" }).getByRole("button", { name: "Ideas" }).click();

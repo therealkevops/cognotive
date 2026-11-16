@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
-const tree = (page: Page) => page.getByRole("tree", { name: "Vault files" });
+const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
 
 async function newDrawing(page: Page) {
   await page.goto("/");
@@ -53,7 +53,7 @@ test("linking a drawing to a note that doesn't exist yet says so", async ({ page
   await expect(page.getByTestId("drawing-notice")).toContainText("a new note");
 });
 
-test("the drawing toolbar links to notes and inserts vault images", async ({ page }) => {
+test("the drawing toolbar links to notes and inserts repository images", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator(".cm-content")).toBeVisible();
   await page.getByLabel("Choose files to add").setInputFiles({

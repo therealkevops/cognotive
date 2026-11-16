@@ -57,7 +57,7 @@ export function VaultsProvider({ children }: { children: ReactNode }) {
       },
       async remove(id) {
         const rest = vaults.filter((v) => v.id !== id);
-        if (rest.length === 0) throw new Error("Keep at least one vault.");
+        if (rest.length === 0) throw new Error("Keep at least one repository.");
         if (active.id === id) switchTo(rest[0].id);
         commit(rest);
         await deleteVaultData(id);

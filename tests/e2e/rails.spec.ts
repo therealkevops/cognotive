@@ -9,11 +9,11 @@ test("both sidebars collapse to icon rails and come back", async ({ page }) => {
   // Collapse both: the editor gets the room.
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await page.getByRole("button", { name: "Collapse panel" }).click();
-  const leftRail = page.getByRole("navigation", { name: "Vault rail" });
+  const leftRail = page.getByRole("navigation", { name: "Repository rail" });
   const rightRail = page.getByRole("navigation", { name: "Context rail" });
   await expect(leftRail).toBeVisible();
   await expect(rightRail).toBeVisible();
-  await expect(page.getByRole("tree", { name: "Vault files" })).toBeHidden();
+  await expect(page.getByRole("tree", { name: "Repository files" })).toBeHidden();
   await expect.poll(async () => (await main.boundingBox())!.width).toBeGreaterThan(wide + 400);
 
   // It's remembered.
@@ -34,5 +34,5 @@ test("both sidebars collapse to icon rails and come back", async ({ page }) => {
   await page.keyboard.press("ControlOrMeta+Shift+Backslash");
   await expect(rightRail).toBeVisible();
   await page.keyboard.press("ControlOrMeta+Backslash");
-  await expect(page.getByRole("tree", { name: "Vault files" }).or(page.getByRole("tab", { name: "Search" }))).toBeVisible();
+  await expect(page.getByRole("tree", { name: "Repository files" }).or(page.getByRole("tab", { name: "Search" }))).toBeVisible();
 });

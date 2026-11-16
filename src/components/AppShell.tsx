@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 const RAIL = "3.25rem";
 
 /**
- * The three-pane layout: vault sidebar on the left, editor in the middle, and a
+ * The three-pane layout: repository sidebar on the left, editor in the middle, and a
  * context panel on the right. Either side can collapse to a slim rail of icons
  * (from md / lg up). Below md the sidebar is an overlay opened from the header.
  */
@@ -44,7 +44,7 @@ export function AppShell({
         <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={onCloseSidebar} aria-hidden />
       )}
       <aside
-        aria-label="Vault"
+        aria-label="Repository"
         className={`${
           sidebarOpen ? "fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] shadow-xl" : "hidden"
         } min-h-0 min-w-0 flex-col border-r border-border bg-sidebar px-2.5 py-3 md:static md:z-auto md:w-auto md:max-w-none md:shadow-none ${
@@ -55,7 +55,7 @@ export function AppShell({
       </aside>
       {leftCollapsed && (
         <nav
-          aria-label="Vault rail"
+          aria-label="Repository rail"
           className="hidden min-h-0 flex-col items-center gap-1 border-r border-border bg-sidebar py-3 md:flex"
         >
           {leftRail}

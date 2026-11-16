@@ -8,10 +8,10 @@ async function openApp(page: Page) {
   await expect(page.locator(".cm-content")).toBeVisible();
 }
 
-const tree = (page: Page) => page.getByRole("tree", { name: "Vault files" });
+const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
 const editor = (page: Page) => page.locator(".cm-content");
 
-test("a new vault opens on the welcome note", async ({ page }) => {
+test("a new repository opens on the welcome note", async ({ page }) => {
   await openApp(page);
   await expect(page.getByRole("textbox", { name: "Note title" })).toHaveValue("Welcome");
   await expect(tree(page).getByRole("treeitem", { name: "Welcome" })).toBeVisible();

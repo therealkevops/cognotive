@@ -9,7 +9,7 @@ import { useVault } from "../vault/useVault";
 type Tab = "broken" | "orphans" | "deadEnds" | "hubs" | "stale";
 
 /**
- * Vault health: what the link graph says needs attention, as lists you can
+ * Repository health: what the link graph says needs attention, as lists you can
  * act on. Clicking a note opens it (and closes this).
  */
 export function HealthDialog({
@@ -50,7 +50,7 @@ export function HealthDialog({
     { id: "broken", label: "Broken links", count: health.broken.length, hint: "Links to notes that don't exist yet." },
     { id: "orphans", label: "Orphans", count: health.orphans.length, hint: "Notes nothing links to. Link them from somewhere, or let them go." },
     { id: "deadEnds", label: "Dead ends", count: health.deadEnds.length, hint: "Notes that don't link anywhere. Worth connecting to related notes." },
-    { id: "hubs", label: "Hubs", count: health.hubs.length, hint: "The notes most others link to: the backbone of the vault." },
+    { id: "hubs", label: "Hubs", count: health.hubs.length, hint: "The notes most others link to: the backbone of the repository." },
     { id: "stale", label: "Stale hubs", count: health.stale.length, hint: "Notes three or more others rely on that haven't changed in six months. Worth a review." },
   ];
   const current = tabs.find((t) => t.id === tab)!;
@@ -75,13 +75,13 @@ export function HealthDialog({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Vault health"
+        aria-label="Repository health"
         className="dialog-panel flex h-[min(40rem,85vh)] max-w-3xl flex-col overflow-hidden"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 px-6 pt-5 pb-3">
-          <h2 className="min-w-0 flex-1 font-serif text-2xl">Vault health</h2>
-          <button type="button" className="icon-button" aria-label="Close vault health" onClick={onClose}>
+          <h2 className="min-w-0 flex-1 font-serif text-2xl">Repository health</h2>
+          <button type="button" className="icon-button" aria-label="Close repository health" onClick={onClose}>
             <X size={18} aria-hidden />
           </button>
         </div>
