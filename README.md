@@ -106,12 +106,20 @@ later phases keep server functions to GitHub login and a thin Claude proxy. See
 Syncing with GitHub needs a **GitHub App**, which is how the app signs you in and gets access to
 only the repositories you choose.
 
-**The quick way:** open your deployment, go to **Settings → GitHub account → Set up GitHub**
-(or `/github-setup`). It creates the app with the right settings in one click, using GitHub's
-[app manifest flow](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest),
-then shows the five environment variables to add in Vercel (step 4 below), with a generated
-`SESSION_SECRET` and your user id already filled in. Then redeploy, install the app on a
-repository and sign in. Run it on the Vercel address, not localhost, so the callback URL matches.
+**The quick way:** open your deployment (the Vercel production address, not localhost) and go to
+**Settings → GitHub account → Set up GitHub** (or `/github-setup`):
+
+1. **Create the GitHub App**: one click, using GitHub's
+   [app manifest flow](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest),
+   with the right permissions and callback URL.
+2. **Save it to Vercel**: paste a [Vercel access token](https://vercel.com/account/settings/tokens)
+   (a 1-day expiry is plenty). The app adds the five environment variables below, with a generated
+   `SESSION_SECRET` and your GitHub user id, and redeploys. The token is used once and not kept.
+   This only works while GitHub isn't set up yet, so the route can't change anything afterwards.
+   (You can also add the variables by hand from the same page.)
+3. **Redeploy**: the page waits for the new deployment to go live.
+4. **Choose a repository and sign in**: one trip to GitHub installs the app on the repositories
+   you pick and signs you in.
 
 **By hand,** if you prefer:
 

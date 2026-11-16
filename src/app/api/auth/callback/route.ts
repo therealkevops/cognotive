@@ -20,6 +20,11 @@ export async function GET(request: NextRequest) {
   const state = params.get("state");
   const expected = request.cookies.get(STATE_COOKIE)?.value;
   if (params.get("error")) return home("denied");
+  // Back from installing (or changing) the app without a sign-in we started, e.g. from
+  // "Choose repositories": start a normal sign-in, which GitHub completes without asking.
+  if (params.get("setup_action") && (!state || !expected || state !== expected)) {
+    return NextResponse.redirect(new URL("/api/auth/login", request.url));
+  }
   if (!code || !state || !expected || state !== expected) return home("bad_state");
 
   try {

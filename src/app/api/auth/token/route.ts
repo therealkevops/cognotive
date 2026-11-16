@@ -6,7 +6,7 @@ export interface TokenResponse {
   token: string;
   expiresAt: number;
   user: { id: number; login: string };
-  /** Where to install the GitHub App on more repositories, if GITHUB_APP_SLUG is set. */
+  /** Where to install the GitHub App on more repositories (and sign in), if GITHUB_APP_SLUG is set. */
   installUrl: string | null;
 }
 
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     token: session.at,
     expiresAt: session.atExp,
     user: { id: session.uid, login: session.login },
-    installUrl: config.appSlug ? `https://github.com/apps/${config.appSlug}/installations/new` : null,
+    installUrl: config.appSlug ? "/api/auth/install" : null,
   };
   const res = NextResponse.json(body, { headers: noStore });
   if (refreshed) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, ExternalLink } from "lucide-react";
+import { Check, Copy, ExternalLink, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -164,25 +164,79 @@ function Start() {
         )}
       </li>
       <li className="text-muted">
-        <h2 className="font-medium">2. Add its details to Vercel</h2>
-        <p className="mt-1 text-sm">Shown here when you come back from GitHub.</p>
+        <h2 className="font-medium">2. Save it to Vercel</h2>
+        <p className="mt-1 text-sm">With a Vercel token you paste once, noted-ai does this for you.</p>
       </li>
       <li className="text-muted">
-        <h2 className="font-medium">3. Install it on a repository and sign in</h2>
+        <h2 className="font-medium">3. Redeploy</h2>
+      </li>
+      <li className="text-muted">
+        <h2 className="font-medium">4. Choose a repository and sign in</h2>
       </li>
     </ol>
   );
 }
 
+type VercelStep =
+  | { kind: "token" }
+  | { kind: "saving" }
+  | { kind: "redeploying"; since: number }
+  | { kind: "ready" }
+  | { kind: "slow" };
+
+/** How long to wait for the redeploy before suggesting a look at Vercel. */
+const REDEPLOY_PATIENCE_MS = 6 * 60 * 1000;
+
 function Created({ app, sessionSecret }: { app: CreatedApp; sessionSecret: string }) {
   const vars = envVars(app, sessionSecret);
-  const dotenv = vars.map(([k, v]) => `${k}=${v}`).join("\n");
+  const [token, setToken] = useState("");
+  const [step, setStep] = useState<VercelStep>({ kind: "token" });
+  const [error, setError] = useState<string | null>(null);
+
+  // After the redeploy starts, wait until this address answers with GitHub set up.
+  useEffect(() => {
+    if (step.kind !== "redeploying") return;
+    const t = setInterval(() => {
+      void fetch("/api/auth/token", { cache: "no-store" })
+        .then((r) => r.json() as Promise<{ configured?: boolean }>)
+        .then((b) => {
+          if (b.configured !== false) setStep({ kind: "ready" });
+          else if (Date.now() - step.since > REDEPLOY_PATIENCE_MS) setStep({ kind: "slow" });
+        })
+        .catch(() => {});
+    }, 4000);
+    return () => clearInterval(t);
+  }, [step]);
+
+  const save = async () => {
+    setStep({ kind: "saving" });
+    setError(null);
+    try {
+      const res = await fetch("/api/setup/vercel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, vars }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(body.error ?? `Setup failed (${res.status}).`);
+      setToken("");
+      setStep({ kind: "redeploying", since: Date.now() });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setStep({ kind: "token" });
+    }
+  };
+
+  const done = (n: number) => (
+    <>
+      {n}. <Check size={16} aria-label="done" className="inline text-accent" />
+    </>
+  );
+
   return (
     <ol className="space-y-6">
       <li>
-        <h2 className="font-medium">
-          1. Create the GitHub App <Check size={16} aria-label="done" className="inline text-accent" />
-        </h2>
+        <h2 className="font-medium">{done(1)} Create the GitHub App</h2>
         <p className="mt-1 text-sm text-muted">
           Created{" "}
           <a href={app.htmlUrl} target="_blank" rel="noreferrer" className="underline hover:text-accent">
@@ -192,63 +246,125 @@ function Created({ app, sessionSecret }: { app: CreatedApp; sessionSecret: strin
         </p>
       </li>
       <li>
-        <h2 className="font-medium">2. Add its details to Vercel</h2>
-        <p className="mt-1 text-sm text-muted">
-          In <strong>Vercel → your project → Settings → Environment Variables</strong>, add these. You can also
-          paste the whole block into Vercel&apos;s first name box.{" "}
-          <strong>Copy them now: this page shows the secret only once.</strong>
-        </p>
-        <div className="mt-3 overflow-hidden rounded-lg border border-border">
-          <table className="w-full table-fixed text-sm" aria-label="Environment variables">
-            <tbody className="divide-y divide-border">
-              {vars.map(([k, v]) => (
-                <tr key={k}>
-                  <th scope="row" className="w-[55%] truncate px-3 py-2 text-left font-mono text-xs font-medium sm:w-[16rem]">
-                    {k}
-                  </th>
-                  <td className="truncate px-3 py-2 font-mono text-xs text-muted">
-                    {k.includes("SECRET") ? "•".repeat(12) : v}
-                  </td>
-                  <td className="w-12 px-2">
-                    <CopyButton value={v} label={`Copy ${k}`} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="mt-2">
-          <CopyButton value={dotenv} label="Copy all" text="Copy all as .env" />
-        </div>
-        <p className="mt-2 text-xs text-muted">
-          ALLOWED_GITHUB_USER_IDS is your GitHub user id, so nobody else can sign in to your deployment.
-        </p>
+        <h2 className="font-medium">
+          {step.kind === "token" || step.kind === "saving" ? "2." : done(2)} Save it to Vercel
+        </h2>
+        {(step.kind === "token" || step.kind === "saving") && (
+          <>
+            <p className="mt-1 text-sm text-muted">
+              noted-ai can add the settings to this Vercel project and redeploy it for you.{" "}
+              <a
+                href="https://vercel.com/account/settings/tokens"
+                target="_blank"
+                rel="noreferrer"
+                className="underline hover:text-accent"
+              >
+                Create a Vercel token
+              </a>{" "}
+              (scope: the account or team that owns this project; expiry: 1 day is plenty) and paste it here. It&apos;s
+              used once and not kept.
+            </p>
+            <form
+              className="mt-3 flex flex-wrap items-end gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (token.trim() && step.kind === "token") void save();
+              }}
+            >
+              <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
+                Vercel token
+                <input
+                  className="input font-mono"
+                  type="password"
+                  autoComplete="off"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                />
+              </label>
+              <button type="submit" className="button-primary" disabled={!token.trim() || step.kind === "saving"}>
+                {step.kind === "saving" ? "Saving…" : "Save and redeploy"}
+              </button>
+            </form>
+            {error && (
+              <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">
+                {error}
+              </p>
+            )}
+          </>
+        )}
+        {step.kind !== "token" && step.kind !== "saving" && (
+          <p className="mt-1 text-sm text-muted">Settings saved to Vercel.</p>
+        )}
+        {(step.kind === "token" || step.kind === "saving" || step.kind === "slow") && (
+          <ManualVars vars={vars} open={!!error || step.kind === "slow"} />
+        )}
       </li>
       <li>
-        <h2 className="font-medium">3. Redeploy, install the app and sign in</h2>
-        <ol className="mt-1 list-decimal space-y-1 pl-5 text-sm text-muted">
-          <li>
-            In Vercel, open <strong>Deployments</strong>, pick the latest and choose <strong>Redeploy</strong>, so it
-            picks up the new variables.
-          </li>
-          <li>
-            <a
-              href={`https://github.com/apps/${app.slug}/installations/new`}
-              target="_blank"
-              rel="noreferrer"
-              className="underline hover:text-accent"
-            >
-              Install the app
-            </a>{" "}
-            on the repository that will hold your notes. A new, empty private repository is fine.
-          </li>
-          <li>
-            Back in noted-ai, open <strong>Settings → GitHub account</strong>, sign in, then connect the repository
-            under <strong>Repositories &amp; sync</strong>.
-          </li>
-        </ol>
+        <h2 className="font-medium">{step.kind === "ready" ? done(3) : "3."} Redeploy</h2>
+        {step.kind === "redeploying" && (
+          <p className="mt-1 flex items-center gap-2 text-sm text-muted" role="status">
+            <Loader2 size={14} aria-hidden className="animate-spin" /> Vercel is redeploying. This usually takes a
+            minute or two; this page carries on by itself.
+          </p>
+        )}
+        {step.kind === "slow" && (
+          <p className="mt-1 text-sm text-muted" role="status">
+            The new deployment isn&apos;t live yet. Check <strong>Deployments</strong> in Vercel, then reload this page.
+          </p>
+        )}
+        {step.kind === "ready" && <p className="mt-1 text-sm text-muted">The new deployment is live.</p>}
+      </li>
+      <li>
+        <h2 className="font-medium">4. Choose a repository and sign in</h2>
+        <p className="mt-1 text-sm text-muted">
+          Pick the repository that will hold your notes; a new, empty private one is fine. GitHub then brings you back,
+          signed in.
+        </p>
+        {step.kind === "ready" ? (
+          <a href="/api/auth/install" className="button-primary mt-3 inline-flex">
+            Choose a repository on GitHub <ExternalLink size={14} aria-hidden />
+          </a>
+        ) : (
+          <p className="mt-2 text-xs text-muted">Available once the redeploy is live.</p>
+        )}
       </li>
     </ol>
+  );
+}
+
+/** The settings, to add in Vercel by hand. */
+function ManualVars({ vars, open }: { vars: Array<[string, string]>; open: boolean }) {
+  const dotenv = vars.map(([k, v]) => `${k}=${v}`).join("\n");
+  return (
+    <details className="mt-4 text-sm" open={open}>
+      <summary className="cursor-pointer text-muted hover:text-foreground">Or add them in Vercel by hand</summary>
+      <p className="mt-2 text-muted">
+        In <strong>Vercel → your project → Settings → Environment Variables</strong>, add these (or paste the whole
+        block into the first name box), then redeploy. <strong>This page shows the secrets only once.</strong>
+      </p>
+      <div className="mt-3 overflow-hidden rounded-lg border border-border">
+        <table className="w-full table-fixed text-sm" aria-label="Environment variables">
+          <tbody className="divide-y divide-border">
+            {vars.map(([k, v]) => (
+              <tr key={k}>
+                <th scope="row" className="w-[55%] truncate px-3 py-2 text-left font-mono text-xs font-medium sm:w-[16rem]">
+                  {k}
+                </th>
+                <td className="truncate px-3 py-2 font-mono text-xs text-muted">
+                  {k.includes("SECRET") ? "•".repeat(12) : v}
+                </td>
+                <td className="w-12 px-2">
+                  <CopyButton value={v} label={`Copy ${k}`} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-2">
+        <CopyButton value={dotenv} label="Copy all" text="Copy all as .env" />
+      </div>
+    </details>
   );
 }
 

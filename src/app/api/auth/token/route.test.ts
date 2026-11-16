@@ -56,7 +56,7 @@ describe("GET /api/auth/token", () => {
     expect(await res.json()).toMatchObject({
       token: "ghu_old",
       user: { id: 1, login: "kev" },
-      installUrl: "https://github.com/apps/noted-ai-kev/installations/new",
+      installUrl: "/api/auth/install",
     });
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(res.headers.get("set-cookie")).toBeNull();
