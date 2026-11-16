@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activityWeeks, healthScore, scoreVerdict, vaultHealth } from "./health";
+import { activityWeeks, healthScore, reviewedDate, scoreVerdict, todayStamp, vaultHealth } from "./health";
 import { LinkIndex } from "./link-index";
 
 describe("vaultHealth", () => {
@@ -63,6 +63,32 @@ describe("hubs", () => {
     const h = run(ix);
     expect(h.hubs).toEqual([]); // two incoming links isn't enough
     expect(h.hubCandidates).toEqual([{ target: "Ideas", sources: ["A.md", "B.md", "C.md"] }]);
+  });
+});
+
+describe("reviewed hubs", () => {
+  const day = 86_400_000;
+  const now = new Date(2026, 10, 16).getTime();
+  const ix = () => {
+    const i = new LinkIndex();
+    for (const n of ["A", "B", "C"]) i.set(`${n}.md`, "[[Hub]]");
+    return i;
+  };
+  const run = (i: LinkIndex) => vaultHealth(i, { now, mtime: (p) => (p === "Hub.md" ? now - 400 * day : now) });
+
+  it("a recent reviewed: date keeps an old hub off the stale list", () => {
+    const i = ix();
+    i.set("Hub.md", "---\nreviewed: 2026-10-01\n---\nhub");
+    expect(run(i).stale).toEqual([]);
+    i.set("Hub.md", "---\nreviewed: 2025-01-01\n---\nhub");
+    expect(run(i).stale).toEqual([{ path: "Hub.md", links: 3, mtime: now - 400 * day, reviewed: new Date(2025, 0, 1).getTime() }]);
+  });
+
+  it("reads dates and strings, and stamps today", () => {
+    expect(reviewedDate({ reviewed: "2026-03-04" })).toBe(new Date(2026, 2, 4).getTime());
+    expect(reviewedDate({ reviewed: new Date(5) })).toBe(5);
+    expect(reviewedDate({ reviewed: "soon" })).toBeUndefined();
+    expect(todayStamp(new Date(2026, 0, 9))).toBe("2026-01-09");
   });
 });
 

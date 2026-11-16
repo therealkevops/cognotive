@@ -3,7 +3,7 @@
 import { X } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { formatLink } from "@/lib/links/format";
-import { activityWeeks, scoreVerdict, vaultHealth } from "@/lib/links/health";
+import { activityWeeks, scoreVerdict, todayStamp, vaultHealth } from "@/lib/links/health";
 import { setFrontmatterProperty } from "@/lib/markdown/frontmatter";
 import { readPref, writePref } from "@/lib/prefs";
 import { displayName, dirname, isWithin } from "@/lib/vault/paths";
@@ -97,6 +97,13 @@ export function HealthDialog({
     await vault.writeNote(path, setFrontmatterProperty(content, "hub", value));
   };
 
+  /** Records today as the note's `reviewed:` date. */
+  const markReviewed = async (path: string) => {
+    const content = path === vault.active?.path ? vault.activeText : vault.links.content(path);
+    if (content === undefined) return;
+    await vault.writeNote(path, setFrontmatterProperty(content, "reviewed", todayStamp()));
+  };
+
   const ignore = (p: string) => void vault.updateSettings({ healthIgnore: [...vault.settings.healthIgnore, p] });
   const restoreIgnored = () => void vault.updateSettings({ healthIgnore: [] });
 
@@ -158,7 +165,7 @@ export function HealthDialog({
       id: "stale",
       label: "Stale hubs",
       count: health.stale.length,
-      hint: "Notes three or more others rely on that haven't changed in six months. Worth a review.",
+      hint: "Notes three or more others rely on that haven't changed or been reviewed in six months. Still accurate? Mark it reviewed.",
       tone: "old",
       detail: health.stale.length ? "Worth a review" : "All fresh",
     },
@@ -387,16 +394,28 @@ export function HealthDialog({
               row(
                 h.path,
                 noteButton(h.path),
-                `${h.links} notes link here · last changed ${new Date(h.mtime).toLocaleDateString()}`,
-                <button
-                  type="button"
-                  className="button-secondary shrink-0 px-2.5 py-1 text-xs text-muted"
-                  aria-label={`Ignore ${displayName(h.path)}`}
-                  title="Leave this note out of the health checks"
-                  onClick={() => ignore(h.path)}
-                >
-                  Ignore
-                </button>,
+                `${h.links} notes link here · last changed ${new Date(h.mtime).toLocaleDateString()}` +
+                  (h.reviewed ? ` · reviewed ${new Date(h.reviewed).toLocaleDateString()}` : ""),
+                <div className="flex shrink-0 gap-1.5">
+                  <button
+                    type="button"
+                    className="button-secondary px-2.5 py-1 text-xs"
+                    aria-label={`Mark ${displayName(h.path)} reviewed`}
+                    title="Still accurate? Record today as reviewed: in the note's properties"
+                    onClick={() => void markReviewed(h.path)}
+                  >
+                    Mark reviewed
+                  </button>
+                  <button
+                    type="button"
+                    className="button-secondary px-2.5 py-1 text-xs text-muted"
+                    aria-label={`Ignore ${displayName(h.path)}`}
+                    title="Leave this note out of the health checks"
+                    onClick={() => ignore(h.path)}
+                  >
+                    Ignore
+                  </button>
+                </div>,
               ),
             )}
           </ul>

@@ -37,7 +37,8 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 - Repository health: a score out of 100 with totals and a heatmap of recent changes; a link map
   of the whole repository (hubs large, orphans loose, missing notes as dashed stubs; hover to see a
   note's links, click to open it or create a missing one); and cards for broken links, orphans,
-  dead ends, hubs and stale hubs that open lists to act on. Hubs are notes well above average in
+  dead ends, hubs and stale hubs (well-linked notes not changed or reviewed in six months; **Mark
+  reviewed** records `reviewed: YYYY-MM-DD` in the note) that open lists to act on. Hubs are notes well above average in
   links in, index notes linking out to many, and notes pinned with `hub: true` (with the command
   *Pin this note to the sidebar as a hub*, or **Pin** in the Hubs list; `hub: false` opts a note
   out). Pinned hubs are listed at the top of the sidebar's Files tab; missing notes linked from three or more

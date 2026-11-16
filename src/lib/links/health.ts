@@ -16,7 +16,7 @@ export interface VaultHealth {
   /** Missing notes that many notes link to: hubs waiting to be written. */
   hubCandidates: Array<{ target: string; sources: string[] }>;
   /** Notes many others rely on that haven't been touched in a long time. */
-  stale: Array<{ path: string; links: number; mtime: number }>;
+  stale: Array<{ path: string; links: number; mtime: number; reviewed?: number }>;
   /** Totals for the checked notes. */
   stats: {
     notes: number;
@@ -41,6 +41,23 @@ export interface Hub {
 }
 
 const DAY = 86_400_000;
+
+/** A note's `reviewed` property as a time (local midnight for a plain date), if it is a date. */
+export function reviewedDate(properties: Record<string, unknown> | undefined): number | undefined {
+  const v = properties?.reviewed;
+  if (v instanceof Date && !isNaN(v.getTime())) return v.getTime();
+  if (typeof v === "string") {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v.trim());
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime();
+  }
+  return undefined;
+}
+
+/** Today as YYYY-MM-DD in local time, for a `reviewed:` property. */
+export function todayStamp(now = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
 
 /** A note's `hub` property: true (marked), false (never a hub), or undefined. */
 export function hubProperty(properties: Record<string, unknown> | undefined): boolean | undefined {
@@ -76,10 +93,14 @@ export function vaultHealth(
 
 
   const cutoff = now - (opts.staleDays ?? 180) * DAY;
+  // A `reviewed:` date counts as a change: a finished hub needn't be edited to stay fresh.
   const stale = notes
-    .map((path) => ({ path, links: inbound.get(path) ?? 0, mtime: opts.mtime(path) ?? now }))
-    .filter((n) => n.links >= 3 && n.mtime < cutoff)
-    .sort((a, b) => a.mtime - b.mtime);
+    .map((path) => {
+      const reviewed = reviewedDate(index.get(path)?.properties);
+      return { path, links: inbound.get(path) ?? 0, mtime: opts.mtime(path) ?? now, ...(reviewed ? { reviewed } : {}) };
+    })
+    .filter((n) => n.links >= 3 && Math.max(n.mtime, n.reviewed ?? 0) < cutoff)
+    .sort((a, b) => Math.max(a.mtime, a.reviewed ?? 0) - Math.max(b.mtime, b.reviewed ?? 0));
 
   const linked = new Set<string>();
   let links = 0;

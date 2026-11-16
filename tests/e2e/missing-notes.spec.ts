@@ -167,6 +167,37 @@ test("pinned hubs are listed in the sidebar", async ({ page }) => {
   await expect(editor(page)).not.toContainText("hub:");
 });
 
+test("Mark reviewed takes a stale hub off the list", async ({ page }) => {
+  // Write the notes "a year ago", then come back to the present.
+  const now = new Date();
+  await page.clock.setSystemTime(new Date(now.getTime() - 365 * 86_400_000));
+  await openApp(page);
+  const zip = zipSync({
+    "V/Old hub.md": strToU8("The centre."),
+    "V/A.md": strToU8("[[Old hub]]"),
+    "V/B.md": strToU8("[[Old hub]]"),
+    "V/C.md": strToU8("[[Old hub]]"),
+  });
+  await page.getByLabel("Choose a zip to import").setInputFiles({ name: "v.zip", mimeType: "application/zip", buffer: Buffer.from(zip) });
+  await expect(page.getByRole("status").filter({ hasText: "Imported 4 files" })).toBeVisible();
+  await page.clock.setSystemTime(now);
+
+  await page.getByRole("button", { name: "Repository health" }).click();
+  const dialog = page.getByRole("dialog", { name: "Repository health" });
+  await dialog.getByRole("tab", { name: /Stale hubs/ }).click();
+  const stale = dialog.getByRole("tabpanel", { name: "Stale hubs" });
+  await stale.getByRole("button", { name: "Mark Old hub reviewed" }).click();
+  await expect(stale).toContainText("Nothing here");
+
+  await dialog.getByRole("button", { name: "Close repository health" }).click();
+  await tree(page).getByRole("treeitem", { name: "Old hub" }).click();
+  await page.getByRole("radio", { name: "Source" }).click();
+  const y = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  await expect(editor(page)).toContainText(`reviewed: ${y}-${mm}-${dd}`);
+});
+
 test("deleting a linked note warns, and can turn the links into text", async ({ page }) => {
   await openApp(page);
   const item = tree(page).getByRole("treeitem", { name: "Linking notes" });
