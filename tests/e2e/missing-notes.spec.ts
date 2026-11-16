@@ -42,15 +42,28 @@ test("cancelling the prompt creates nothing", async ({ page }) => {
   await expect(tree(page).getByRole("treeitem", { name: "Scratch" })).toHaveCount(0);
 });
 
-test("the Links panel lists unresolved links and creates them", async ({ page }) => {
+test("Vault health lists broken links, orphans and hubs, and creates missing notes", async ({ page }) => {
   await openApp(page);
-  const section = page.getByRole("region", { name: "Unresolved links" });
-  await section.getByRole("button", { name: /Unresolved links/ }).click();
-  await expect(section).toContainText("Linked from Linking notes");
-  await section.getByRole("button", { name: "Create Ideas" }).click();
+  await page.getByRole("button", { name: "Vault health" }).click();
+  const dialog = page.getByRole("dialog", { name: "Vault health" });
+  const list = dialog.getByRole("tabpanel");
+  await expect(list).toContainText("Ideas");
+  await expect(list).toContainText("Linked from Linking notes");
+
+  await dialog.getByRole("tab", { name: /Hubs/ }).click();
+  await expect(dialog.getByRole("tabpanel", { name: "Hubs" })).toContainText("Nothing here");
+  await dialog.getByRole("tab", { name: /Broken links/ }).click();
+  await dialog.getByRole("button", { name: "Create Ideas" }).click();
+  await expect(dialog).toBeHidden();
   await page.getByRole("dialog", { name: "Create note" }).getByRole("button", { name: "Create" }).click();
   await expect(title(page)).toHaveValue("Ideas");
-  await expect(section.getByRole("button", { name: "Create Ideas" })).toHaveCount(0);
+
+  // The new note is linked from Linking notes, but doesn't link anywhere itself: a dead end.
+  await page.getByRole("button", { name: "Vault health" }).click();
+  await dialog.getByRole("tab", { name: /Dead ends/ }).click();
+  await expect(dialog.getByRole("tabpanel", { name: "Dead ends" }).getByRole("button", { name: "Ideas" })).toBeVisible();
+  await dialog.getByRole("tabpanel", { name: "Dead ends" }).getByRole("button", { name: "Ideas" }).click();
+  await expect(dialog).toBeHidden();
 });
 
 test("deleting a linked note warns, and can turn the links into text", async ({ page }) => {

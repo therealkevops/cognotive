@@ -189,6 +189,38 @@ export class LinkIndex {
     return out;
   }
 
+  /**
+   * Notes related to `path` without linking to it directly: they link to the
+   * same notes (shared targets) or are linked from the same notes (shared
+   * sources). Strongest first, with up to three of the notes they share.
+   */
+  related(path: string, limit = 8): Array<{ path: string; score: number; via: string[] }> {
+    const outOf = new Map<string, Set<string>>();
+    const into = new Map<string, Set<string>>();
+    for (const [source, e] of this.notes) {
+      const set = new Set<string>();
+      for (const l of e.parsed.links) {
+        const p = l.target ? this.resolve(l.target, source) : null;
+        if (!p || p === source) continue;
+        set.add(p);
+        if (!into.has(p)) into.set(p, new Set());
+        into.get(p)!.add(source);
+      }
+      outOf.set(source, set);
+    }
+    const mineOut = outOf.get(path) ?? new Set<string>();
+    const mineIn = into.get(path) ?? new Set<string>();
+    const out: Array<{ path: string; score: number; via: string[] }> = [];
+    for (const other of this.notes.keys()) {
+      if (other === path || !isNote(other) || mineOut.has(other) || mineIn.has(other)) continue;
+      const shared = new Set<string>();
+      for (const t of outOf.get(other) ?? []) if (mineOut.has(t)) shared.add(t);
+      for (const s of into.get(other) ?? []) if (mineIn.has(s)) shared.add(s);
+      if (shared.size) out.push({ path: other, score: shared.size, via: [...shared].slice(0, 3) });
+    }
+    return out.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path)).slice(0, limit);
+  }
+
   /** Link targets that don't match any file: target → notes that use it. */
   unresolved(): Map<string, string[]> {
     const out = new Map<string, string[]>();
@@ -296,34 +328,7 @@ export class LinkIndex {
     return { nodes: [...nodes.values()], edges: [...edges.values()] };
   }
 
-  /** Notes within `depth` links of `path`, following links in both directions. */
-  neighborhood(path: string, depth: number, opts: { includeUnresolved?: boolean } = {}) {
-    const g = this.graph(opts);
-    const adj = new Map<string, Set<string>>();
-    for (const e of g.edges) {
-      if (!adj.has(e.source)) adj.set(e.source, new Set());
-      if (!adj.has(e.target)) adj.set(e.target, new Set());
-      adj.get(e.source)!.add(e.target);
-      adj.get(e.target)!.add(e.source);
-    }
-    const keep = new Set([path]);
-    let frontier = [path];
-    for (let d = 0; d < depth; d++) {
-      const next: string[] = [];
-      for (const n of frontier) {
-        for (const m of adj.get(n) ?? []) {
-          if (keep.has(m)) continue;
-          keep.add(m);
-          next.push(m);
-        }
-      }
-      frontier = next;
-    }
-    return {
-      nodes: g.nodes.filter((n) => keep.has(n.id)),
-      edges: g.edges.filter((e) => keep.has(e.source) && keep.has(e.target)),
-    };
-  }
+
 
   /** Notes with no links in or out. */
   orphans(): string[] {

@@ -42,6 +42,26 @@ describe("LinkIndex", () => {
     expect(counts.has("Lonely.md")).toBe(false);
   });
 
+  it("finds notes related through shared links", () => {
+    const ix = new LinkIndex();
+    ix.set("A.md", "[[Hub]] [[Tools]]");
+    ix.set("B.md", "[[Hub]] [[Tools]] [[Other]]");
+    ix.set("C.md", "[[Hub]]");
+    ix.set("D.md", "[[A]] and [[E]]");
+    ix.set("E.md", "nothing");
+    ix.set("Hub.md", "");
+    ix.set("Tools.md", "");
+    // B shares two targets with A; C one; E is linked from the same note (D) as A.
+    expect(ix.related("A.md").map((r) => [r.path, r.score])).toEqual([
+      ["B.md", 2],
+      ["C.md", 1],
+      ["E.md", 1],
+    ]);
+    expect(ix.related("A.md")[0].via).toEqual(["Hub.md", "Tools.md"]);
+    // Directly linked notes aren't "related": D links to A.
+    expect(ix.related("A.md").some((r) => r.path === "D.md")).toBe(false);
+  });
+
   it("lists unresolved links by target", () => {
     expect([...vault().unresolved()]).toEqual([["Missing note", ["Home.md"]]]);
   });
@@ -72,11 +92,6 @@ describe("LinkIndex", () => {
 
   it("finds neighbourhoods and orphans", () => {
     const ix = vault();
-    expect(ix.neighborhood("Recipes/Pasta.md", 1).nodes.map((n) => n.id).sort()).toEqual([
-      "Garden.md",
-      "Home.md",
-      "Recipes/Pasta.md",
-    ]);
     expect(ix.orphans()).toEqual(["Lonely.md"]);
   });
 

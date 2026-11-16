@@ -22,7 +22,6 @@ Select text and use the toolbar, or the shortcuts:
 | Reading view | Ctrl/Cmd + E |
 | Quick switcher | Ctrl/Cmd + O |
 | Search all notes | Ctrl/Cmd + Shift + F |
-| Graph view | Ctrl/Cmd + G |
 
 - [x] Write a note
 - [ ] Try the reading view
@@ -62,7 +61,8 @@ like [[Ideas]], are shown dashed: open one to create the note.
 - Ctrl/Cmd-click opens a link in a new tab, Ctrl/Cmd+Alt-click in the side pane.
 - Back and forward (the arrows by the title) retrace the notes you've followed.
 - Tag notes with #guide or nested tags like #area/home.
-- The **Links** panel on the right lists backlinks, unlinked mentions and outgoing links.
+- The **Connections** panel on the right shows links in and out, notes that share links, and unlinked mentions. **Map as canvas** lays them out on a board.
+- **Vault health** (bottom of the sidebar) lists broken links, orphans and hubs.
 - Renaming a note updates every link to it.
 
 Embed part of another note with \`![[Note#Heading]]\`:

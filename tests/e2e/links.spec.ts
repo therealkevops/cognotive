@@ -87,15 +87,24 @@ test("tags list their notes", async ({ page }) => {
   await expect(page.getByRole("region", { name: "Search" }).getByRole("button", { name: /Linking notes/ })).toBeVisible();
 });
 
-test("the graph view shows the vault", async ({ page }) => {
+test("the Connections panel shows notes that share links", async ({ page }) => {
+  await newNote(page, "Reading list");
+  await page.keyboard.type("Start with [[Welcome]]");
+  const shares = page.getByRole("region", { name: "Shares links with" });
+  // Linking notes also links to Welcome, so the two are related.
+  await expect(shares.getByRole("button", { name: "Linking notes" })).toBeVisible();
+  await expect(shares).toContainText("Both connect to Welcome");
+});
+
+test("Map as canvas lays out a note and its connections", async ({ page }) => {
   await page.goto("/");
   await expect(editor(page)).toBeVisible();
-  await page.getByRole("button", { name: "Graph view" }).click();
-  const dialog = page.getByRole("dialog", { name: "Graph view" });
-  await expect(dialog).toContainText("2 notes · 2 links");
-  await expect(dialog.getByTestId("graph").locator("canvas").first()).toBeVisible();
-  await dialog.getByRole("checkbox", { name: "Notes not yet created" }).check();
-  await expect(dialog).toContainText("3 notes");
-  await page.keyboard.press("Escape");
-  await expect(dialog).toBeHidden();
+  await page.getByRole("button", { name: "Map as canvas" }).click();
+  await expect(title(page)).toHaveValue("Welcome map");
+  const board = page.getByTestId("canvas");
+  await expect(board.locator(".react-flow__node", { hasText: "Welcome to noted-ai" })).toBeVisible();
+  await expect(board.getByRole("button", { name: "Linking notes", exact: true })).toBeVisible(); // its card's title
+  // Welcome and Linking notes link to each other: one arrow, both ways.
+  await expect(board.locator(".react-flow__edge")).toHaveCount(1);
+  await expect(tree(page).getByRole("treeitem", { name: "Welcome map" })).toBeVisible();
 });

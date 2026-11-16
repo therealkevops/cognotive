@@ -40,7 +40,6 @@
     "node-diff3": "4.0.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "react-force-graph-2d": "1.29.2",
     "rehype-highlight": "7.0.2",
     "rehype-katex": "7.0.1",
     "rehype-sanitize": "6.0.0",

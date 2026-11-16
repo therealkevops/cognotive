@@ -1,5 +1,6 @@
 "use client";
 
+import { LayoutDashboard } from "lucide-react";
 import { useMemo, useState } from "react";
 import { formatLink } from "@/lib/links/format";
 import type { Backlink, CanvasRelation, Mention } from "@/lib/links/link-index";
@@ -43,36 +44,54 @@ function Section({
 }
 
 /** Backlinks, unlinked mentions and outgoing links of the open note. */
+/**
+ * Everything connected to the open note, grouped by how: typed relations from
+ * canvases, links in and out, notes that share links with it, notes with the
+ * same tags, and unlinked mentions. "Map as canvas" lays it all out on a board.
+ */
 export function LinksPanel({
   onOpenLink,
-  onCreate,
+  onMapCanvas,
 }: {
   onOpenLink(target: string, heading?: string): void;
-  /** Offers to create the missing note `target`, as linked from `from`. */
-  onCreate(target: string, from: string): void;
+  /** Makes a canvas of this note and its neighbours. */
+  onMapCanvas?(): void;
 }) {
   const vault = useVault();
   const path = vault.active?.path;
-  // Every link in the vault to a note that doesn't exist yet, grouped case-insensitively.
-  const unresolved = useMemo(() => {
-    const groups = new Map<string, { target: string; sources: string[] }>();
-    for (const [target, sources] of vault.links.unresolved()) {
-      const key = target.toLowerCase();
-      const g = groups.get(key) ?? { target, sources: [] };
-      for (const s of sources) if (!g.sources.includes(s)) g.sources.push(s);
-      groups.set(key, g);
-    }
-    return [...groups.values()].sort((a, b) => b.sources.length - a.sources.length || a.target.localeCompare(b.target));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vault.links, vault.indexVersion]);
 
-  const { backlinks, mentions, outgoing, relations } = useMemo(() => {
-    if (!path) return { backlinks: [] as Backlink[], mentions: [] as Mention[], outgoing: [], relations: [] as CanvasRelation[] };
+  const { backlinks, mentions, outgoing, relations, related, sameTags } = useMemo(() => {
+    if (!path)
+      return {
+        backlinks: [] as Backlink[],
+        mentions: [] as Mention[],
+        outgoing: [],
+        relations: [] as CanvasRelation[],
+        related: [] as Array<{ path: string; score: number; via: string[] }>,
+        sameTags: [] as Array<{ path: string; tags: string[] }>,
+      };
+    const linked = new Set([
+      ...vault.links.backlinks(path).map((b) => b.source),
+      ...vault.links.outgoing(path).flatMap((o) => (o.resolved ? [o.resolved] : [])),
+    ]);
+    // Notes with tags in common (and not already linked), most shared tags first.
+    const byTag = new Map<string, string[]>();
+    for (const tag of vault.links.get(path)?.tags ?? []) {
+      for (const p of vault.links.withTag(tag)) {
+        if (p === path || linked.has(p)) continue;
+        byTag.set(p, [...(byTag.get(p) ?? []), tag]);
+      }
+    }
     return {
       backlinks: vault.links.backlinks(path),
       mentions: vault.links.unlinkedMentions(path),
       outgoing: vault.links.outgoing(path),
       relations: vault.links.canvasRelations(path),
+      related: vault.links.related(path),
+      sameTags: [...byTag]
+        .map(([p, tags]) => ({ path: p, tags }))
+        .sort((a, b) => b.tags.length - a.tags.length || a.path.localeCompare(b.path))
+        .slice(0, 8),
     };
     // indexVersion signals index changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -97,6 +116,17 @@ export function LinksPanel({
 
   return (
     <div>
+      {onMapCanvas && (
+        <button
+          type="button"
+          className="button-secondary mb-4 w-full"
+          onClick={onMapCanvas}
+          title="Make a canvas with this note and everything connected to it"
+        >
+          <LayoutDashboard size={15} aria-hidden />
+          Map as canvas
+        </button>
+      )}
       <Section title="Backlinks" count={backlinks.length}>
         {backlinks.length === 0 ? (
           <p className="text-sm text-muted">No notes link here yet.</p>
@@ -145,6 +175,38 @@ export function LinksPanel({
                 >
                   on {canvasName(r.canvas)}
                 </button>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      <Section title="Shares links with" count={related.length} defaultOpen={related.length > 0}>
+        {related.length === 0 ? (
+          <p className="text-sm text-muted">No other notes share links with this one yet.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {related.map((r) => (
+              <li key={r.path} className="text-sm">
+                <button type="button" className="text-left font-medium hover:text-accent" onClick={() => void vault.open(r.path)}>
+                  {displayName(r.path)}
+                </button>
+                <p className="truncate text-xs text-muted">Both connect to {r.via.map(displayName).join(", ")}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      {sameTags.length > 0 && (
+        <Section title="Same tags" count={sameTags.length}>
+          <ul className="space-y-1.5">
+            {sameTags.map((t) => (
+              <li key={t.path} className="text-sm">
+                <button type="button" className="text-left font-medium hover:text-accent" onClick={() => void vault.open(t.path)}>
+                  {displayName(t.path)}
+                </button>
+                <p className="truncate text-xs text-muted">{t.tags.map((x) => `#${x}`).join(" ")}</p>
               </li>
             ))}
           </ul>
@@ -203,41 +265,6 @@ export function LinksPanel({
         )}
       </Section>
 
-      <Section title="Unresolved links" count={unresolved.length} defaultOpen={false}>
-        {unresolved.length === 0 ? (
-          <p className="text-sm text-muted">Every link in the vault points to a note that exists.</p>
-        ) : (
-          <ul className="space-y-2">
-            {unresolved.map((u) => (
-              <li key={u.target} className="text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate text-muted italic">{u.target}</span>
-                  <button
-                    type="button"
-                    className="shrink-0 rounded border border-border px-1.5 text-xs hover:border-accent hover:text-accent"
-                    aria-label={`Create ${u.target}`}
-                    onClick={() => onCreate(u.target, u.sources[0])}
-                  >
-                    Create
-                  </button>
-                </div>
-                <p className="mt-0.5 text-xs text-muted">
-                  Linked from{" "}
-                  {u.sources.slice(0, 3).map((src, i) => (
-                    <span key={src}>
-                      {i > 0 && ", "}
-                      <button type="button" className="hover:text-accent hover:underline" onClick={() => void vault.open(src)}>
-                        {noteTitle(src)}
-                      </button>
-                    </span>
-                  ))}
-                  {u.sources.length > 3 && ` and ${u.sources.length - 3} more`}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
     </div>
   );
 }

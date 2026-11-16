@@ -9,10 +9,10 @@ import {
   CodeXml,
   Files,
   History,
-  Network,
   FilePlus,
   ListTree,
   Link2,
+  Activity,
   PanelLeft,
   PanelLeftClose,
   PanelLeftOpen,
@@ -33,6 +33,8 @@ import { EMPTY_HISTORY, goBack, goForward, renameInHistory, visit, type NavHisto
 import { readPref, writePref } from "@/lib/prefs";
 import type { LinkHost } from "@/lib/editor/wikilinks";
 import type { LinkContext } from "@/lib/markdown/remark-links";
+import { serializeCanvas } from "@/lib/canvas/format";
+import { neighbourhoodCanvas, type Neighbour } from "@/lib/canvas/map";
 import { convertLinks, formatLink, markdownLink } from "@/lib/links/format";
 import { splitLinkText } from "@/lib/links/parse";
 import { splitFrontmatter } from "@/lib/markdown/frontmatter";
@@ -59,7 +61,6 @@ import { drawingName } from "@/lib/vault/paths";
 import type { CanvasVault } from "./CanvasView";
 import type { DrawingVault } from "./DrawingView";
 import { fillTemplate, formatDate, newNoteFromLink } from "@/lib/vault/settings";
-import { GraphDialog, LocalGraph } from "../graph/GraphDialog";
 import { SettingsDialog, type SettingsSection } from "../settings/SettingsDialog";
 import { HistoryDialog } from "../sync/HistoryDialog";
 import { SyncButton } from "../sync/SyncButton";
@@ -70,6 +71,7 @@ import { VaultSwitcher } from "../vault/VaultSwitcher";
 import { CreateNoteDialog } from "./CreateNoteDialog";
 import { DeleteDialog } from "./DeleteDialog";
 import { FileTree } from "./FileTree";
+import { HealthDialog } from "./HealthDialog";
 import { FileView } from "./FileView";
 import { LinksPanel } from "./LinksPanel";
 import { Picker, type PickerItem } from "./Picker";
@@ -99,7 +101,7 @@ const ReadingView = dynamic(() => import("./ReadingView"), {
 
 type Mode = "live" | "source" | "reading";
 type SidebarTab = "files" | "search" | "tags";
-type PanelTab = "outline" | "links" | "graph";
+type PanelTab = "outline" | "links";
 
 const MODES: Array<{ id: Mode; label: string; icon: typeof Pencil }> = [
   { id: "live", label: "Live preview", icon: Pencil },
@@ -115,8 +117,10 @@ export function Workspace() {
   const [switcherOpen, setSwitcherOpen] = useState(false);
   /** Which settings section is open, or false. */
   const [settingsOpen, setSettingsOpen] = useState<false | SettingsSection>(false);
-  const [graphOpen, setGraphOpen] = useState(false);
-  const [panelTab, setPanelTabState] = useState<PanelTab>(() => readPref<PanelTab>("panelTab", "links"));
+  const [healthOpen, setHealthOpen] = useState(false);
+  const [panelTab, setPanelTabState] = useState<PanelTab>(() =>
+    readPref<string>("panelTab", "links") === "outline" ? "outline" : "links",
+  );
   const setPanelTab = (t: PanelTab) => {
     setPanelTabState(t);
     writePref("panelTab", t);
@@ -210,9 +214,6 @@ export function Workspace() {
       } else if (key === "e" && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         setMode(mode === "reading" ? lastEditMode : "reading");
-      } else if (key === "g" && !e.shiftKey && !e.altKey) {
-        e.preventDefault();
-        setGraphOpen(true);
       } else if (e.code === "KeyN" && e.altKey) {
         e.preventDefault();
         void vault.createNote();
@@ -697,11 +698,11 @@ export function Workspace() {
         <button
           type="button"
           className="nav-item text-foreground/80"
-          onClick={() => setGraphOpen(true)}
-          title="Graph view (Ctrl/Cmd+G)"
+          onClick={() => setHealthOpen(true)}
+          title="Broken links, orphans, dead ends and hubs"
         >
-          <Network size={15} aria-hidden />
-          Graph view
+          <Activity size={15} aria-hidden />
+          Vault health
         </button>
       </div>
       <div>
@@ -744,8 +745,8 @@ export function Workspace() {
       <RailButton label="Today" onClick={() => void openDaily()}>
         <CalendarDays size={18} aria-hidden />
       </RailButton>
-      <RailButton label="Graph view" onClick={() => setGraphOpen(true)}>
-        <Network size={18} aria-hidden />
+      <RailButton label="Vault health" onClick={() => setHealthOpen(true)}>
+        <Activity size={18} aria-hidden />
       </RailButton>
       <div className="mt-auto">
         <RailButton label="Settings" onClick={() => setSettingsOpen("appearance")}>
@@ -765,14 +766,11 @@ export function Workspace() {
         <PanelRightOpen size={18} aria-hidden />
       </RailButton>
       <span className="my-1 h-px w-6 bg-border" aria-hidden />
-      <RailButton label="Links" active={false} onClick={() => openPanelTab("links")}>
+      <RailButton label="Connections" onClick={() => openPanelTab("links")}>
         <Link2 size={18} aria-hidden />
       </RailButton>
       <RailButton label="Outline" onClick={() => openPanelTab("outline")}>
         <ListTree size={18} aria-hidden />
-      </RailButton>
-      <RailButton label="Local graph" onClick={() => openPanelTab("graph")}>
-        <Network size={18} aria-hidden />
       </RailButton>
     </>
   );
@@ -823,6 +821,36 @@ export function Workspace() {
     );
   };
 
+  /**
+   * Makes a canvas of the open note and what's connected to it: typed
+   * relations first, then mutual links, links out and links in (up to 16),
+   * saved as "<note> map.canvas" next to the note and opened.
+   */
+  const mapAsCanvas = async () => {
+    const center = activePathNow;
+    if (!center) return;
+    const found = new Map<string, Neighbour>();
+    const add = (path: string, direction: "out" | "in", label?: string) => {
+      if (path === center) return;
+      const prev = found.get(path);
+      if (!prev) found.set(path, { path, direction, ...(label ? { label } : {}) });
+      else {
+        if (prev.direction !== direction) prev.direction = "both";
+        if (label && !prev.label) prev.label = label;
+      }
+    };
+    for (const r of vault.links.canvasRelations(center)) if (r.resolved) add(r.other, r.direction, r.label);
+    for (const o of vault.links.outgoing(center)) if (o.resolved) add(o.resolved, "out");
+    for (const b of vault.links.backlinks(center)) if (!isCanvas(b.source)) add(b.source, "in");
+    const rank = (n: Neighbour) => (n.label ? 0 : n.direction === "both" ? 1 : n.direction === "out" ? 2 : 3);
+    const neighbours = [...found.values()].sort((a, b) => rank(a) - rank(b)).slice(0, 16);
+    const data = neighbourhoodCanvas(center, neighbours);
+    const base = joinPath(dirname(center), `${noteTitle(center)} map`);
+    let path = `${base}.canvas`;
+    for (let i = 2; vault.exists(path); i++) path = `${base} ${i}.canvas`;
+    await vault.createNoteWith(path, serializeCanvas(data));
+  };
+
   /** Rewrites every link in the open note in one format (one undoable edit in the editor). */
   const convertActiveLinks = (to: "markdown" | "wikilink") => {
     if (!activePathNow) return;
@@ -854,7 +882,8 @@ export function Workspace() {
       label: "Search all notes",
       hint: "Ctrl/Cmd+Shift+F",
     },
-    { id: "graph", label: "Open graph view", hint: "Ctrl/Cmd+G" },
+    { id: "health", label: "Open vault health" },
+    { id: "map-canvas", label: "Map this note as a canvas", when: kind === "note" },
     { id: "mode-live", label: "Live preview", when: kind === "note" },
     { id: "mode-source", label: "Source mode", when: kind === "note" },
     { id: "mode-reading", label: "Reading view", hint: "Ctrl/Cmd+E", when: kind === "note" },
@@ -902,7 +931,8 @@ export function Workspace() {
       setTab("search");
       setSidebarOpen(true);
     },
-    graph: () => setGraphOpen(true),
+    health: () => setHealthOpen(true),
+    "map-canvas": () => void mapAsCanvas(),
     "mode-live": () => setMode("live"),
     "mode-source": () => setMode("source"),
     "mode-reading": () => setMode("reading"),
@@ -938,9 +968,8 @@ export function Workspace() {
                 <div role="tablist" aria-label="Note panels" className="segmented flex flex-1">
                   {(
                     [
-                      ["links", "Links"],
+                      ["links", "Connections"],
                       ["outline", "Outline"],
-                      ["graph", "Graph"],
                     ] as const
                   ).map(([id, label]) => (
                     <button
@@ -967,10 +996,8 @@ export function Workspace() {
                 {panelTab === "outline" ? (
                   <Outline markdown={vault.activeText} onJump={jumpTo} />
                 ) : panelTab === "links" ? (
-                  <LinksPanel onOpenLink={(t) => void openLink(t)} onCreate={offerCreate} />
-                ) : (
-                  <LocalGraph onOpenFull={() => setGraphOpen(true)} />
-                )}
+                  <LinksPanel onOpenLink={(t) => void openLink(t)} onMapCanvas={kind === "note" ? () => void mapAsCanvas() : undefined} />
+                ) : null}
               </>
             ) : null
           }
@@ -1192,7 +1219,7 @@ export function Workspace() {
       {creating && <CreateNoteDialog {...creating} onClose={() => setCreating(null)} />}
       {deleting && <DeleteDialog path={deleting} isFolder={false} onClose={() => setDeleting(null)} />}
       {settingsOpen && <SettingsDialog initial={settingsOpen} onClose={() => setSettingsOpen(false)} />}
-      {graphOpen && <GraphDialog onClose={() => setGraphOpen(false)} />}
+      {healthOpen && <HealthDialog onClose={() => setHealthOpen(false)} onCreate={offerCreate} />}
       <Toasts />
     </>
   );
