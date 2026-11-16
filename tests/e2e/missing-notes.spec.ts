@@ -1,3 +1,4 @@
+import { strToU8, zipSync } from "fflate";
 import { expect, test, type Page } from "@playwright/test";
 
 const editor = (page: Page) => page.locator(".cm-content");
@@ -75,9 +76,43 @@ test("Repository health lists broken links, orphans and hubs, and creates missin
   // The new note is linked from Linking notes, but doesn't link anywhere itself: a dead end.
   await page.getByRole("button", { name: "Repository health" }).click();
   await dialog.getByRole("tab", { name: /Dead ends/ }).click();
-  await expect(dialog.getByRole("tabpanel", { name: "Dead ends" }).getByRole("button", { name: "Ideas" })).toBeVisible();
-  await dialog.getByRole("tabpanel", { name: "Dead ends" }).getByRole("button", { name: "Ideas" }).click();
+  await expect(dialog.getByRole("tabpanel", { name: "Dead ends" }).getByRole("button", { name: "Ideas", exact: true })).toBeVisible();
+  await dialog.getByRole("tabpanel", { name: "Dead ends" }).getByRole("button", { name: "Ideas", exact: true }).click();
   await expect(dialog).toBeHidden();
+});
+
+test("Repository health quick fixes link mentions, ignore notes and count what's fixed", async ({ page }) => {
+  await openApp(page);
+  const zip = zipSync({
+    "V/Alpha.md": strToU8("nothing to see"),
+    "V/Beta.md": strToU8("I like Alpha a lot."),
+    "V/Gamma.md": strToU8("See [[Beta]]."),
+  });
+  await page.getByLabel("Choose a zip to import").setInputFiles({ name: "v.zip", mimeType: "application/zip", buffer: Buffer.from(zip) });
+  await expect(page.getByRole("status").filter({ hasText: "Imported 3 files" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Repository health" }).click();
+  const dialog = page.getByRole("dialog", { name: "Repository health" });
+  await dialog.getByRole("tab", { name: /Orphans/ }).click();
+  const orphans = dialog.getByRole("tabpanel", { name: "Orphans" });
+  await expect(orphans).toContainText("Mentioned in Beta: “I like Alpha a lot.”");
+  await orphans.getByRole("button", { name: "Link Alpha from Beta" }).click();
+  await expect(orphans.getByRole("button", { name: "Alpha", exact: true })).toHaveCount(0);
+  // Alpha is no longer an orphan, and Beta no longer a dead end.
+  await expect(dialog.getByRole("status")).toHaveText(/2 issues fixed today/);
+
+  // Gamma links nowhere but Beta, so it isn't a dead end; Alpha still is. Ignore it.
+  await dialog.getByRole("tab", { name: /Dead ends/ }).click();
+  const deadEnds = dialog.getByRole("tabpanel", { name: "Dead ends" });
+  await deadEnds.getByRole("button", { name: "Ignore Alpha" }).click();
+  await expect(deadEnds.getByRole("button", { name: "Alpha", exact: true })).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Check them again" }).click();
+  await expect(deadEnds.getByRole("button", { name: "Alpha", exact: true })).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Close repository health" }).click();
+  await tree(page).getByRole("treeitem", { name: "Beta" }).click();
+  await page.getByRole("radio", { name: "Source" }).click();
+  await expect(page.locator(".cm-content")).toHaveText("I like [[Alpha]] a lot.");
 });
 
 test("deleting a linked note warns, and can turn the links into text", async ({ page }) => {

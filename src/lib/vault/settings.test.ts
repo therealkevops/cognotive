@@ -21,6 +21,11 @@ describe("parseSettings", () => {
     });
   });
 
+  it("keeps only strings in the health ignore list", () => {
+    expect(parseSettings('{"healthIgnore": ["A.md", 3, null]}').healthIgnore).toEqual(["A.md"]);
+    expect(parseSettings('{"healthIgnore": "A.md"}').healthIgnore).toEqual([]);
+  });
+
   it("round-trips", () => {
     const s = { ...DEFAULT_SETTINGS, attachmentFolder: "files" };
     expect(parseSettings(serializeSettings(s))).toEqual(s);

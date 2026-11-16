@@ -37,7 +37,10 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 - Repository health: a score out of 100 with totals and a heatmap of recent changes; a link map
   of the whole repository (hubs large, orphans loose, missing notes as dashed stubs; hover to see a
   note's links, click to open it or create a missing one); and cards for broken links, orphans,
-  dead ends, hubs and stale hubs that open lists to act on
+  dead ends, hubs and stale hubs that open lists to act on. Quick fixes: create a missing note,
+  link an orphan from a note that mentions it, link a dead end to a note it mentions, or ignore a
+  note (kept in `.noted/settings.json`); the score updates as you go, with a count of what you fixed
+  today
 - Canvases (`.canvas`, the JSON Canvas format Obsidian uses): cards for text, notes, images,
   drawings and web links, groups, and labelled arrows, which become typed relations
 - Excalidraw drawings (`.excalidraw` files): create with the pen button in the file tree, edit

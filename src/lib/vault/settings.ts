@@ -18,6 +18,8 @@ export interface VaultSettings {
   newNoteFolder: string;
   /** How new links are written: [[wikilinks]], or [markdown](links.md) that also work on github.com. */
   linkFormat: "wikilink" | "markdown";
+  /** Notes Repository health leaves out of its checks (the user chose "Ignore"). */
+  healthIgnore: string[];
 }
 
 export const SETTINGS_PATH = ".noted/settings.json";
@@ -32,6 +34,7 @@ export const DEFAULT_SETTINGS: VaultSettings = {
   newNoteLocation: "current",
   newNoteFolder: "",
   linkFormat: "wikilink",
+  healthIgnore: [],
 };
 
 export function parseSettings(text: string | undefined): VaultSettings {
@@ -45,6 +48,7 @@ export function parseSettings(text: string | undefined): VaultSettings {
     }
     if (!["current", "root", "folder"].includes(out.newNoteLocation)) out.newNoteLocation = "current";
     if (out.linkFormat !== "wikilink" && out.linkFormat !== "markdown") out.linkFormat = "wikilink";
+    out.healthIgnore = Array.isArray(raw.healthIgnore) ? raw.healthIgnore.filter((p): p is string => typeof p === "string") : [];
     return out;
   } catch {
     return { ...DEFAULT_SETTINGS };

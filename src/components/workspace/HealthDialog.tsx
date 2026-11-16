@@ -2,7 +2,9 @@
 
 import { X } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { formatLink } from "@/lib/links/format";
 import { activityWeeks, scoreVerdict, vaultHealth } from "@/lib/links/health";
+import { readPref, writePref } from "@/lib/prefs";
 import { displayName, dirname, isWithin } from "@/lib/vault/paths";
 import { useVault } from "../vault/useVault";
 import { LinkMap } from "./LinkMap";
@@ -30,28 +32,27 @@ export function HealthDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // Daily notes and templates are naturally unlinked; leave them out, and notes the user chose to ignore.
+  const ignored = useMemo(() => {
+    const s = vault.settings;
+    const skip = new Set(s.healthIgnore);
+    return (p: string) =>
+      skip.has(p) || (!!s.dailyFolder && isWithin(p, s.dailyFolder)) || (!!s.templateFolder && isWithin(p, s.templateFolder));
+  }, [vault.settings]);
+
   const health = useMemo(() => {
     const mtimes = new Map(vault.entries.map((e) => [e.path, e.mtime]));
-    const s = vault.settings;
-    return vaultHealth(vault.links, {
-      mtime: (p) => mtimes.get(p),
-      // Daily notes and templates are naturally unlinked; leave them out.
-      ignore: (p) =>
-        (!!s.dailyFolder && isWithin(p, s.dailyFolder)) || (!!s.templateFolder && isWithin(p, s.templateFolder)),
-    });
+    return vaultHealth(vault.links, { mtime: (p) => mtimes.get(p), ignore: ignored });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-  }, [vault.links, vault.indexVersion, vault.entries, vault.settings]);
+  }, [vault.links, vault.indexVersion, vault.entries, ignored]);
 
   const graph = useMemo(() => {
-    const s = vault.settings;
-    const ignored = (p: string) =>
-      (!!s.dailyFolder && isWithin(p, s.dailyFolder)) || (!!s.templateFolder && isWithin(p, s.templateFolder));
     const g = vault.links.graph({ includeUnresolved: true });
     const nodes = g.nodes.filter((n) => n.unresolved || !ignored(n.id));
     const ids = new Set(nodes.map((n) => n.id));
     return { nodes, edges: g.edges.filter((e) => ids.has(e.source) && ids.has(e.target)) };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-  }, [vault.links, vault.indexVersion, vault.settings]);
+  }, [vault.links, vault.indexVersion, ignored]);
   const hubSet = useMemo(() => new Set(health.hubs.map((h) => h.path)), [health]);
   const orphanSet = useMemo(() => new Set(health.orphans), [health]);
 
@@ -59,6 +60,49 @@ export function HealthDialog({
     onClose();
     void vault.open(p);
   };
+
+  /* ---------- Quick fixes ---------- */
+
+  // Suggested links: where an orphan is mentioned, and what a dead end mentions.
+  const suggestions = useMemo(() => {
+    const out = new Map<string, { source: string; target: string; from: number; text: string; context: string }>();
+    if (tab === "orphans")
+      for (const p of health.orphans.slice(0, 100)) {
+        const m = vault.links.unlinkedMentions(p)[0];
+        if (m) out.set(p, { ...m, target: p });
+      }
+    if (tab === "deadEnds")
+      for (const p of health.deadEnds.slice(0, 100)) {
+        const m = vault.links.mentionsIn(p, 1)[0];
+        if (m) out.set(p, m);
+      }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
+  }, [tab, health, vault.links, vault.indexVersion]);
+
+  /** Turns the mention into a link (in the repository's link format). */
+  const linkMention = async (m: { source: string; target: string; from: number; text: string }) => {
+    const content = vault.links.content(m.source);
+    if (content === undefined || content.slice(m.from, m.from + m.text.length) !== m.text) return;
+    const target = vault.links.linkText(m.target);
+    const link = formatLink(vault.settings.linkFormat, m.source, { path: m.target, target, alias: target === m.text ? undefined : m.text }, target);
+    await vault.writeNote(m.source, content.slice(0, m.from) + link + content.slice(m.from + m.text.length));
+  };
+
+  const ignore = (p: string) => void vault.updateSettings({ healthIgnore: [...vault.settings.healthIgnore, p] });
+  const restoreIgnored = () => void vault.updateSettings({ healthIgnore: [] });
+
+  // Issues fixed today: the count when first opened today, minus the count now.
+  const issues = health.broken.length + health.orphans.length + health.deadEnds.length + health.stale.length;
+  const [baseline] = useState(() => {
+    const key = `health:${vault.vaultId}:today`;
+    const today = new Date().toDateString();
+    const saved = readPref<{ day: string; issues: number } | null>(key, null);
+    if (saved?.day === today) return saved.issues;
+    writePref(key, { day: today, issues });
+    return issues;
+  });
+  const fixedToday = Math.max(0, baseline - issues);
 
   const n = health.stats.notes;
   const tabs: Array<{ id: Tab; label: string; count: number; hint: string; tone: Tone; detail: string; share?: number }> = [
@@ -148,6 +192,11 @@ export function HealthDialog({
                 <p className="font-serif text-xl" data-testid="health-verdict">
                   {verdict.label}
                 </p>
+                {fixedToday > 0 && (
+                  <p className="health-fixed" role="status">
+                    {fixedToday} {fixedToday === 1 ? "issue" : "issues"} fixed today ✨
+                  </p>
+                )}
                 <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-2">
                   <Stat label="Notes" value={n.toLocaleString()} />
                   <Stat label="Links" value={health.stats.links.toLocaleString()} />
@@ -227,14 +276,73 @@ export function HealthDialog({
               ),
             )}
           {(tab === "orphans" || tab === "deadEnds") &&
-            health[tab].map((p) => row(p, noteButton(p), dirname(p) || undefined))}
+            health[tab].map((p) => {
+              const m = suggestions.get(p);
+              const other = m ? (tab === "orphans" ? m.source : m.target) : null;
+              return row(
+                p,
+                noteButton(p),
+                m && other ? (
+                  <>
+                    {tab === "orphans" ? "Mentioned in " : "Mentions "}
+                    <span className="text-foreground/80">{displayName(other)}</span>: “{m.context.trim()}”
+                  </>
+                ) : (
+                  dirname(p) || undefined
+                ),
+                <div className="flex shrink-0 gap-1.5">
+                  {m && other && (
+                    <button
+                      type="button"
+                      className="button-secondary px-2.5 py-1 text-xs"
+                      aria-label={tab === "orphans" ? `Link ${displayName(p)} from ${displayName(other)}` : `Link ${displayName(p)} to ${displayName(other)}`}
+                      onClick={() => void linkMention(m)}
+                    >
+                      {tab === "orphans" ? "Link from " : "Link to "}
+                      {displayName(other)}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="button-secondary px-2.5 py-1 text-xs text-muted"
+                    aria-label={`Ignore ${displayName(p)}`}
+                    title="Leave this note out of the health checks"
+                    onClick={() => ignore(p)}
+                  >
+                    Ignore
+                  </button>
+                </div>,
+              );
+            })}
           {tab === "hubs" &&
             health.hubs.map((h) => row(h.path, noteButton(h.path), `${h.links} notes link here`))}
           {tab === "stale" &&
             health.stale.map((h) =>
-              row(h.path, noteButton(h.path), `${h.links} notes link here · last changed ${new Date(h.mtime).toLocaleDateString()}`),
+              row(
+                h.path,
+                noteButton(h.path),
+                `${h.links} notes link here · last changed ${new Date(h.mtime).toLocaleDateString()}`,
+                <button
+                  type="button"
+                  className="button-secondary shrink-0 px-2.5 py-1 text-xs text-muted"
+                  aria-label={`Ignore ${displayName(h.path)}`}
+                  title="Leave this note out of the health checks"
+                  onClick={() => ignore(h.path)}
+                >
+                  Ignore
+                </button>,
+              ),
             )}
           </ul>
+          {vault.settings.healthIgnore.length > 0 && (
+            <p className="px-6 pt-1 pb-4 text-xs text-muted">
+              {vault.settings.healthIgnore.length} {vault.settings.healthIgnore.length === 1 ? "note is" : "notes are"} left out of
+              these checks.{" "}
+              <button type="button" className="underline hover:text-accent" onClick={restoreIgnored}>
+                Check them again
+              </button>
+            </p>
+          )}
         </div>
       </div>
     </div>

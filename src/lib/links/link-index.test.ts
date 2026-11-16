@@ -75,6 +75,21 @@ describe("LinkIndex", () => {
     ]);
   });
 
+  it("finds other notes' titles mentioned in a note, first mention of each", () => {
+    const ix = new LinkIndex();
+    ix.set("Beta.md", "Alpha, then gamma, then Alpha again. [[Delta]] is linked. `Gamma` in code.");
+    ix.set("Alpha.md", "");
+    ix.set("Gamma.md", "");
+    ix.set("Delta.md", "");
+    const m = ix.mentionsIn("Beta.md");
+    expect(m.map((x) => [x.target, x.text, x.from])).toEqual([
+      ["Alpha.md", "Alpha", 0],
+      ["Gamma.md", "gamma", 12],
+    ]);
+    expect(ix.mentionsIn("Beta.md", 1)).toHaveLength(1);
+    expect(ix.mentionsIn("Nope.md")).toEqual([]);
+  });
+
   it("counts tags, including parents of nested tags", () => {
     const tags = vault().tags();
     expect(Object.fromEntries(tags)).toEqual({ index: 1, outdoors: 1, food: 1, "food/italian": 1 });

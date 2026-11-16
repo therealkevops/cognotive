@@ -268,6 +268,40 @@ export class LinkIndex {
     return out.sort((a, b) => a.source.localeCompare(b.source) || a.from - b.from);
   }
 
+  /**
+   * The other way round from `unlinkedMentions`: other notes' titles (or
+   * aliases) mentioned as plain text inside `path`, first mention of each,
+   * in order. `target` is the mentioned note.
+   */
+  mentionsIn(path: string, limit = 5): Array<Mention & { target: string }> {
+    const e = this.notes.get(path);
+    if (!e) return [];
+    const byName = new Map<string, string>();
+    for (const [p, other] of this.notes) {
+      if (p === path || isDrawing(p) || isCanvas(p)) continue;
+      for (const n of [noteTitle(p), ...other.parsed.aliases]) {
+        if (n.trim().length >= 3 && !byName.has(n.toLowerCase())) byName.set(n.toLowerCase(), p);
+      }
+    }
+    if (byName.size === 0) return [];
+    const pattern = new RegExp(
+      `(?<![\\p{L}\\p{N}_])(${[...byName.keys()].map(escapeRegExp).sort((a, b) => b.length - a.length).join("|")})(?![\\p{L}\\p{N}_])`,
+      "giu",
+    );
+    const masked = maskLinks(e.content, e.parsed);
+    const out: Array<Mention & { target: string }> = [];
+    const seen = new Set<string>();
+    for (const m of masked.matchAll(pattern)) {
+      const target = byName.get(m[0].toLowerCase())!;
+      if (seen.has(target)) continue;
+      seen.add(target);
+      const from = m.index!;
+      out.push({ source: path, target, from, text: m[0], line: lineNumber(e.content, from), context: lineText(e.content, from) });
+      if (out.length >= limit) break;
+    }
+    return out;
+  }
+
   /** Tag → number of notes using it (nested tags count toward their parents too). */
   tags(): Map<string, number> {
     const counts = new Map<string, number>();
