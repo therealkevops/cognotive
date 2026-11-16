@@ -108,3 +108,19 @@ describe("personal access tokens", () => {
     ]);
   });
 });
+
+describe("canWrite", () => {
+  const client = (status: number) =>
+    new GitHubClient(async () => "t", (async () =>
+      status === 201 ? Response.json({ sha: "e69de29" }, { status }) : Response.json({ message: "no" }, { status })) as typeof fetch);
+  it("is true when an empty blob can be saved", async () => {
+    expect(await client(201).canWrite("me", "notes")).toBe(true);
+  });
+  it("is false for repositories the token can only read", async () => {
+    expect(await client(403).canWrite("me", "site")).toBe(false);
+    expect(await client(404).canWrite("me", "site")).toBe(false);
+  });
+  it("can't tell for an empty repository", async () => {
+    expect(await client(409).canWrite("me", "new")).toBeNull();
+  });
+});

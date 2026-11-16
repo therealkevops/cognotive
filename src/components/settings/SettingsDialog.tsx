@@ -854,6 +854,8 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
   const [secret, setSecret] = useState("");
   const [busy, setBusy] = useState(false);
   const [recovery, setRecovery] = useState<{ key: string; config: GitHubVaultConfig } | null>(null);
+  // Can the token write to the chosen repository? Public ones are listed even when it can only read.
+  const [writable, setWritable] = useState<boolean | "checking">(true);
 
   const checkPat = () => {
     setCheckingPat(true);
@@ -896,8 +898,13 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
   }, [client, repo, branch]);
   const pickRepo = (fullName: string) => {
     setRepoName(fullName);
+    setWritable("checking");
     const r = repos?.find((x) => x.fullName === fullName);
     if (!r) return;
+    client
+      .canWrite(r.owner, r.name)
+      .then((ok) => setWritable(ok !== false))
+      .catch(() => setWritable(true)); // can't tell; sync will report a real problem
     setName((n) => n || r.name);
     setBranch(r.defaultBranch);
     setBranches([r.defaultBranch]);
@@ -922,7 +929,7 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
 
   const probeKind = probe && typeof probe === "object" ? probe.kind : null;
   const passError = probeKind === "empty" && encrypt ? newPassphraseError(pass, confirm) : null;
-  const ready = probe !== "checking" && (probeKind === "encrypted" ? !!secret.trim() : !passError);
+  const ready = writable === true && probe !== "checking" && (probeKind === "encrypted" ? !!secret.trim() : !passError);
 
   let folderError: string | null = null;
   let cleanFolder = "";
@@ -1035,7 +1042,14 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
       </div>
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       {pat && (
-        <Field label="Repository" hint="Only repositories the token can reach are listed.">
+        <Field
+          label="Repository"
+          hint={
+            writable === false
+              ? undefined
+              : "Repositories the token can reach. GitHub lets every token read public repositories, so yours are listed too."
+          }
+        >
           <select
             className="input"
             value={repoName}
@@ -1052,6 +1066,16 @@ function ConnectRepoForm({ onDone }: { onDone(): void }) {
             ))}
           </select>
         </Field>
+      )}
+      {pat && repo && writable === false && (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          This token can only read {repo.fullName}, so it can&apos;t sync there. Add the repository to the token&apos;s
+          repository access on GitHub, with Contents set to Read and write, then{" "}
+          <button type="button" className="font-medium underline" onClick={() => pickRepo(repo.fullName)}>
+            check again
+          </button>
+          .
+        </p>
       )}
       {repo && (
         <>

@@ -96,7 +96,15 @@ export class FakeGitHub {
       });
     }
     if (path === "/user/repos") {
-      return ok([{ name: "notes", full_name: "me/notes", owner: { login: "me" }, default_branch: "main", private: true }]);
+      return ok([
+        { name: "notes", full_name: "me/notes", owner: { login: "me" }, default_branch: "main", private: true },
+        // A public repository the token wasn't given: GitHub lists it, but only for reading.
+        { name: "website", full_name: "me/website", owner: { login: "me" }, default_branch: "main", private: false },
+      ]);
+    }
+    if (path.startsWith("/repos/me/website/")) {
+      if (path.endsWith("/branches")) return ok([{ name: "main" }]);
+      return ok({ message: "Resource not accessible by personal access token" }, 403);
     }
     if (path === "/user/installations") return ok({ installations: [{ id: 1 }] });
     if (path === "/user/installations/1/repositories") {

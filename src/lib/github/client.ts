@@ -246,6 +246,23 @@ export class GitHubClient {
     return r.sha;
   }
 
+  /**
+   * Whether the token can write to a repository. Every token can read public
+   * repositories, so being listed isn't enough. Tests by saving an empty blob:
+   * it isn't attached to any commit, so nothing in the repository changes.
+   * null when GitHub can't say (an empty repository refuses blobs).
+   */
+  async canWrite(owner: string, repo: string): Promise<boolean | null> {
+    try {
+      await this.createBlob(owner, repo, "");
+      return true;
+    } catch (e) {
+      if (e instanceof GitHubError && (e.status === 403 || e.status === 404)) return false;
+      if (e instanceof GitHubError && e.status === 409) return null;
+      throw e;
+    }
+  }
+
   async createTree(
     owner: string,
     repo: string,
