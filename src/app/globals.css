@@ -796,6 +796,25 @@ mark {
 .health-day.level-2 { background: color-mix(in srgb, var(--accent) 52%, transparent); }
 .health-day.level-3 { background: color-mix(in srgb, var(--accent) 76%, transparent); }
 .health-day.level-4 { background: var(--accent); }
+.hub-badge {
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  font-style: normal;
+  vertical-align: 1px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+.hub-badge-marked { color: #2f7d4d; background: color-mix(in srgb, #3f9d63 15%, transparent); }
+.hub-badge-waiting { color: #a3471f; background: color-mix(in srgb, #d9772b 14%, transparent); }
+[data-theme="dark"] .hub-badge-marked { color: #7ad69c; }
+[data-theme="dark"] .hub-badge-waiting { color: #f0a774; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .hub-badge-marked { color: #7ad69c; }
+  :root:not([data-theme="light"]) .hub-badge-waiting { color: #f0a774; }
+}
 .link-map {
   height: 15rem;
   border: 1px solid var(--border);

@@ -115,6 +115,37 @@ test("Repository health quick fixes link mentions, ignore notes and count what's
   await expect(page.locator(".cm-content")).toHaveText("I like [[Alpha]] a lot.");
 });
 
+test("a note can be marked as a hub, and missing notes many link to are hubs waiting to be written", async ({ page }) => {
+  await openApp(page);
+  const zip = zipSync({
+    "V/A.md": strToU8("[[Recipes]]"),
+    "V/B.md": strToU8("[[Recipes]]"),
+    "V/C.md": strToU8("[[Recipes]]"),
+  });
+  await page.getByLabel("Choose a zip to import").setInputFiles({ name: "v.zip", mimeType: "application/zip", buffer: Buffer.from(zip) });
+  await expect(page.getByRole("status").filter({ hasText: "Imported 3 files" })).toBeVisible();
+
+  // Welcome is open: mark it from the command palette.
+  await page.keyboard.press("ControlOrMeta+p");
+  await page.getByRole("dialog", { name: "Command palette" }).getByRole("combobox").fill("mark this note as a hub");
+  await page.keyboard.press("Enter");
+  await page.getByRole("radio", { name: "Source" }).click();
+  await expect(editor(page).locator(".cm-line").first()).toHaveText("---");
+  await expect(editor(page)).toContainText("hub: true");
+
+  await page.getByRole("button", { name: "Repository health" }).click();
+  const dialog = page.getByRole("dialog", { name: "Repository health" });
+  await dialog.getByRole("tab", { name: /Hubs/ }).click();
+  const hubs = dialog.getByRole("tabpanel", { name: "Hubs" });
+  await expect(hubs).toContainText("Recipeswaiting to be written");
+  await expect(hubs).toContainText("Welcomemarked");
+  await hubs.getByRole("button", { name: "Unmark Welcome as a hub" }).click();
+  await expect(hubs).not.toContainText("Welcomemarked");
+  await hubs.getByRole("button", { name: "Create hub Recipes" }).click();
+  await page.getByRole("dialog", { name: "Create note" }).getByRole("button", { name: "Create" }).click();
+  await expect(title(page)).toHaveValue("Recipes");
+});
+
 test("deleting a linked note warns, and can turn the links into text", async ({ page }) => {
   await openApp(page);
   const item = tree(page).getByRole("treeitem", { name: "Linking notes" });

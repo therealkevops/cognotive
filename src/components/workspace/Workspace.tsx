@@ -39,7 +39,8 @@ import { serializeCanvas } from "@/lib/canvas/format";
 import { neighbourhoodCanvas, type Neighbour } from "@/lib/canvas/map";
 import { convertLinks, formatLink, markdownLink } from "@/lib/links/format";
 import { splitLinkText } from "@/lib/links/parse";
-import { splitFrontmatter } from "@/lib/markdown/frontmatter";
+import { setFrontmatterProperty, splitFrontmatter } from "@/lib/markdown/frontmatter";
+import { hubProperty } from "@/lib/links/health";
 import { extractHeadings } from "@/lib/markdown/outline";
 import { blockIdChange, listBlocks } from "@/lib/markdown/blocks";
 import { previewMarkdown } from "@/lib/markdown/preview";
@@ -924,6 +925,18 @@ export function Workspace() {
     else void vault.writeNote(from, next);
   };
 
+  /** Sets or removes a property of the open note (one undoable edit in the editor). */
+  const setActiveProperty = (key: string, value: string | boolean | undefined) => {
+    if (!activePathNow) return;
+    const text = view && mode !== "reading" ? view.state.doc.toString() : vault.activeText;
+    const next = setFrontmatterProperty(text, key, value);
+    if (next === text) return;
+    if (view && mode !== "reading") view.dispatch({ changes: { from: 0, to: text.length, insert: next }, userEvent: "input" });
+    else void vault.writeNote(activePathNow, next);
+  };
+  const activeIsMarkedHub =
+    !!activePathNow && hubProperty(vault.links.get(activePathNow)?.properties) === true;
+
   /** Command palette entries (data only) and what each does. */
   const commands: Array<PickerItem & { when?: boolean }> = [
     { id: "new-note", label: "New note", hint: "Ctrl/Cmd+Alt+N" },
@@ -950,6 +963,11 @@ export function Workspace() {
     },
     { id: "health", label: "Open repository health" },
     { id: "map-canvas", label: "Map this note as a canvas", when: kind === "note" },
+    {
+      id: "hub-toggle",
+      label: activeIsMarkedHub ? "Unmark this note as a hub" : "Mark this note as a hub",
+      when: kind === "note",
+    },
     { id: "mode-live", label: "Live preview", when: kind === "note" },
     { id: "mode-source", label: "Source mode", when: kind === "note" },
     { id: "mode-reading", label: "Reading view", hint: "Ctrl/Cmd+E", when: kind === "note" },
@@ -1004,6 +1022,7 @@ export function Workspace() {
     },
     health: () => setHealthOpen(true),
     "map-canvas": () => void mapAsCanvas(),
+    "hub-toggle": () => setActiveProperty("hub", activeIsMarkedHub ? undefined : true),
     "mode-live": () => setMode("live"),
     "mode-source": () => setMode("source"),
     "mode-reading": () => setMode("reading"),

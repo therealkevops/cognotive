@@ -65,6 +65,15 @@ like [[Ideas]], are shown dashed: open one to create the note.
 - **Repository health** (bottom of the sidebar) lists broken links, orphans and hubs.
 - Renaming a note updates every link to it.
 
+## Hubs
+
+A hub is a note that holds an area together, like a contents page. Give each area one (the
+*Map of content* starter template makes one), link new notes to their hub as you write, and let
+the hub collect links rather than content. Repository health finds hubs (notes many others link
+to, and index notes that link out to many) and lists missing notes that already have enough links
+to be one. Mark a note yourself with \`hub: true\` in its properties, or the command
+*Mark this note as a hub*.
+
 Embed part of another note with \`![[Note#Heading]]\`:
 
 ![[Welcome#Maths and diagrams]]

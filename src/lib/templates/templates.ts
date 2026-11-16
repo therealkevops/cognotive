@@ -241,6 +241,26 @@ tags: [review]
 
 1. 
 `,
+  "Map of content.md": `---
+hub: true
+template-name: "{{input:Topic}}"
+---
+# {{input:Topic}}
+
+{{cursor}}What this area is about, in a sentence or two.
+
+## Start here
+
+- 
+
+## Notes
+
+- 
+
+## Open questions
+
+- 
+`,
   "Daily.md": `# {{date:dddd D MMMM YYYY}}
 
 ## Plan

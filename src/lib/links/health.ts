@@ -8,8 +8,13 @@ export interface VaultHealth {
   deadEnds: string[];
   /** Links to notes that don't exist: target → notes using it. */
   broken: Array<{ target: string; sources: string[] }>;
-  /** The most linked-to notes. */
-  hubs: Array<{ path: string; links: number }>;
+  /**
+   * Notes that hold the repository together: marked with `hub: true`, linked
+   * to by many notes ("linked"), or index notes linking out to many ("index").
+   */
+  hubs: Hub[];
+  /** Missing notes that many notes link to: hubs waiting to be written. */
+  hubCandidates: Array<{ target: string; sources: string[] }>;
   /** Notes many others rely on that haven't been touched in a long time. */
   stale: Array<{ path: string; links: number; mtime: number }>;
   /** Totals for the checked notes. */
@@ -26,7 +31,24 @@ export interface VaultHealth {
   score: number;
 }
 
+export interface Hub {
+  path: string;
+  /** Notes linking here. */
+  links: number;
+  /** Notes this one links to. */
+  out: number;
+  kind: "marked" | "linked" | "index";
+}
+
 const DAY = 86_400_000;
+
+/** A note's `hub` property: true (marked), false (never a hub), or undefined. */
+export function hubProperty(properties: Record<string, unknown> | undefined): boolean | undefined {
+  const v = properties?.hub;
+  if (v === true || (typeof v === "string" && /^(true|yes)$/i.test(v.trim()))) return true;
+  if (v === false || (typeof v === "string" && /^(false|no)$/i.test(v.trim()))) return false;
+  return undefined;
+}
 
 /**
  * What the link graph says needs attention, as lists you can act on.
@@ -52,11 +74,6 @@ export function vaultHealth(
     broken.set(key, g);
   }
 
-  const hubs = [...inbound]
-    .filter(([p, n]) => isNote(p) && n >= 2)
-    .map(([path, links]) => ({ path, links }))
-    .sort((a, b) => b.links - a.links || a.path.localeCompare(b.path))
-    .slice(0, 10);
 
   const cutoff = now - (opts.staleDays ?? 180) * DAY;
   const stale = notes
@@ -73,6 +90,29 @@ export function vaultHealth(
     for (const t of targets) linked.add(t);
   }
   const brokenList = [...broken.values()];
+
+  // Hubs stand well above the repository's average, so the word keeps its meaning.
+  const outCount = new Map<string, number>();
+  for (const p of notes) {
+    outCount.set(p, new Set(index.outgoing(p).map((o) => o.resolved).filter((t) => !!t && t !== p && isNote(t))).size);
+  }
+  const avg = notes.length ? links / notes.length : 0;
+  const minIn = Math.max(3, Math.ceil(avg * 2));
+  const minOut = Math.max(8, Math.ceil(avg * 3));
+  const hubs: Hub[] = [];
+  const detected: Hub[] = [];
+  for (const p of notes) {
+    const mark = hubProperty(index.get(p)?.properties);
+    if (mark === false) continue;
+    const h = { path: p, links: inbound.get(p) ?? 0, out: outCount.get(p) ?? 0 };
+    if (mark) hubs.push({ ...h, kind: "marked" });
+    else if (h.links >= minIn) detected.push({ ...h, kind: "linked" });
+    else if (h.out >= minOut) detected.push({ ...h, kind: "index" });
+  }
+  const weight = (h: Hub) => h.links + h.out / 2;
+  hubs.sort((a, b) => weight(b) - weight(a) || a.path.localeCompare(b.path));
+  detected.sort((a, b) => weight(b) - weight(a) || a.path.localeCompare(b.path));
+  hubs.push(...detected.slice(0, 10));
   const stats = {
     notes: notes.length,
     links,
@@ -87,6 +127,7 @@ export function vaultHealth(
     deadEnds,
     broken: brokenList.sort((a, b) => b.sources.length - a.sources.length || a.target.localeCompare(b.target)),
     hubs,
+    hubCandidates: brokenList.filter((b) => b.sources.length >= 3).map((b) => ({ target: b.target, sources: [...b.sources] })),
     stale,
   };
 }

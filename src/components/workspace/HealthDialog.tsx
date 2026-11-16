@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { formatLink } from "@/lib/links/format";
 import { activityWeeks, scoreVerdict, vaultHealth } from "@/lib/links/health";
+import { setFrontmatterProperty } from "@/lib/markdown/frontmatter";
 import { readPref, writePref } from "@/lib/prefs";
 import { displayName, dirname, isWithin } from "@/lib/vault/paths";
 import { useVault } from "../vault/useVault";
@@ -89,6 +90,13 @@ export function HealthDialog({
     await vault.writeNote(m.source, content.slice(0, m.from) + link + content.slice(m.from + m.text.length));
   };
 
+  /** Sets (true/false) or removes the note's `hub` property. */
+  const markHub = async (path: string, value: boolean | undefined) => {
+    const content = vault.links.content(path);
+    if (content === undefined) return;
+    await vault.writeNote(path, setFrontmatterProperty(content, "hub", value));
+  };
+
   const ignore = (p: string) => void vault.updateSettings({ healthIgnore: [...vault.settings.healthIgnore, p] });
   const restoreIgnored = () => void vault.updateSettings({ healthIgnore: [] });
 
@@ -137,9 +145,14 @@ export function HealthDialog({
       id: "hubs",
       label: "Hubs",
       count: health.hubs.length,
-      hint: "The notes most others link to: the backbone of the repository.",
+      hint:
+        "The notes that hold the repository together: ones many notes link to, index notes linking out to a topic, and notes marked with hub: true. Link new notes to their hub as you write.",
       tone: "good",
-      detail: health.hubs[0] ? `Top: ${displayName(health.hubs[0].path)}` : "None yet",
+      detail: health.hubCandidates.length
+        ? `${health.hubCandidates.length} waiting to be written`
+        : health.hubs[0]
+          ? `Top: ${displayName(health.hubs[0].path)}`
+          : "None yet",
     },
     {
       id: "stale",
@@ -315,7 +328,47 @@ export function HealthDialog({
               );
             })}
           {tab === "hubs" &&
-            health.hubs.map((h) => row(h.path, noteButton(h.path), `${h.links} notes link here`))}
+            health.hubCandidates.map((c) =>
+              row(
+                `?${c.target}`,
+                <>
+                  <span className="text-muted italic">{c.target}</span>
+                  <span className="hub-badge hub-badge-waiting">waiting to be written</span>
+                </>,
+                `${c.sources.length} notes already link here`,
+                <button
+                  type="button"
+                  className="button-secondary shrink-0 px-2.5 py-1 text-xs"
+                  aria-label={`Create hub ${c.target}`}
+                  onClick={() => {
+                    onClose();
+                    onCreate(c.target, c.sources[0]);
+                  }}
+                >
+                  Create
+                </button>,
+              ),
+            )}
+          {tab === "hubs" &&
+            health.hubs.map((h) =>
+              row(
+                h.path,
+                <>
+                  {noteButton(h.path)}
+                  <span className={`hub-badge hub-badge-${h.kind}`}>{HUB_KIND[h.kind]}</span>
+                </>,
+                `${h.links} ${h.links === 1 ? "note links" : "notes link"} here · links to ${h.out}`,
+                <button
+                  type="button"
+                  className="button-secondary shrink-0 px-2.5 py-1 text-xs text-muted"
+                  aria-label={h.kind === "marked" ? `Unmark ${displayName(h.path)} as a hub` : `${displayName(h.path)} is not a hub`}
+                  title={h.kind === "marked" ? "Remove hub: true from the note" : "Add hub: false to the note, so it isn't counted"}
+                  onClick={() => void markHub(h.path, h.kind === "marked" ? undefined : false)}
+                >
+                  {h.kind === "marked" ? "Unmark" : "Not a hub"}
+                </button>,
+              ),
+            )}
           {tab === "stale" &&
             health.stale.map((h) =>
               row(
@@ -348,6 +401,8 @@ export function HealthDialog({
     </div>
   );
 }
+
+const HUB_KIND = { marked: "marked", linked: "many links in", index: "index" } as const;
 
 type Tone = "good" | "fair" | "poor" | "bad" | "old";
 

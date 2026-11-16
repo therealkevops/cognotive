@@ -37,7 +37,10 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 - Repository health: a score out of 100 with totals and a heatmap of recent changes; a link map
   of the whole repository (hubs large, orphans loose, missing notes as dashed stubs; hover to see a
   note's links, click to open it or create a missing one); and cards for broken links, orphans,
-  dead ends, hubs and stale hubs that open lists to act on. Quick fixes: create a missing note,
+  dead ends, hubs and stale hubs that open lists to act on. Hubs are notes well above average in
+  links in, index notes linking out to many, and notes marked `hub: true` (or with the command
+  *Mark this note as a hub*; `hub: false` opts a note out); missing notes linked from three or more
+  notes are listed as hubs waiting to be written. Quick fixes: create a missing note,
   link an orphan from a note that mentions it, link a dead end to a note it mentions, or ignore a
   note (kept in `.noted/settings.json`); the score updates as you go, with a count of what you fixed
   today
@@ -75,7 +78,7 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   - Properties `template-folder` (where new notes go) and `template-name` (e.g.
     `"{{date}} {{input:Topic}}"`) are the template's own settings; other properties, such as
     tags, are copied into the note
-  - Starter templates (Meeting, Project, Person, Weekly review, Daily) can be added when a
+  - Starter templates (Meeting, Project, Person, Weekly review, Map of content, Daily) can be added when a
     repository is created, or later from the Templates tab
 - Tabs for open files (the button at the end of the tab bar, or the command *Close all tabs*, closes them all), and a side pane to read one note while writing another (the columns
   button in the file tree, or Shift+Enter in the quick switcher)
