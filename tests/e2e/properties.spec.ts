@@ -164,3 +164,34 @@ test("the side pane edits the properties of the note it shows", async ({ page })
   await expect(page.locator(".cm-content")).toContainText("tags: [guide, area]");
   await expect(page.locator(".cm-content")).toContainText("hub: true");
 });
+
+test("an attachment's properties are edited above it, and follow a rename", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".cm-content")).toBeVisible();
+  await page.getByLabel("Choose files to add").setInputFiles({
+    name: "pic.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64"),
+  });
+  const title = page.getByRole("textbox", { name: "Note title" });
+  await expect(title).toHaveValue("pic");
+  const props = page.getByTestId("file-view").getByRole("region", { name: "Properties" });
+  await props.getByRole("button", { name: "Add property" }).click();
+  await props.getByRole("combobox", { name: "New property name" }).fill("tags");
+  await page.keyboard.press("Enter");
+  await props.getByRole("combobox", { name: "Add to tags" }).fill("photos");
+  await page.keyboard.press("Enter");
+  await expect(props).toContainText("#photos");
+
+  // The tag counts, and stays with the file when it's renamed.
+  await page.getByRole("tab", { name: "Tags" }).click();
+  await expect(page.getByRole("button", { name: "#photos 1", exact: true })).toBeVisible();
+  await title.fill("beach");
+  await title.press("Enter");
+  await page.getByRole("tab", { name: "Files" }).click();
+  // (The attachments folder is open: the upload opened it.)
+  await expect(page.getByRole("tree", { name: "Repository files" }).getByRole("treeitem", { name: /^beach/ })).toBeVisible();
+  await page.reload();
+  await expect(title).toHaveValue("beach");
+  await expect(page.getByTestId("file-view").getByRole("region", { name: "Properties" })).toContainText("#photos");
+});

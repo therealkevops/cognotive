@@ -36,6 +36,8 @@ describe("isSyncable", () => {
     expect(isSyncable("Drawings/x.excalidraw")).toBe(true);
     expect(isSyncable(".obsidian/app.json")).toBe(false);
     expect(isSyncable(".noted/settings.json")).toBe(true);
+    expect(isSyncable(".noted/properties.json")).toBe(true);
+    expect(isSyncable(".noted/other.json")).toBe(false);
     expect(isSyncable("a/.hidden/b.md")).toBe(false);
     expect(isSyncable("attachments/pic.png")).toBe(true);
     expect(isSyncable("tool.exe")).toBe(false);

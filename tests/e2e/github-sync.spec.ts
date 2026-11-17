@@ -116,3 +116,24 @@ test("a conflict stays in the note, and is resolved side by side", async ({ page
   await expect(page.getByRole("button", { name: /^Synced/ })).toBeVisible();
   expect(github.files()["Plan.md"]).toBe("# Plan!\n\nstart (mine)\n\nmiddle\n\nend");
 });
+
+test("attachment properties sync in .noted/properties.json", async ({ page }) => {
+  const github = new FakeGitHub({ "Hello.md": "hi" });
+  await github.install(page);
+  await connectRepo(page);
+  await page.getByLabel("Choose files to add").setInputFiles({
+    name: "pic.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64"),
+  });
+  const props = page.getByTestId("file-view").getByRole("region", { name: "Properties" });
+  await props.getByRole("button", { name: "Add property" }).click();
+  await props.getByRole("combobox", { name: "New property name" }).fill("hub");
+  await page.keyboard.press("Enter");
+  await expect(props.getByRole("checkbox", { name: "hub" })).toBeChecked();
+  await page.getByRole("button", { name: /unsynced/ }).click();
+  await expect(page.getByRole("button", { name: /^Synced/ })).toBeVisible();
+  const stored = JSON.parse(String(github.files()[".noted/properties.json"]));
+  expect(Object.values(stored)).toEqual([{ hub: true }]);
+  expect(Object.keys(stored)[0]).toMatch(/pic\.png$/);
+});

@@ -80,23 +80,23 @@ export class LinkIndex {
     this.resolver.add(path);
   }
 
+  /**
+   * Properties of an attachment (kept outside the file): its tags and aliases
+   * count like a note's. Null forgets them. Attachments stay out of the graph.
+   */
+  setFileProperties(path: string, properties: Record<string, unknown> | null): void {
+    if (isNote(path) || isDrawing(path) || isCanvas(path)) return;
+    if (properties && Object.keys(properties).length) {
+      this.resolver.add(path);
+      this.notes.set(path, { content: "", parsed: fromProperties(properties) });
+    } else this.notes.delete(path);
+  }
+
   set(path: string, content: string): void {
     this.resolver.add(path);
     if (isDrawing(path)) {
       const { links } = parseDrawing(drawingJson(path, content));
-      const properties = drawingProperties(path, content);
-      const list = (v: unknown) => (Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : []).map((x) => String(x).trim()).filter(Boolean);
-      this.notes.set(path, {
-        content,
-        parsed: {
-          links,
-          tags: [...new Set(list(properties.tags).map((t) => t.replace(/^#/, "").toLowerCase()))],
-          properties,
-          aliases: list(properties.aliases ?? properties.alias),
-          headings: [],
-          propertiesError: false,
-        },
-      });
+      this.notes.set(path, { content, parsed: { ...fromProperties(drawingProperties(path, content)), links } });
     } else if (isCanvas(path)) {
       const data = parseCanvas(content);
       this.notes.set(path, {
@@ -288,7 +288,7 @@ export class LinkIndex {
     if (!e) return [];
     const byName = new Map<string, string>();
     for (const [p, other] of this.notes) {
-      if (p === path || isDrawing(p) || isCanvas(p)) continue;
+      if (p === path || !isNote(p)) continue;
       for (const n of [noteTitle(p), ...other.parsed.aliases]) {
         if (n.trim().length >= 3 && !byName.has(n.toLowerCase())) byName.set(n.toLowerCase(), p);
       }
@@ -339,6 +339,7 @@ export class LinkIndex {
   graph(opts: { includeUnresolved?: boolean } = {}): { nodes: GraphNode[]; edges: GraphEdge[] } {
     const nodes = new Map<string, GraphNode>();
     for (const [p, e] of this.notes) {
+      if (!isNote(p) && !isDrawing(p) && !isCanvas(p)) continue; // attachments with properties
       nodes.set(p, {
         id: p,
         title: isDrawing(p) ? drawingName(p) : isCanvas(p) ? canvasName(p) : noteTitle(p),
@@ -536,3 +537,16 @@ function maskLinks(content: string, parsed: ParsedNote): string {
 }
 
 export { splitLinkText };
+
+/** Tags and aliases from a file's properties (drawings and attachments). */
+function fromProperties(properties: Record<string, unknown>): ParsedNote {
+  const list = (v: unknown) =>
+    (Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : []).map((x) => String(x).trim()).filter(Boolean);
+  return {
+    ...EMPTY_PARSED,
+    links: [],
+    tags: [...new Set(list(properties.tags).map((t) => t.replace(/^#/, "").toLowerCase()))],
+    properties,
+    aliases: list(properties.aliases ?? properties.alias),
+  };
+}

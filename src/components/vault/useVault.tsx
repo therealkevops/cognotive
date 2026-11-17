@@ -44,6 +44,15 @@ import {
 } from "@/lib/vault/paths";
 import type { VaultEntry, VaultStore } from "@/lib/vault/types";
 import { withNewNoteProperties } from "@/lib/vault/new-note-properties";
+import {
+  movedFileProperties,
+  parseFileProperties,
+  PROPERTIES_PATH,
+  serializeFileProperties,
+  withFileProperty,
+  withoutFileProperties,
+  type FileProperties,
+} from "@/lib/vault/file-properties";
 import { WELCOME_NOTES } from "@/lib/vault/welcome";
 
 const SAVE_DELAY_MS = 400;
@@ -121,6 +130,10 @@ export interface VaultApi {
   importFiles(files: Map<string, Uint8Array>): Promise<{ added: number; skipped: number; renamed: number }>;
   /** This vault's settings (.noted/settings.json). */
   settings: VaultSettings;
+  /** An attachment's properties (kept in .noted/properties.json). */
+  fileProperties(path: string): Record<string, unknown>;
+  /** Sets (or, with undefined, removes) a property of an attachment. */
+  setFileProperty(path: string, key: string, value: unknown): Promise<void>;
   updateSettings(patch: Partial<VaultSettings>): Promise<void>;
   /** Creates a note with content (e.g. from a template) and opens it. */
   createNoteWith(path: string, content: string): Promise<string | undefined>;
@@ -170,6 +183,18 @@ export function VaultProvider({
   const [changeCounter, setChangeCounter] = useState(0);
   const [settings, setSettings] = useState<VaultSettings>(DEFAULT_SETTINGS);
   const settingsRef = useRef(settings);
+  // Attachments' properties, and keeping the link index in step with them.
+  const [fileProps, setFileProps] = useState<FileProperties>({});
+  const filePropsRef = useRef<FileProperties>({});
+  const applyFileProps = useCallback(
+    (next: FileProperties) => {
+      for (const p of Object.keys(filePropsRef.current)) if (!(p in next)) indexes.links.setFileProperties(p, null);
+      for (const [p, props] of Object.entries(next)) indexes.links.setFileProperties(p, props);
+      filePropsRef.current = next;
+      setFileProps(next);
+    },
+    [indexes],
+  );
   useEffect(() => {
     settingsRef.current = settings;
   }, [settings]);
@@ -269,6 +294,8 @@ export function VaultProvider({
         }
       }
       if (cancelled) return;
+      filePropsRef.current = {};
+      applyFileProps(parseFileProperties((await store.read(PROPERTIES_PATH))?.content));
       setEntries(list);
       bumpIndex();
       const last = readPref<string | null>(`vault:${vaultId}:last`, null);
@@ -284,7 +311,7 @@ export function VaultProvider({
     return () => {
       cancelled = true;
     };
-  }, [store, indexes, vaultId, open, bumpIndex, fail, seed]);
+  }, [store, indexes, vaultId, open, bumpIndex, fail, seed, applyFileProps]);
 
   // Save when the tab is hidden or closed.
   useEffect(() => {
@@ -494,6 +521,28 @@ export function VaultProvider({
     [store, indexes, vaultId, bumpIndex],
   );
 
+  /** Writes attachments' properties and updates the index. */
+  const saveFileProps = useCallback(
+    async (next: FileProperties) => {
+      await store.write(PROPERTIES_PATH, serializeFileProperties(next));
+      applyFileProps(next);
+      bumpIndex();
+      changed();
+    },
+    [store, applyFileProps, bumpIndex, changed],
+  );
+  const fileProperties = useCallback((path: string) => fileProps[path] ?? {}, [fileProps]);
+  const setFileProperty = useCallback(
+    async (path: string, key: string, value: unknown) => {
+      try {
+        await saveFileProps(withFileProperty(filePropsRef.current, path, key, value));
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [saveFileProps, fail],
+  );
+
   const renameOrMove = useCallback(
     async (from: string, to: string) => {
       if (from === to) return;
@@ -509,6 +558,8 @@ export function VaultProvider({
         await store.rename(`${from}.svg`, `${to}.svg`).catch(() => {});
       }
       const moved = await afterMove(from, to);
+      const props = movedFileProperties(filePropsRef.current, moved);
+      if (props) await saveFileProps(props);
 
       // Update links in other notes so they follow the renamed files.
       const rewritten = new Set<string>();
@@ -527,7 +578,7 @@ export function VaultProvider({
       }
       changed();
     },
-    [exists, flush, store, afterMove, changed, links, indexes, bumpIndex, open],
+    [exists, flush, store, afterMove, changed, links, indexes, bumpIndex, open, saveFileProps],
   );
 
   const rename = useCallback(
@@ -575,6 +626,8 @@ export function VaultProvider({
         await store.delete(path);
         if (isDrawing(path)) await store.delete(`${path}.svg`);
         for (const e of removed) indexes.remove(e.path);
+        const props = withoutFileProperties(filePropsRef.current, removed.map((e) => e.path));
+        if (props) await saveFileProps(props);
         bumpIndex();
         await refresh();
         changed();
@@ -582,7 +635,7 @@ export function VaultProvider({
         fail(e);
       }
     },
-    [store, indexes, refresh, open, bumpIndex, fail, changed],
+    [store, indexes, refresh, open, bumpIndex, fail, changed, saveFileProps],
   );
 
   const clearError = useCallback(() => setError(null), []);
@@ -715,6 +768,7 @@ export function VaultProvider({
       if (paths.length === 0) return;
       const list = await store.list();
       if (paths.includes(SETTINGS_PATH)) setSettings(parseSettings((await store.read(SETTINGS_PATH))?.content));
+      const propsChanged = paths.includes(PROPERTIES_PATH);
       const present = new Set(list.map((e) => e.path));
       for (const path of paths) {
         if (!present.has(path)) indexes.remove(path);
@@ -724,6 +778,8 @@ export function VaultProvider({
           if (f) indexes.set(path, f.content);
         }
       }
+      // Re-indexing an attachment drops its properties: put them back (or the new ones).
+      applyFileProps(propsChanged ? parseFileProperties((await store.read(PROPERTIES_PATH))?.content) : filePropsRef.current);
       setEntries(list);
       bumpIndex();
       const current = activePath.current;
@@ -744,7 +800,7 @@ export function VaultProvider({
         await open(current);
       }
     },
-    [store, indexes, bumpIndex, open],
+    [store, indexes, bumpIndex, open, applyFileProps],
   );
 
   const api = useMemo<VaultApi>(
@@ -776,6 +832,8 @@ export function VaultProvider({
       importFiles,
       settings,
       updateSettings,
+      fileProperties,
+      setFileProperty,
       createNoteWith,
       createDrawing,
       createCanvas,
@@ -811,6 +869,8 @@ export function VaultProvider({
       importFiles,
       settings,
       updateSettings,
+      fileProperties,
+      setFileProperty,
       createNoteWith,
       createDrawing,
       createCanvas,

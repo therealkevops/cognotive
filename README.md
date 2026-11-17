@@ -47,6 +47,9 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   frontmatter of the Obsidian plugin's `.excalidraw.md` files (its own `excalidraw-…` keys are left
   alone), and under a `properties` key in plain `.excalidraw` files, which Excalidraw ignores. A
   drawing's tags and aliases count like a note's
+- Attachments (images, PDFs, audio, video) have properties too, edited above the file. They're
+  kept in `.noted/properties.json` (by path; it syncs, and follows renames, moves and deletes), and
+  their tags and aliases count like a note's
 - Help with properties, as in a code editor: in the properties block, names are suggested as you
   type (with what each one does), then values: your tags, `true`/`false` for `hub`, today's date
   for `created`/`reviewed`, and values you've used before for your own properties. Hovering over a

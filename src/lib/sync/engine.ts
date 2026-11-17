@@ -1,6 +1,7 @@
 import { diff3Merge, merge } from "node-diff3";
 import type { LocalStore } from "../vault/local-store";
 import { basename, dirname, extname, isBinary, isDrawing, isWithin, joinPath, noteTitle } from "../vault/paths";
+import { PROPERTIES_PATH } from "../vault/file-properties";
 import { SETTINGS_PATH } from "../vault/settings";
 import { gitBlobSha } from "./hash";
 import { RemoteMovedError, type Change, type RemoteRepo } from "./remote";
@@ -13,7 +14,7 @@ const MERGEABLE = new Set([".md", ".markdown", ".txt", ".csv"]);
 
 /** Hidden paths (.obsidian, .git, .github, ...) never sync. */
 export function isSyncable(path: string): boolean {
-  if (path === SETTINGS_PATH) return true;
+  if (path === SETTINGS_PATH || path === PROPERTIES_PATH) return true;
   if (path.split("/").some((seg) => seg.startsWith("."))) return false;
   return TEXT_EXTENSIONS.has(extname(path)) || isBinary(path);
 }
