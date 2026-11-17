@@ -56,6 +56,7 @@ export function HealthDialog({
   }, [vault.links, vault.indexVersion, ignored]);
   const hubSet = useMemo(() => new Set(health.hubs.map((h) => h.path)), [health]);
   const orphanSet = useMemo(() => new Set(health.orphans), [health]);
+  const pinnedSet = useMemo(() => new Set(health.hubs.filter((h) => h.kind === "marked").map((h) => h.path)), [health]);
   const candidateSet = useMemo(() => new Set(health.hubCandidates.map((c) => c.target.toLowerCase())), [health]);
 
   const open = (p: string) => {
@@ -234,6 +235,7 @@ export function HealthDialog({
             hubs={hubSet}
             orphans={orphanSet}
             candidates={candidateSet}
+            pinned={pinnedSet}
             onOpen={open}
             onCreate={(target, from, hub) => {
               onClose();

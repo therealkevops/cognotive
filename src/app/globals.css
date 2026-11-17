@@ -831,7 +831,9 @@ mark {
 .map-node { cursor: pointer; transition: opacity 120ms; animation: map-pop 500ms cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 5ms); }
 @keyframes map-pop { from { opacity: 0; } }
 .map-dot { stroke: var(--raised); stroke-width: 1.5; transition: r 120ms; }
-.map-hub .map-dot { fill: #3f9d63; }
+.map-hub .map-dot, .map-pinned .map-dot { fill: #3f9d63; }
+.map-halo { fill: none; stroke: #3f9d63; stroke-width: 2; opacity: 0.45; }
+.map-pinned .map-label, .map-label.map-label-pinned { font-weight: 600; }
 .map-note .map-dot { fill: color-mix(in srgb, var(--accent) 75%, var(--foreground)); }
 .map-orphan .map-dot { fill: #d9a21b; }
 .map-missing .map-dot { fill: transparent; stroke: #d2463c; stroke-width: 1.5; stroke-dasharray: 2 2; }

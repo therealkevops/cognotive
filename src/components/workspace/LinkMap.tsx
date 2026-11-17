@@ -6,7 +6,7 @@ import type { GraphEdge, GraphNode } from "@/lib/links/link-index";
 
 const MAX_NODES = 300;
 
-type Kind = "hub" | "note" | "orphan" | "missing" | "candidate";
+type Kind = "pinned" | "hub" | "note" | "orphan" | "missing" | "candidate";
 
 /**
  * The repository's link graph at a glance: hubs large, orphans as loose amber
@@ -19,6 +19,7 @@ export function LinkMap({
   hubs,
   orphans,
   candidates,
+  pinned,
   onOpen,
   onCreate,
 }: {
@@ -27,6 +28,8 @@ export function LinkMap({
   orphans: Set<string>;
   /** Missing notes (lower-cased titles) linked from enough notes to be hubs. */
   candidates: Set<string>;
+  /** Notes pinned as hubs (`hub: true`): haloed and always named. */
+  pinned: Set<string>;
   onOpen(path: string): void;
   onCreate(target: string, from: string, hub: boolean): void;
 }) {
@@ -41,7 +44,7 @@ export function LinkMap({
     const edges = graph.edges.filter((e) => ids.has(e.source) && ids.has(e.target));
     const pos = new Map(forceLayout(shown.map((n) => n.id), edges).map((p) => [p.id, p]));
     const kind = (n: GraphNode): Kind =>
-      n.unresolved ? (candidates.has(n.title.toLowerCase()) ? "candidate" : "missing") : hubs.has(n.id) ? "hub" : orphans.has(n.id) ? "orphan" : "note";
+      n.unresolved ? (candidates.has(n.title.toLowerCase()) ? "candidate" : "missing") : pinned.has(n.id) ? "pinned" : hubs.has(n.id) ? "hub" : orphans.has(n.id) ? "orphan" : "note";
     const neighbours = new Map<string, Set<string>>();
     for (const e of edges) {
       if (!neighbours.has(e.source)) neighbours.set(e.source, new Set());
@@ -55,10 +58,11 @@ export function LinkMap({
         .sort((a, b) => b.degree - a.degree)
         .slice(0, 3)
         .map((n) => n.id)
-        .concat(shown.filter((n) => n.unresolved && candidates.has(n.title.toLowerCase())).map((n) => n.id)),
+        .concat(shown.filter((n) => n.unresolved && candidates.has(n.title.toLowerCase())).map((n) => n.id))
+        .concat(shown.filter((n) => pinned.has(n.id)).map((n) => n.id)),
     );
     return { nodes: shown.map((n) => ({ ...n, ...pos.get(n.id)!, kind: kind(n) })), edges, neighbours, labelled, total: graph.nodes.length };
-  }, [graph, hubs, orphans, candidates]);
+  }, [graph, hubs, orphans, candidates, pinned]);
 
   if (map.nodes.length === 0) return null;
   const near = hover ? map.neighbours.get(hover) : undefined;
@@ -66,10 +70,11 @@ export function LinkMap({
   const pct = (v: number) => `${(v * 100).toFixed(2)}%`;
   const at = new Map(map.nodes.map((n) => [n.id, n]));
   const missingFrom = (id: string) => map.edges.find((e) => e.target === id)?.source ?? "";
-  const radius = (n: (typeof map.nodes)[number]) => (n.kind === "missing" ? 3.5 : Math.min(14, 3.5 + Math.sqrt(n.degree) * 2));
+  const radius = (n: (typeof map.nodes)[number]) =>
+    n.kind === "missing" ? 3.5 : Math.max(n.kind === "pinned" ? 7 : 0, Math.min(14, 3.5 + Math.sqrt(n.degree) * 2));
   const ghost = (k: Kind) => k === "missing" || k === "candidate";
   const hovered = hover ? at.get(hover) : undefined;
-  const counts = { hub: 0, note: 0, orphan: 0, missing: 0, candidate: 0 };
+  const counts = { pinned: 0, hub: 0, note: 0, orphan: 0, missing: 0, candidate: 0 };
   for (const n of map.nodes) counts[n.kind]++;
 
   return (
@@ -79,7 +84,7 @@ export function LinkMap({
           width="100%"
           height="100%"
           role="img"
-          aria-label={`Link map: ${plural(counts.hub + counts.note + counts.orphan, "note")}, ${plural(map.edges.length, "link")}, ${plural(counts.missing + counts.candidate, "missing note")}${counts.candidate ? `, ${plural(counts.candidate, "hub")} waiting to be written` : ""}`}
+          aria-label={`Link map: ${plural(counts.pinned + counts.hub + counts.note + counts.orphan, "note")}, ${plural(map.edges.length, "link")}, ${plural(counts.missing + counts.candidate, "missing note")}${counts.candidate ? `, ${plural(counts.candidate, "hub")} waiting to be written` : ""}`}
         >
           <g>
             {map.edges.map((e) => {
@@ -116,8 +121,11 @@ export function LinkMap({
                   ? `${n.title}: a hub waiting to be written (${n.degree} notes link here)`
                   : n.kind === "missing"
                     ? `${n.title} (doesn't exist yet)`
-                    : n.title}
+                    : n.kind === "pinned"
+                      ? `${n.title} (pinned hub)`
+                      : n.title}
               </title>
+              {n.kind === "pinned" && <circle cx={pct(n.x)} cy={pct(n.y)} r={radius(n) + 4} className="map-halo" />}
               {/* A larger invisible target makes small dots easy to hover. */}
               <circle cx={pct(n.x)} cy={pct(n.y)} r={Math.max(9, radius(n) + 4)} fill="transparent" />
               <circle cx={pct(n.x)} cy={pct(n.y)} r={radius(n)} className="map-dot" />
@@ -130,9 +138,9 @@ export function LinkMap({
                 key={n.id}
                 x={pct(n.x)}
                 y={pct(n.y)}
-                dy={-radius(n) - 5}
+                dy={n.y < 0.15 ? radius(n) + 13 : -radius(n) - 5}
                 textAnchor={n.x < 0.15 ? "start" : n.x > 0.85 ? "end" : "middle"}
-                className={`map-label${n.kind === "candidate" ? " map-label-candidate" : ""}`}
+                className={`map-label${n.kind === "candidate" ? " map-label-candidate" : n.kind === "pinned" ? " map-label-pinned" : ""}`}
               >
                 {n.title}
               </text>
@@ -140,6 +148,7 @@ export function LinkMap({
         </svg>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+        {counts.pinned > 0 && <Legend kind="pinned" label={`Pinned hubs (${counts.pinned})`} />}
         <Legend kind="hub" label={`Hubs (${counts.hub})`} />
         <Legend kind="note" label={`Notes (${counts.note})`} />
         <Legend kind="orphan" label={`Orphans (${counts.orphan})`} />
@@ -160,8 +169,9 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 function Legend({ kind, label }: { kind: Kind; label: string }) {
   return (
     <span className="flex items-center gap-1.5">
-      <svg width="10" height="10" aria-hidden className={`map-${kind}`}>
-        <circle cx="5" cy="5" r="4" className="map-dot" />
+      <svg width="12" height="12" aria-hidden className={`map-${kind}`}>
+        {kind === "pinned" && <circle cx="6" cy="6" r="5.25" className="map-halo" strokeWidth="1.5" />}
+        <circle cx="6" cy="6" r={kind === "pinned" ? 3 : 4} className="map-dot" />
       </svg>
       {label}
     </span>

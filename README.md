@@ -39,7 +39,7 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   `status`). Notes from templates keep the template's values; templates themselves are left alone
 - Repository health: a score out of 100 with totals and a heatmap of recent changes; a link map
   of the whole repository (hubs large, orphans loose, missing notes as dashed stubs, hubs waiting to be written as dashed orange
-  rings; hover to see a
+  rings, pinned hubs haloed and always named; hover to see a
   note's links, click to open it or create a missing one); and cards for broken links, orphans,
   dead ends, hubs and stale hubs (well-linked notes not changed or reviewed in six months; **Mark
   reviewed** records `reviewed: YYYY-MM-DD` in the note) that open lists to act on. Hubs are notes well above average in

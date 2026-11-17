@@ -161,6 +161,13 @@ test("pinned hubs are listed in the sidebar", async ({ page }) => {
   await expect(pinned.getByRole("button", { name: "Welcome", exact: true })).toBeVisible();
 
   await tree(page).getByRole("treeitem", { name: "Linking notes" }).click();
+  // The link map rings and names it.
+  await page.getByRole("button", { name: "Repository health" }).click();
+  const health = page.getByRole("dialog", { name: "Repository health" });
+  await expect(health.getByRole("region", { name: "Link map" })).toContainText("Pinned hubs (1)");
+  await expect(health.getByRole("button", { name: "Open Welcome" }).locator("circle.map-halo")).toHaveCount(1);
+  await health.getByRole("button", { name: "Close repository health" }).click();
+
   await pinned.getByRole("button", { name: "Welcome", exact: true }).click();
   await expect(title(page)).toHaveValue("Welcome");
   // It stays pinned after a reload, and can be unpinned from the sidebar.
