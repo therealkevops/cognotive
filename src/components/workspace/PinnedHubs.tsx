@@ -1,8 +1,8 @@
 "use client";
 
-import { ChevronRight, PinOff, Waypoints } from "lucide-react";
+import { ChevronRight, FilePlus2, PinOff, Waypoints } from "lucide-react";
 import { useMemo, useState } from "react";
-import { hubProperty } from "@/lib/links/health";
+import { hubCandidates, hubProperty } from "@/lib/links/health";
 import { setFrontmatterProperty } from "@/lib/markdown/frontmatter";
 import { readPref, writePref } from "@/lib/prefs";
 import { isNote, noteTitle } from "@/lib/vault/paths";
@@ -10,9 +10,10 @@ import { useVault } from "../vault/useVault";
 
 /**
  * Notes pinned as hubs (`hub: true`), above the file tree: the repository's
- * entry points. Hidden until a note is pinned.
+ * entry points, then missing notes so many link to that they're hubs waiting
+ * to be written. Hidden while there are neither.
  */
-export function PinnedHubs() {
+export function PinnedHubs({ onCreate }: { onCreate(target: string, from: string): void }) {
   const vault = useVault();
   const prefKey = `vault:${vault.vaultId}:hubs-open`;
   const [open, setOpen] = useState(() => readPref<boolean>(prefKey, true));
@@ -27,7 +28,13 @@ export function PinnedHubs() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
   }, [vault.links, vault.indexVersion]);
 
-  if (hubs.length === 0) return null;
+  const candidates = useMemo(
+    () => hubCandidates(vault.links),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
+    [vault.links, vault.indexVersion],
+  );
+
+  if (hubs.length === 0 && candidates.length === 0) return null;
 
   const toggle = () => {
     setOpen(!open);
@@ -48,7 +55,7 @@ export function PinnedHubs() {
       >
         <ChevronRight size={12} aria-hidden className={`transition-transform ${open ? "rotate-90" : ""}`} />
         Hubs
-        <span className="ml-auto font-normal">{hubs.length}</span>
+        <span className="ml-auto font-normal">{hubs.length + candidates.length}</span>
       </button>
       {open && (
         <ul className="max-h-48 overflow-y-auto">
@@ -81,6 +88,28 @@ export function PinnedHubs() {
             );
           })}
         </ul>
+      )}
+      {open && candidates.length > 0 && (
+        <>
+          <h3 className="mt-1.5 mb-0.5 px-2 text-[11px] font-medium text-muted">To write</h3>
+          <ul aria-label="Hubs to write" className="max-h-32 overflow-y-auto">
+            {candidates.map((c) => (
+              <li key={c.target.toLowerCase()}>
+                <button
+                  type="button"
+                  className="nav-item group w-full py-1 text-left"
+                  aria-label={`Create hub ${c.target}`}
+                  title={`${c.sources.length} notes link to ${c.target}, which doesn't exist yet. Create it as a hub.`}
+                  onClick={() => onCreate(c.target, c.sources[0])}
+                >
+                  <FilePlus2 size={14} aria-hidden className="shrink-0 text-[#d9772b]" />
+                  <span className="truncate italic text-foreground/75">{c.target}</span>
+                  <span className="ml-auto shrink-0 text-xs text-muted tabular-nums">{c.sources.length}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </section>
   );

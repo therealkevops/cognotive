@@ -42,6 +42,32 @@ export interface Hub {
 
 const DAY = 86_400_000;
 
+/** Missing link targets (grouped ignoring case) and the notes linking to each. */
+function brokenLinks(index: LinkIndex): Map<string, { target: string; sources: string[] }> {
+  const broken = new Map<string, { target: string; sources: string[] }>();
+  for (const [target, sources] of index.unresolved()) {
+    const key = target.toLowerCase();
+    const g = broken.get(key) ?? { target, sources: [] };
+    for (const s of sources) if (!g.sources.includes(s)) g.sources.push(s);
+    broken.set(key, g);
+  }
+  return broken;
+}
+
+/** How many notes must link to a missing note before it counts as a hub waiting to be written. */
+export const CANDIDATE_LINKS = 3;
+
+const candidatesOf = (broken: Array<{ target: string; sources: string[] }>) =>
+  broken
+    .filter((b) => b.sources.length >= CANDIDATE_LINKS)
+    .map((b) => ({ target: b.target, sources: [...b.sources] }))
+    .sort((a, b) => b.sources.length - a.sources.length || a.target.localeCompare(b.target));
+
+/** Missing notes linked from enough notes to be hubs waiting to be written, most linked first. */
+export function hubCandidates(index: LinkIndex): Array<{ target: string; sources: string[] }> {
+  return candidatesOf([...brokenLinks(index).values()]);
+}
+
 /** A note's `reviewed` property as a time (local midnight for a plain date), if it is a date. */
 export function reviewedDate(properties: Record<string, unknown> | undefined): number | undefined {
   const v = properties?.reviewed;
@@ -83,13 +109,7 @@ export function vaultHealth(
   const orphans = notes.filter((p) => !inbound.has(p)).sort();
   const deadEnds = notes.filter((p) => !index.outgoing(p).some((o) => o.resolved && o.resolved !== p)).sort();
 
-  const broken = new Map<string, { target: string; sources: string[] }>();
-  for (const [target, sources] of index.unresolved()) {
-    const key = target.toLowerCase();
-    const g = broken.get(key) ?? { target, sources: [] };
-    for (const s of sources) if (!g.sources.includes(s)) g.sources.push(s);
-    broken.set(key, g);
-  }
+  const broken = brokenLinks(index);
 
 
   const cutoff = now - (opts.staleDays ?? 180) * DAY;
@@ -148,7 +168,7 @@ export function vaultHealth(
     deadEnds,
     broken: brokenList.sort((a, b) => b.sources.length - a.sources.length || a.target.localeCompare(b.target)),
     hubs,
-    hubCandidates: brokenList.filter((b) => b.sources.length >= 3).map((b) => ({ target: b.target, sources: [...b.sources] })),
+    hubCandidates: candidatesOf(brokenList),
     stale,
   };
 }

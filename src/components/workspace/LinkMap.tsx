@@ -28,7 +28,7 @@ export function LinkMap({
   /** Missing notes (lower-cased titles) linked from enough notes to be hubs. */
   candidates: Set<string>;
   onOpen(path: string): void;
-  onCreate(target: string, from: string): void;
+  onCreate(target: string, from: string, hub: boolean): void;
 }) {
   const [hover, setHover] = useState<string | null>(null);
 
@@ -109,7 +109,7 @@ export function LinkMap({
               opacity={lit(n.id) ? 1 : 0.25}
               onMouseEnter={() => setHover(n.id)}
               onMouseLeave={() => setHover((h) => (h === n.id ? null : h))}
-              onClick={() => (ghost(n.kind) ? onCreate(n.title, missingFrom(n.id)) : onOpen(n.id))}
+              onClick={() => (ghost(n.kind) ? onCreate(n.title, missingFrom(n.id), n.kind === "candidate") : onOpen(n.id))}
             >
               <title>
                 {n.kind === "candidate"

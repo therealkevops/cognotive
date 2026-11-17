@@ -21,8 +21,8 @@ export function HealthDialog({
   onCreate,
 }: {
   onClose(): void;
-  /** Offers to create the missing note `target`, as linked from `from`. */
-  onCreate(target: string, from: string): void;
+  /** Offers to create the missing note `target`, as linked from `from` (`hub`: a hub waiting to be written). */
+  onCreate(target: string, from: string, hub?: boolean): void;
 }) {
   const vault = useVault();
   const [tab, setTab] = useState<Tab>("broken");
@@ -235,9 +235,9 @@ export function HealthDialog({
             orphans={orphanSet}
             candidates={candidateSet}
             onOpen={open}
-            onCreate={(target, from) => {
+            onCreate={(target, from, hub) => {
               onClose();
-              onCreate(target, from);
+              onCreate(target, from, hub);
             }}
           />
 
@@ -351,7 +351,7 @@ export function HealthDialog({
                   aria-label={`Create hub ${c.target}`}
                   onClick={() => {
                     onClose();
-                    onCreate(c.target, c.sources[0]);
+                    onCreate(c.target, c.sources[0], true);
                   }}
                 >
                   Create

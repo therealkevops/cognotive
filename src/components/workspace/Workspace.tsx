@@ -168,7 +168,7 @@ export function Workspace() {
   const [sidePath, setSidePath] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   /** A note about to be created from a link, waiting for the user to confirm its name and folder. */
-  const [creating, setCreating] = useState<{ name: string; folder: string } | null>(null);
+  const [creating, setCreating] = useState<{ name: string; folder: string; hub?: boolean } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [linkPickerOpen, setLinkPickerOpen] = useState(false);
   /** Notes opened in this session, most recent first, for ranking link suggestions. */
@@ -370,9 +370,9 @@ export function Workspace() {
     [vault],
   );
 
-  /** Offers to create a missing note `target`, as linked from `from`. */
+  /** Offers to create a missing note `target`, as linked from `from` (`hub`: a hub waiting to be written). */
   const offerCreate = useCallback(
-    (target: string, from: string) => setCreating(newNoteFromLink(target, from, vault.settings)),
+    (target: string, from: string, hub = false) => setCreating({ ...newNoteFromLink(target, from, vault.settings), hub }),
     [vault.settings],
   );
 
@@ -766,7 +766,7 @@ export function Workspace() {
       <div className="min-h-0 flex-1">
         {tab === "files" ? (
           <div className="flex h-full flex-col">
-            <PinnedHubs />
+            <PinnedHubs onCreate={(target, from) => offerCreate(target, from, true)} />
             <div className="min-h-0 flex-1">
               <FileTree />
             </div>

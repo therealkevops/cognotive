@@ -203,6 +203,27 @@ test("Mark reviewed takes a stale hub off the list", async ({ page }) => {
   await expect(editor(page)).toContainText(`reviewed: ${y}-${mm}-${dd}`);
 });
 
+test("hubs waiting to be written are listed in the sidebar, and created pinned", async ({ page }) => {
+  await openApp(page);
+  const zip = zipSync({
+    "V/A.md": strToU8("[[Recipes]]"),
+    "V/B.md": strToU8("[[recipes]]"),
+    "V/C.md": strToU8("[[Recipes]]"),
+  });
+  await page.getByLabel("Choose a zip to import").setInputFiles({ name: "v.zip", mimeType: "application/zip", buffer: Buffer.from(zip) });
+  const hubs = page.getByRole("region", { name: "Hubs" });
+  const toWrite = hubs.getByRole("list", { name: "Hubs to write" });
+  await expect(toWrite.getByRole("button", { name: "Create hub Recipes" })).toContainText("3");
+  await toWrite.getByRole("button", { name: "Create hub Recipes" }).click();
+
+  const create = page.getByRole("dialog", { name: "Create note" });
+  await expect(create.getByLabel("Pin it as a hub in the sidebar")).toBeChecked();
+  await create.getByRole("button", { name: "Create" }).click();
+  await expect(title(page)).toHaveValue("Recipes");
+  await expect(hubs.getByRole("button", { name: "Recipes", exact: true })).toBeVisible();
+  await expect(toWrite).toHaveCount(0);
+});
+
 test("deleting a linked note warns, and can turn the links into text", async ({ page }) => {
   await openApp(page);
   const item = tree(page).getByRole("treeitem", { name: "Linking notes" });

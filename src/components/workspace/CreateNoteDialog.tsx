@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { joinPath, uniquePath, validateName } from "@/lib/vault/paths";
 import { useVault } from "../vault/useVault";
 import { Modal } from "./Modal";
 
@@ -11,14 +12,19 @@ import { Modal } from "./Modal";
 export function CreateNoteDialog({
   name: initialName,
   folder: initialFolder,
+  hub = false,
   onClose,
 }: {
   name: string;
   folder: string;
+  /** A hub waiting to be written: offer to pin it (ticked). */
+  hub?: boolean;
   onClose(): void;
 }) {
   const vault = useVault();
   const [name, setName] = useState(initialName);
+  const [pin, setPin] = useState(hub);
+  const [error, setError] = useState<string | null>(null);
   const [folder, setFolder] = useState(initialFolder);
   const folders = useMemo(() => {
     const list = vault.entries
@@ -36,11 +42,22 @@ export function CreateNoteDialog({
         onSubmit={(e) => {
           e.preventDefault();
           if (!name.trim()) return;
+          if (pin) {
+            const err = validateName(name.trim());
+            if (err) return setError(err);
+            onClose();
+            void vault.createNoteWith(uniquePath(joinPath(folder, `${name.trim()}.md`), vault.exists), "---\nhub: true\n---\n");
+            return;
+          }
           onClose();
           void vault.createNote(folder, name.trim());
         }}
       >
-        <p className="text-sm text-muted">This link points to a note that doesn&apos;t exist yet.</p>
+        <p className="text-sm text-muted">
+          {hub
+            ? "Several notes already link here, so it can become a hub: a note that gathers links to them."
+            : "This link points to a note that doesn't exist yet."}
+        </p>
         <label className="block text-sm">
           <span className="mb-1 block font-medium">Name</span>
           <input className="input w-full" value={name} autoFocus onChange={(e) => setName(e.target.value)} />
@@ -56,6 +73,17 @@ export function CreateNoteDialog({
             ))}
           </select>
         </label>
+        {hub && (
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={pin} onChange={(e) => setPin(e.target.checked)} />
+            Pin it as a hub in the sidebar
+          </label>
+        )}
+        {error && (
+          <p role="alert" className="text-xs text-[#c2412d]">
+            {error}
+          </p>
+        )}
         <div className="flex justify-end gap-2 pt-1">
           <button type="button" className="button-secondary" onClick={onClose}>
             Cancel
