@@ -64,7 +64,7 @@ export async function deleteVaultData(id: string): Promise<void> {
       const req = indexedDB.deleteDatabase(name);
       req.onsuccess = req.onerror = req.onblocked = () => resolve();
     });
-  await Promise.all([del(`noted-ai:vault:${id}`), del(`noted-ai:sync:${id}`), forgetKeys(id).catch(() => {}), forgetToken(id).catch(() => {})]);
+  await Promise.all([del(`noted-ai:vault:${id}`), del(`noted-ai:sync:${id}`), del(`noted-ai:conflicts:${id}`), forgetKeys(id).catch(() => {}), forgetToken(id).catch(() => {})]);
   for (const key of ["last", "seeded", "expanded"]) writePref(`vault:${id}:${key}`, null);
 }
 

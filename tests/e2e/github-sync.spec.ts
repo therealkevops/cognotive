@@ -74,3 +74,45 @@ test("a device without the token asks for one, and the notes stay readable", asy
   // The cloned notes are still readable from the browser copy.
   await expect(page.getByRole("tree", { name: "Repository files" }).getByRole("treeitem", { name: "Hello" })).toBeVisible();
 });
+
+test("a conflict stays in the note, and is resolved side by side", async ({ page }) => {
+  const github = new FakeGitHub({ "Plan.md": "# Plan\n\nstart\n\nmiddle\n\nend" });
+  await github.install(page);
+  await connectRepo(page);
+  const tree = page.getByRole("tree", { name: "Repository files" });
+  await tree.getByRole("treeitem", { name: "Plan" }).click();
+  await page.getByRole("radio", { name: "Source" }).click();
+  const editor = page.locator(".cm-content");
+
+  // The same line changes here and on GitHub; GitHub also changes the heading.
+  await editor.getByText("start").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" (mine)");
+  github.push({ "Plan.md": "# Plan!\n\nstart (theirs)\n\nmiddle\n\nend" });
+  await page.getByRole("button", { name: /^1 unsynced/ }).click();
+
+  // No copy file: the note keeps GitHub's line there for now, with everything else merged.
+  const banner = page.getByRole("region", { name: "Conflict" });
+  await expect(banner).toBeVisible();
+  await expect(tree.getByRole("treeitem", { name: /conflict/ })).toHaveCount(0);
+  await expect(editor).toContainText("# Plan!");
+  await expect(editor).toContainText("start (theirs)");
+
+  await banner.getByRole("button", { name: "Review" }).click();
+  const dialog = page.getByRole("dialog", { name: "Conflict in Plan" });
+  const first = dialog.getByRole("listitem", { name: "Conflict 1" });
+  await expect(first).toContainText("start (theirs)");
+  await expect(first).toContainText("start (mine)");
+  await first.getByRole("radio", { name: "Keep yours" }).click();
+  await dialog.getByRole("button", { name: "Apply" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(banner).toBeHidden();
+  await expect(editor).toContainText("# Plan!");
+  await expect(editor).toContainText("start (mine)");
+  await expect(editor).not.toContainText("theirs");
+
+  // The resolved note goes up on the next sync.
+  await page.getByRole("button", { name: /^1 unsynced/ }).click();
+  await expect(page.getByRole("button", { name: /^Synced/ })).toBeVisible();
+  expect(github.files()["Plan.md"]).toBe("# Plan!\n\nstart (mine)\n\nmiddle\n\nend");
+});

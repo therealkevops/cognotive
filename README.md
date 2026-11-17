@@ -168,14 +168,16 @@ The browser talks to GitHub directly with it.
 - All pending edits go up as one commit, e.g. `noted-ai: update Groceries, Plan` (or
   `noted-ai: update 2 files` in an encrypted repository).
 - Changes from elsewhere (Obsidian, GitHub's editor, another device) come down on the next sync.
-  If the same note changed in both places, edits to different lines are merged. If the same
-  lines changed, GitHub's version stays and yours is saved next to it as
-  `Note (conflict YYYY-MM-DD).md`. Nothing is overwritten.
+  If the same note changed in both places, edits to different lines are merged. If the same lines
+  changed, the note keeps everything that merged and shows GitHub's version of those lines for now,
+  with a banner: **Review** shows each clash side by side, to keep GitHub's lines, yours, or both.
+  Your version is kept on this device until you choose (the command *Review conflicts* lists them),
+  so nothing is lost and no copy files are made.
 - Notes, drawings and other text files (`.md`, `.excalidraw`, `.canvas`, `.json`, `.txt`,
   `.csv`) sync, and so do attachments (images, PDFs, audio, video) as binary files. Hidden
   folders such as `.obsidian/` and other file types are left untouched in the repo.
-- Drawings and attachments are never line-merged: if one changed in both places, you get a
-  conflict copy.
+- Drawings, canvases and attachments are never line-merged: if one changed in both places, the
+  review offers GitHub's file, yours, or both (yours saved as a copy only if you choose that).
 
 ### Encrypted repositories
 
@@ -217,7 +219,7 @@ src/lib/            framework-free logic with unit tests alongside:
   markdown/         reading-view renderer (unified/remark/rehype), outline
   search/           keyword index (MiniSearch)
   github/           browser GitHub REST client, token storage and checks
-  sync/             sync engine (three-way, conflict copies), remote adapter, sync state
+  sync/             sync engine (three-way merge, conflicts kept for review), remote adapter, sync state
   links/            link and tag parsing, Obsidian-style resolution, LinkIndex (backlinks,
                     mentions, graph, rename rewriting)
   drawing/          Excalidraw file parsing (text, links), link rewriting, SVG rendering

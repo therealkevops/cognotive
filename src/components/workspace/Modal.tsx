@@ -4,7 +4,18 @@ import { X } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
 /** A small centred dialog. Escape or a click outside closes it. */
-export function Modal({ label, onClose, children }: { label: string; onClose(): void; children: ReactNode }) {
+export function Modal({
+  label,
+  onClose,
+  children,
+  wide = false,
+}: {
+  label: string;
+  onClose(): void;
+  children: ReactNode;
+  /** Room for side-by-side content. */
+  wide?: boolean;
+}) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -16,7 +27,7 @@ export function Modal({ label, onClose, children }: { label: string; onClose(): 
         role="dialog"
         aria-modal="true"
         aria-label={label}
-        className="dialog-panel max-w-md p-6"
+        className={`dialog-panel p-6 ${wide ? "max-w-3xl" : "max-w-md"}`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center gap-3">

@@ -88,7 +88,7 @@ describe("EncryptedRemote", () => {
     expect((await a.local.read("Plan.md"))?.content).toBe("ONE\ntwo\nTHREE\n");
   });
 
-  it("keeps both versions when the same line changed on both devices", async () => {
+  it("reports a conflict, with both versions, when the same line changed on both devices", async () => {
     const { github, keys } = await encryptedRepo();
     const a = device(github, keys);
     const b = device(github, keys);
@@ -99,9 +99,8 @@ describe("EncryptedRemote", () => {
     await a.engine.sync();
     await b.local.write("Note.md", "hello from b\n");
     const r = await b.engine.sync();
-    expect(r.conflicts).toEqual(["Note (conflict 2026-11-14).md"]);
+    expect(r.conflicts).toMatchObject([{ path: "Note.md", ours: "hello from b\n", theirs: "hello from a\n", base: "hello\n" }]);
     expect((await b.local.read("Note.md"))?.content).toBe("hello from a\n");
-    expect(stored(github)).not.toContain("conflict");
   });
 
   it("renames and deletes reach the other device", async () => {

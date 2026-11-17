@@ -126,6 +126,8 @@ export interface VaultApi {
   createNoteWith(path: string, content: string): Promise<string | undefined>;
   /** Replaces a note's text from outside the editor (e.g. linking a mention). Reloads it if open. */
   writeNote(path: string, content: string): Promise<void>;
+  /** Writes any file (text or bytes), creating or replacing it. Reloads it if open. */
+  writeFile(path: string, content: string | Uint8Array): Promise<void>;
   /** Case-insensitive, like most file systems Obsidian vaults live on. */
   exists(path: string): boolean;
 }
@@ -690,6 +692,24 @@ export function VaultProvider({
     [flush, store, indexes, bumpIndex, open, changed, fail],
   );
 
+  const writeFile = useCallback(
+    async (path: string, content: string | Uint8Array) => {
+      if (typeof content === "string") return writeNote(path, content);
+      try {
+        await flush();
+        await store.writeBinary(path, content);
+        indexes.addFile(path);
+        bumpIndex();
+        setEntries(await store.list());
+        if (activePath.current === path) await open(path);
+        changed();
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [writeNote, flush, store, indexes, bumpIndex, open, changed, fail],
+  );
+
   const reload = useCallback(
     async (paths: string[]) => {
       if (paths.length === 0) return;
@@ -751,6 +771,7 @@ export function VaultProvider({
       move,
       remove,
       writeNote,
+      writeFile,
       exportZip,
       importFiles,
       settings,
@@ -785,6 +806,7 @@ export function VaultProvider({
       move,
       remove,
       writeNote,
+      writeFile,
       exportZip,
       importFiles,
       settings,

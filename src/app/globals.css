@@ -865,6 +865,39 @@ mark {
   .health-bar > span { transition: none; }
 }
 
+/* Sync conflicts under review (ConflictReview.tsx). */
+.conflict-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.5rem 1.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.6rem;
+  font-size: 0.85rem;
+  color: var(--foreground);
+  background: color-mix(in srgb, #d9772b 12%, transparent);
+  border: 1px solid color-mix(in srgb, #d9772b 35%, transparent);
+}
+.conflict-banner svg { color: #d9772b; }
+.conflict-context {
+  margin-bottom: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+.conflict-side {
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  transition: opacity 120ms;
+}
+.conflict-side pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.85rem; font-family: var(--font-mono), ui-monospace, monospace; }
+.conflict-theirs { background: color-mix(in srgb, #2f6fd6 7%, transparent); }
+.conflict-yours { background: color-mix(in srgb, #3f9d63 8%, transparent); }
+.conflict-dropped { opacity: 0.45; }
+.conflict-choices button { white-space: nowrap; }
+.conflict-dropped pre { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--foreground) 35%, transparent); }
+
 /* ---------- Touch screens ---------- */
 
 @media (hover: none) {

@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { reloadOnChunkError } from "@/lib/chunk";
+import type { ConflictRecord } from "@/lib/sync/conflicts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell, RailButton } from "@/components/AppShell";
 import { isDark, loadAppearance } from "@/lib/appearance";
@@ -72,6 +73,7 @@ import { useSync } from "../sync/useSync";
 import { useVault } from "../vault/useVault";
 import { useVaults } from "../vault/useVaults";
 import { VaultSwitcher } from "../vault/VaultSwitcher";
+import { ConflictBanner, ConflictDialog } from "./ConflictReview";
 import { CreateNoteDialog } from "./CreateNoteDialog";
 import { DeleteDialog } from "./DeleteDialog";
 import { FileTree } from "./FileTree";
@@ -169,6 +171,8 @@ export function Workspace() {
   const [sidePath, setSidePath] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   /** A note about to be created from a link, waiting for the user to confirm its name and folder. */
+  /** A sync conflict open for review. */
+  const [reviewing, setReviewing] = useState<ConflictRecord | null>(null);
   /** A canvas being edited as text (to repair one that isn't valid JSON). */
   const [canvasAsText, setCanvasAsText] = useState<string | null>(null);
   const [creating, setCreating] = useState<{ name: string; folder: string; hub?: boolean } | null>(null);
@@ -1004,6 +1008,7 @@ export function Workspace() {
       when: !!activePathNow,
     },
     { id: "sync", label: "Sync now", when: sync.status.kind !== "local" },
+    { id: "conflicts", label: `Review conflicts (${sync.conflicts.length})`, when: sync.conflicts.length > 0 },
     {
       id: "history",
       label: "Show version history of this file",
@@ -1047,6 +1052,12 @@ export function Workspace() {
     "tab-close-all": closeAllTabs,
     delete: () => activePathNow && setDeleting(activePathNow),
     sync: sync.syncNow,
+    conflicts: () => {
+      const c = sync.conflicts.find((x) => x.path === activePathNow) ?? sync.conflicts[0];
+      if (!c) return;
+      if (vault.exists(c.path) && c.path !== activePathNow) void vault.open(c.path);
+      setReviewing(c);
+    },
     history: () => setHistoryOpen(true),
     export: () => void exportZip(),
     import: chooseZip,
@@ -1179,6 +1190,7 @@ export function Workspace() {
               <Toolbar view={view} />
             </div>
           )}
+          {activePathNow && <ConflictBanner path={activePathNow} onReview={setReviewing} />}
           <div className="flex min-h-0 flex-1">
             <div
               className={`min-h-0 min-w-0 flex-1 ${kind === "drawing" || kind === "canvas" ? "overflow-hidden" : "overflow-y-auto"}`}
@@ -1355,6 +1367,7 @@ export function Workspace() {
       {creating && <CreateNoteDialog {...creating} onClose={() => setCreating(null)} />}
       {deleting && <DeleteDialog path={deleting} isFolder={false} onClose={() => setDeleting(null)} />}
       {settingsOpen && <SettingsDialog initial={settingsOpen} onClose={() => setSettingsOpen(false)} />}
+      {reviewing && <ConflictDialog record={reviewing} onClose={() => setReviewing(null)} />}
       {healthOpen && <HealthDialog onClose={() => setHealthOpen(false)} onCreate={offerCreate} />}
       <Toasts />
     </>

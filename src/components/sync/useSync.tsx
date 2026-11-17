@@ -18,6 +18,7 @@ import { unlockWithPassphrase, unlockWithRecoveryKey, type RepoKeys } from "@/li
 import { EncryptedRemote, PlainRemote } from "@/lib/sync/encrypted-remote";
 import { SyncEngine } from "@/lib/sync/engine";
 import { probeRepo } from "@/lib/sync/encryption-setup";
+import { ConflictStore, type ConflictRecord } from "@/lib/sync/conflicts";
 import { GitHubRemote } from "@/lib/sync/remote";
 import { IdbSyncState } from "@/lib/sync/state";
 import type { LocalStore } from "@/lib/vault/local-store";
@@ -43,6 +44,10 @@ interface SyncApi {
   /** Messages about conflicts from the last sync, until dismissed. */
   notices: string[];
   dismissNotices(): void;
+  /** Places changed here and on GitHub, waiting to be reviewed (this device only). */
+  conflicts: ConflictRecord[];
+  /** Forgets a conflict once it's been settled. */
+  resolveConflict(id: string): Promise<void>;
   /** Checks a new token for this repository and saves it. */
   setToken?(token: string): Promise<void>;
   /** Unlocks an encrypted repository on this device. Throws WrongKeyError. */
@@ -60,6 +65,8 @@ const SyncContext = createContext<SyncApi>({
   syncNow: () => {},
   notices: [],
   dismissNotices: () => {},
+  conflicts: [],
+  resolveConflict: async () => {},
 });
 
 export const useSync = () => useContext(SyncContext);
@@ -88,6 +95,25 @@ export function SyncProvider({
   const vault = useVault();
   const [status, setStatus] = useState<SyncStatus>({ kind: "idle", pending: 0, lastSyncedAt: null });
   const [notices, setNotices] = useState<string[]>([]);
+  const conflictStore = useMemo(() => new ConflictStore(config.id), [config.id]);
+  const [conflicts, setConflicts] = useState<ConflictRecord[]>([]);
+  useEffect(() => {
+    let live = true;
+    void conflictStore
+      .list()
+      .catch(() => [])
+      .then((c) => live && setConflicts(c));
+    return () => {
+      live = false;
+    };
+  }, [conflictStore]);
+  const resolveConflict = useCallback(
+    async (id: string) => {
+      await conflictStore.remove(id);
+      setConflicts(await conflictStore.list());
+    },
+    [conflictStore],
+  );
 
   // The repository's personal access token lives in this browser. undefined while loading.
   const [stored, setStored] = useState<StoredToken | null | undefined>(undefined);
@@ -179,10 +205,13 @@ export function SyncProvider({
           const r = await engine.sync();
           await vaultRef.current.reload([...r.changedLocally]);
           if (r.conflicts.length) {
+            await conflictStore.add(r.conflicts);
+            setConflicts(await conflictStore.list());
             setNotices((n) => [
               ...n,
               ...r.conflicts.map(
-                (c) => `“${noteTitle(c)}” was changed here and on GitHub. Both versions were kept.`,
+                (c) =>
+                  `“${noteTitle(c.path)}” was changed here and on GitHub in the same place. Nothing was lost: open it to review the differences.`,
               ),
             ]);
           }
@@ -208,7 +237,7 @@ export function SyncProvider({
     } finally {
       running.current = false;
     }
-  }, [engine, config.owner, config.repo]);
+  }, [engine, config.owner, config.repo, conflictStore]);
 
   // First sync once the vault has loaded, and again when the user signs in.
   const signedIn = !!stored;
@@ -290,6 +319,8 @@ export function SyncProvider({
       syncNow: () => void run(),
       notices,
       dismissNotices: () => setNotices([]),
+      conflicts,
+      resolveConflict,
       unlock: encrypted ? unlock : undefined,
       setToken,
       history:
@@ -311,6 +342,6 @@ export function SyncProvider({
               repoLabel: `${config.owner}/${config.repo}`,
             },
     };
-  }, [status, run, notices, client, config.owner, config.repo, config.branch, config.folder, encrypted, remote, unlock, setToken]);
+  }, [status, run, notices, conflicts, resolveConflict, client, config.owner, config.repo, config.branch, config.folder, encrypted, remote, unlock, setToken]);
   return <SyncContext.Provider value={api}>{children}</SyncContext.Provider>;
 }

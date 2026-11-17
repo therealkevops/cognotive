@@ -146,8 +146,10 @@ Vercel's invocation and transfer budgets.
   diff the trees and fetch only changed files.
 - **Conflicts:** if the ref update is rejected (someone pushed from Obsidian or another
   device), fetch the remote version and run a three-way merge against the last synced base.
-  If the merge has conflicts, keep both: the remote version stays, and ours is saved as
-  `Note (conflict 2026-11-14).md` with a banner in the UI.
+  If the merge has conflicts, the note keeps every change that merged and the remote's lines
+  where both sides changed; ours is kept on the device as a conflict record, and a banner on
+  the note opens a side-by-side review (keep theirs, ours or both for each clash). Non-text
+  files offer theirs, ours, or both (ours as a copy).
 - **Rate limits:** 5,000 requests/hour per user is far more than this needs; the client
   backs off on `403`/`429` and shows sync status.
 - **Offline:** works naturally. Edits stay in IndexedDB and are committed when back online.

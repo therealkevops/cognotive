@@ -1,4 +1,4 @@
-import { merge } from "node-diff3";
+import { diff3Merge, merge } from "node-diff3";
 import type { LocalStore } from "../vault/local-store";
 import { basename, dirname, extname, isBinary, isDrawing, isWithin, joinPath, noteTitle } from "../vault/paths";
 import { SETTINGS_PATH } from "../vault/settings";
@@ -25,11 +25,28 @@ export interface SyncResult {
   changedLocally: string[];
   /** Local paths whose changes were committed. */
   pushed: string[];
-  /** Conflict copies created ("Note (conflict 2026-11-14).md"). */
-  conflicts: string[];
+  /**
+   * Files changed differently here and on the remote. Each now holds the
+   * remote's version of the conflicting part (with every other change from
+   * both sides); what was here is in the conflict, to review and resolve.
+   */
+  conflicts: SyncConflict[];
   /** Paths left for the next sync because the user edited them during this one. */
   deferred: string[];
   commit: string | null;
+}
+
+export interface SyncConflict {
+  path: string;
+  /** This device's version when the conflict was found. */
+  ours: Content;
+  /** The remote's version. */
+  theirs: Content;
+  /** The last version both sides had (text files), if known. */
+  base?: string;
+  /** Line-by-line review (notes and other text) or a choice of whole file. */
+  kind: "text" | "file";
+  at: number;
 }
 
 interface LocalWrite {
@@ -38,6 +55,8 @@ interface LocalWrite {
   content: Content | null;
   /** Base sha to record if the write succeeds; on failure the old base is kept. */
   baseSha: string | undefined;
+  /** Reported only if the write lands (otherwise the next pass meets it again). */
+  conflict?: SyncConflict;
 }
 
 const MAX_ATTEMPTS = 4;
@@ -164,8 +183,7 @@ export class SyncEngine {
     const pushes: Change[] = [];
     const writes: LocalWrite[] = [];
     const newBase = new Map(base);
-    const conflicts: string[] = [];
-    const taken = new Set([...local.keys(), ...remote.keys()]);
+    const conflicts: SyncConflict[] = [];
 
     const paths = new Set([...base.keys(), ...local.keys(), ...remote.keys()]);
     for (const path of [...paths].sort()) {
@@ -200,28 +218,36 @@ export class SyncEngine {
       } else {
         // Both edited.
         const theirs = await this.read(path, r);
-        const merged =
-          b !== undefined &&
-          MERGEABLE.has(extname(path)) &&
-          !isDrawing(path) &&
-          typeof l.content === "string" &&
-          typeof theirs === "string"
-            ? mergeText(l.content, (await this.read(path, b)) as string, theirs)
-            : null;
+        const baseContent = b !== undefined ? await this.read(path, b) : undefined;
+        const text =
+          MERGEABLE.has(extname(path)) && !isDrawing(path) && typeof l.content === "string" && typeof theirs === "string";
+        const baseText = typeof baseContent === "string" ? baseContent : text && b === undefined ? "" : undefined;
+        const merged = text && baseText !== undefined ? mergeText(l.content as string, baseText, theirs as string) : null;
+        const conflict = (kind: SyncConflict["kind"]): SyncConflict => ({
+          path,
+          ours: l.content,
+          theirs,
+          ...(typeof baseContent === "string" ? { base: baseContent } : text ? { base: "" } : {}),
+          kind,
+          at: this.now().getTime(),
+        });
         if (merged !== null) {
           const sha = await this.id(merged);
           writes.push({ path, expected: l.content, content: merged, baseSha: sha });
           pushes.push({ path: this.toRepo(path), content: merged });
           // Until the local write lands, the base is what the remote will hold.
           setBase(sha);
+        } else if (text && baseText !== undefined) {
+          // Everything that merges, merged; where the same lines changed, the remote's
+          // lines for now. Ours is kept in the conflict for review.
+          const resolved = mergeTheirs(l.content as string, baseText, theirs as string);
+          const sha = await this.id(resolved);
+          writes.push({ path, expected: l.content, content: resolved, baseSha: sha, conflict: conflict("text") });
+          if (sha !== r) pushes.push({ path: this.toRepo(path), content: resolved });
+          setBase(sha);
         } else {
-          const copy = conflictPath(path, this.now(), (p) => taken.has(p));
-          taken.add(copy);
-          conflicts.push(copy);
-          // Ours moves to the copy; the original takes theirs.
-          writes.push({ path: copy, expected: undefined, content: l.content, baseSha: l.sha });
-          writes.push({ path, expected: l.content, content: theirs, baseSha: r });
-          pushes.push({ path: this.toRepo(copy), content: l.content });
+          // Drawings, canvases, attachments: the remote's file for now, ours kept in the conflict.
+          writes.push({ path, expected: l.content, content: theirs, baseSha: r, conflict: conflict("file") });
         }
       }
     }
@@ -238,6 +264,7 @@ export class SyncEngine {
     for (const w of writes) {
       if (await this.write(w)) {
         changedLocally.push(w.path);
+        if (w.conflict) conflicts.push(w.conflict);
         if (w.baseSha === undefined) newBase.delete(w.path);
         else newBase.set(w.path, w.baseSha);
       } else {
@@ -264,6 +291,17 @@ export class SyncEngine {
 export function mergeText(ours: string, base: string, theirs: string): string | null {
   const m = merge(ours, base, theirs, { stringSeparator: "\n" });
   return m.conflict ? null : m.result.join("\n");
+}
+
+/**
+ * Line-based three-way merge that settles conflicts in the remote's favour:
+ * every change that merges cleanly is kept, and where both sides changed the
+ * same lines the remote's lines are used.
+ */
+export function mergeTheirs(ours: string, base: string, theirs: string): string {
+  const sep = "\n";
+  const blocks = diff3Merge(ours.split(sep), base.split(sep), theirs.split(sep), { stringSeparator: sep });
+  return blocks.flatMap((b) => (b.ok ? b.ok : b.conflict!.b)).join(sep);
 }
 
 export function conflictPath(path: string, date: Date, taken: (p: string) => boolean): string {

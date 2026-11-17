@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it } from "vitest";
 import { LocalStore } from "../vault/local-store";
-import { conflictPath, isSyncable, mergeText, SyncEngine } from "./engine";
+import { conflictPath, isSyncable, mergeText, mergeTheirs, SyncEngine } from "./engine";
 import { FakeRemote } from "./fake-remote";
 import { MemorySyncState } from "./state";
 
@@ -101,18 +101,25 @@ describe("SyncEngine", () => {
     expect(await engine.pendingChanges()).toBe(0);
   });
 
-  it("keeps both versions when the same line changed on both sides", async () => {
-    const { local, engine, remote } = await setup({ "Notes/a.md": "line\n" });
+  it("keeps everything that merges, and reports where the same lines changed on both sides", async () => {
+    const { local, engine, remote } = await setup({ "Notes/a.md": "title\nx\nline\nend\n" });
     await engine.sync();
-    await local.write("Notes/a.md", "mine\n");
-    await remote.push({ "Notes/a.md": "theirs\n" });
+    await local.write("Notes/a.md", "TITLE\nx\nmine\nend\n");
+    await remote.push({ "Notes/a.md": "title\nx\ntheirs\nend\nmore\n" });
     const r = await engine.sync();
-    expect(r.conflicts).toEqual(["Notes/a (conflict 2026-11-14).md"]);
-    expect(await localSnapshot(local)).toEqual({
-      "Notes/a.md": "theirs\n",
-      "Notes/a (conflict 2026-11-14).md": "mine\n",
-    });
+    // No copy: the note has both sides' other changes, and the remote's line where they clash.
+    expect(await localSnapshot(local)).toEqual({ "Notes/a.md": "TITLE\nx\ntheirs\nend\nmore\n" });
     expect(remote.snapshot()).toEqual(await localSnapshot(local));
+    expect(r.conflicts).toEqual([
+      {
+        path: "Notes/a.md",
+        ours: "TITLE\nx\nmine\nend\n",
+        theirs: "title\nx\ntheirs\nend\nmore\n",
+        base: "title\nx\nline\nend\n",
+        kind: "text",
+        at: DAY.getTime(),
+      },
+    ]);
     expect(await engine.pendingChanges()).toBe(0);
   });
 
@@ -122,7 +129,8 @@ describe("SyncEngine", () => {
     await local.write("x.md", "local");
     await remote.push({ "x.md": "remote" });
     const r = await engine.sync();
-    expect(r.conflicts).toEqual(["x (conflict 2026-11-14).md"]);
+    expect(r.conflicts).toMatchObject([{ path: "x.md", ours: "local", theirs: "remote", base: "", kind: "text" }]);
+    expect(await localSnapshot(local)).toEqual({ "x.md": "remote" });
   });
 
   it("lets an edit win over a delete, either way round", async () => {
@@ -161,10 +169,9 @@ describe("SyncEngine", () => {
     expect((await local.read("a.md"))!.content).toBe("typed during sync");
     local.writeIf = realWriteIf;
 
-    // Next sync sees both sides changed: different line → conflict copy, nothing lost.
+    // Next sync sees both sides changed: different line → a conflict to review, nothing lost.
     const r2 = await engine.sync();
-    expect(r2.conflicts).toEqual(["a (conflict 2026-11-14).md"]);
-    expect((await local.read("a (conflict 2026-11-14).md"))!.content).toBe("typed during sync");
+    expect(r2.conflicts).toMatchObject([{ path: "a.md", ours: "typed during sync", theirs: "A-remote" }]);
     expect((await local.read("a.md"))!.content).toBe("A-remote");
   });
 
@@ -203,25 +210,27 @@ describe("SyncEngine attachments and drawings", () => {
     expect(await engine.pendingChanges()).toBe(0);
   });
 
-  it("keeps both versions of an attachment changed on both sides", async () => {
+  it("keeps the remote attachment and reports ours when both sides changed it", async () => {
     const { local, engine, remote } = await setup({ "pic.png": png(1) });
     await engine.sync();
     await local.writeBinary("pic.png", png(2));
     await remote.push({ "pic.png": png(3) });
     const r = await engine.sync();
-    expect(r.conflicts).toEqual(["pic (conflict 2026-11-14).png"]);
+    expect(r.conflicts).toMatchObject([{ path: "pic.png", kind: "file" }]);
+    expect(r.conflicts[0].ours).toEqual(png(2));
     expect(await local.readBinary("pic.png")).toEqual(png(3));
-    expect(await local.readBinary("pic (conflict 2026-11-14).png")).toEqual(png(2));
+    expect((await local.list()).filter((e) => e.kind === "file")).toHaveLength(1);
   });
 
-  it("never line-merges drawings: both edited means a conflict copy", async () => {
+  it("never line-merges drawings: both edited means a whole-file conflict", async () => {
     const base = '{\n"elements": [\n1\n],\n"x": 1\n}';
     const { local, engine, remote } = await setup({ "d.excalidraw": base });
     await engine.sync();
     await local.write("d.excalidraw", base.replace("1\n]", "1,\n2\n]"));
     await remote.push({ "d.excalidraw": base.replace('"x": 1', '"x": 2') });
     const r = await engine.sync();
-    expect(r.conflicts).toEqual(["d (conflict 2026-11-14).excalidraw"]);
+    expect(r.conflicts).toMatchObject([{ path: "d.excalidraw", kind: "file" }]);
+    expect((await local.read("d.excalidraw"))!.content).toContain('"x": 2');
   });
 });
 
@@ -253,6 +262,14 @@ describe("mergeText", () => {
   });
   it("accepts identical changes on both sides", () => {
     expect(mergeText("a\nX\n", "a\nb\n", "a\nX\n")).toBe("a\nX\n");
+  });
+});
+
+describe("mergeTheirs", () => {
+  it("merges what it can and takes their lines where both changed", () => {
+    expect(mergeTheirs("a\nB\nc\nd", "a\nb\nc\nd", "a\nX\nc\nD")).toBe("a\nX\nc\nD");
+    expect(mergeTheirs("A\nb\nc", "a\nb\nc", "a\nb\nC")).toBe("A\nb\nC");
+    expect(mergeTheirs("mine", "", "theirs")).toBe("theirs");
   });
 });
 
