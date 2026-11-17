@@ -82,12 +82,25 @@ describe("live preview", () => {
     expect(marks[0].classList.contains("cm-wikilink-unresolved")).toBe(false);
   });
 
-  it("treats top-of-note frontmatter as properties, not headings", () => {
-    const doc = "---\ntags: [a]\n---\n# Title\nend";
+  it("shows top-of-note frontmatter as a properties panel, and as YAML while the cursor is in it", () => {
+    const doc = "---\ntags: [a]\nhub: true\n---\n# Title\nend";
     const v = view(doc, doc.length);
+    const panel = v.contentDOM.querySelector(".cm-properties")!;
+    expect(panel.querySelector(".cm-property-tag")?.textContent).toBe("#a");
+    expect(panel.querySelector<HTMLInputElement>("input[type=checkbox]")?.checked).toBe(true);
+    // Not a horizontal rule and setext heading: the heading below is still the title.
+    expect(v.contentDOM.textContent).toContain("Title");
+
+    v.dispatch({ selection: { anchor: 5 } });
+    expect(v.contentDOM.querySelector(".cm-properties")).toBeNull();
     expect(v.contentDOM.querySelectorAll(".cm-md-frontmatter").length).toBeGreaterThan(0);
     expect(lineText(v, 2)).toBe("tags: [a]");
-    expect(lineText(v, 4)).toBe("Title");
+  });
+
+  it("leaves invalid properties as YAML, where the problem is shown", () => {
+    const doc = "---\ntags: [a\n---\nend";
+    const v = view(doc, doc.length);
+    expect(v.contentDOM.querySelector(".cm-properties")).toBeNull();
   });
 
   it("shows ![[image]] embeds as images, loaded through the host", async () => {

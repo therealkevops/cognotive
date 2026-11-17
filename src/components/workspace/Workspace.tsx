@@ -35,6 +35,7 @@ import type { OpenHow } from "@/lib/links/open";
 import { EMPTY_HISTORY, goBack, goForward, renameInHistory, visit, type NavHistory } from "@/lib/nav/history";
 import { readPref, writePref } from "@/lib/prefs";
 import { editTableSource } from "@/lib/editor/table-keys";
+import { addProperty } from "@/lib/editor/properties-panel";
 import type { LinkHost } from "@/lib/editor/wikilinks";
 import { collectPropertyInfo, type PropertyInfo } from "@/lib/editor/properties";
 import type { LinkContext } from "@/lib/markdown/remark-links";
@@ -975,6 +976,7 @@ export function Workspace() {
     },
     { id: "template", label: "Insert template…", when: editing },
     { id: "templateNote", label: "New note from template…" },
+    { id: "property-add", label: "Add a property", when: editing },
     { id: "table-format", label: "Format table", hint: "Ctrl/Cmd+Alt+T", when: editing },
     { id: "table-from-lines", label: "Convert selected lines (CSV) to a table", when: editing },
     { id: "table-to-lines", label: "Convert table to CSV lines", when: editing },
@@ -1036,6 +1038,11 @@ export function Workspace() {
     "daily-yesterday": () => void openDaily(new Date(Date.now() - 86_400_000)),
     template: () => setTemplatePicker("insert"),
     templateNote: () => setTemplatePicker("new"),
+    "property-add": () => {
+      if (!view) return;
+      addProperty(view);
+      view.focus();
+    },
     "table-format": () => view && editTableSource(view, "format"),
     "table-from-lines": () => view && editTableSource(view, "from-lines"),
     "table-to-lines": () => view && editTableSource(view, "to-lines"),

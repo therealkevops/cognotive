@@ -34,7 +34,8 @@ test("a note created from a link goes in the linking note's folder", async ({ pa
 
 test("cancelling the prompt creates nothing", async ({ page }) => {
   await openApp(page);
-  await editor(page).click();
+  // The first line (the middle of Welcome can be its table).
+  await editor(page).locator(".cm-line").first().click();
   await page.keyboard.press("ControlOrMeta+End");
   await page.keyboard.type("\n[[Scratch]]");
   await page.keyboard.press("Alt+Enter");

@@ -103,10 +103,11 @@ export default function MarkdownEditor({
         }),
       }),
     );
-    // A note with only properties (a new note) starts below them, ready to type.
+    // A note with properties opens below them (so live preview shows them as a panel),
+    // at the end of a new note that has only properties.
     const { frontmatter, body } = splitFrontmatter(initial);
-    if (frontmatter && !body.trim()) {
-      const anchor = body ? initial.length : frontmatter.length;
+    if (frontmatter) {
+      const anchor = body && !body.trim() ? initial.length : frontmatter.length;
       v.dispatch({ selection: { anchor: Math.min(anchor, v.state.doc.length) } });
     }
     // A new note starts at the top, not at the previous note's scroll position.

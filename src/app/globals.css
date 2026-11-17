@@ -592,7 +592,7 @@ mark {
   padding: 0 2px;
 }
 .cm-rendered-block {
-  margin: 0.4em 0;
+  padding: 0.4em 0;
   cursor: text;
   font-size: 0.95em;
 }
@@ -616,7 +616,7 @@ mark {
   position: relative;
   width: fit-content;
   max-width: 100%;
-  margin: 0.5em 0 0.2em;
+  padding: 0.5em 0 0.2em;
   font-family: var(--font-sans), sans-serif;
   font-size: 0.92em;
   line-height: 1.5;
@@ -905,6 +905,43 @@ mark {
 .cm-tooltip.cm-completionInfo { max-width: 22rem; padding: 0.45rem 0.65rem; font-size: 0.8rem; line-height: 1.45; }
 .cm-tooltip-autocomplete .cm-completionDetail { margin-left: 0.6em; font-style: normal; font-size: 0.8em; color: var(--muted); }
 .cm-tooltip-lint { font-size: 0.8rem; }
+
+/* Properties as a panel in live preview (properties-panel.ts). */
+/* Block widgets get padding, not margins: CodeMirror can't measure margins, and lines below would be misplaced. */
+.cm-properties-wrap { padding: 0.2rem 0 0.8rem; }
+.cm-properties {
+  padding: 0.4rem 0.5rem 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  font-family: var(--font-sans), sans-serif;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.cm-properties dl { display: grid; grid-template-columns: minmax(6rem, max-content) 1fr; }
+.cm-property-row { display: contents; cursor: text; }
+.cm-property-row dt,
+.cm-property-row dd { padding: 0.2rem 0.45rem; border-radius: 0.4rem; }
+.cm-property-row dt { color: var(--muted); font-family: var(--font-mono), ui-monospace, monospace; font-size: 0.92em; }
+.cm-property-row dd { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; min-width: 0; overflow-wrap: anywhere; }
+.cm-property-row:hover dt,
+.cm-property-row:hover dd { background: color-mix(in srgb, var(--foreground) 4%, transparent); }
+.cm-property-chip {
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  font-size: 0.92em;
+  background: color-mix(in srgb, var(--foreground) 7%, transparent);
+}
+.cm-property-tag { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.cm-property-empty { color: var(--muted); font-style: italic; }
+.cm-property-row input[type="checkbox"] { accent-color: var(--accent); width: 0.95rem; height: 0.95rem; cursor: pointer; }
+.cm-property-add {
+  margin: 0.15rem 0 0 0.2rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.4rem;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.cm-property-add:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 
 /* ---------- Touch screens ---------- */
 

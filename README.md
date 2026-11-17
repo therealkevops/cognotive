@@ -34,6 +34,10 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   **Link** button). **Map as canvas** lays a note and its connections out on a canvas
 - Tags (`#tag`, `#nested/tag`, or `tags:` in properties) with a Tags pane; search `tag:name`
 - Properties (YAML frontmatter) shown at the top of the reading view; `aliases:` count as names
+- In live preview, properties show as a panel: tags and aliases as chips, `hub` as a checkbox you
+  can tick, empty values marked. Click a row to edit its YAML (with the suggestions below);
+  **+ Add property**, or the command *Add a property* (which also starts a block in a note without
+  one), offers property names straight away. Notes with properties open with the cursor below them
 - Help with properties, as in a code editor: in the properties block, names are suggested as you
   type (with what each one does), then values: your tags, `true`/`false` for `hub`, today's date
   for `created`/`reviewed`, and values you've used before for your own properties. Hovering over a

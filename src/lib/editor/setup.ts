@@ -33,6 +33,7 @@ import { tableGridExtensions, tableGridOn } from "./table-grid";
 import { tableEditing } from "./table-keys";
 import { tagHighlighter } from "./tags";
 import { completeProperties, propertyExtensions } from "./properties";
+import { propertiesPanel } from "./properties-panel";
 import { completeLinks, linkHost, livePreviewOn, WikiLinkSyntax, wikilinkExtensions, type LinkHost } from "./wikilinks";
 
 /** Formatting shortcuts. "Mod" is Cmd on macOS and Ctrl elsewhere. */
@@ -129,6 +130,7 @@ export function livePreviewExtension(on: boolean, tables: "grid" | "markdown" = 
     ? [
         livePreview,
         liveBlocks,
+        propertiesPanel,
         livePreviewOn.of(true),
         tableGridOn.of(tables === "grid"),
         EditorView.contentAttributes.of({ class: "cm-live-preview" }),
