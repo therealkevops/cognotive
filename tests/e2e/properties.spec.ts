@@ -96,3 +96,44 @@ test("live preview shows properties as a panel, with Add property and a hub chec
   await page.getByRole("radio", { name: "Source" }).click();
   await expect(editor).toHaveText("---tags: [guide]hub: false---Body text");
 });
+
+test("the reading view edits properties in place, with suggestions", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".cm-content")).toBeVisible();
+  await page.getByRole("tree", { name: "Repository files" }).getByRole("treeitem", { name: "Linking notes" }).click();
+  await page.getByRole("radio", { name: "Reading" }).click();
+  const props = page.getByRole("region", { name: "Properties" });
+  await expect(props).toContainText("#guide");
+
+  // A tag from the repository's tags.
+  await props.getByRole("combobox", { name: "Add to tags" }).fill("ar");
+  await expect(props.getByRole("option", { name: "area", exact: true })).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(props).toContainText("#area");
+  // Remove an alias.
+  await props.getByRole("button", { name: "Remove Links" }).click();
+
+  // A new property, by name, then its value.
+  await props.getByRole("button", { name: "Add property" }).click();
+  await props.getByRole("combobox", { name: "New property name" }).fill("hu");
+  await expect(props.getByRole("option", { name: /^hub/ })).toContainText("pins the note");
+  await page.keyboard.press("Enter");
+  const hub = props.getByRole("checkbox", { name: "hub" });
+  await expect(hub).toBeChecked();
+  // The sidebar now lists it as a pinned hub.
+  await expect(page.getByRole("region", { name: "Hubs", exact: true })).toContainText("Linking notes");
+
+  // One of your own, with a free-text value.
+  await props.getByRole("button", { name: "Add property" }).click();
+  await props.getByRole("combobox", { name: "New property name" }).fill("status");
+  await page.keyboard.press("Enter");
+  await props.getByRole("combobox", { name: "status" }).fill("draft");
+  await page.keyboard.press("Enter");
+
+  await page.getByRole("radio", { name: "Source" }).click();
+  const editor = page.locator(".cm-content");
+  await expect(editor).toContainText("tags: [guide, area]");
+  await expect(editor).toContainText("aliases: []");
+  await expect(editor).toContainText("hub: true");
+  await expect(editor).toContainText("status: draft");
+});

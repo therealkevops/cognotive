@@ -15,7 +15,7 @@ export function splitFrontmatter(markdown: string): { frontmatter: string; body:
  */
 export function setFrontmatterProperty(markdown: string, key: string, value: string | boolean | undefined): string {
   const { frontmatter, body } = splitFrontmatter(markdown);
-  const line = value === undefined ? null : `${key}: ${value}`;
+  const line = value === undefined ? null : value === "" ? `${key}:` : `${key}: ${value}`;
   const own = new RegExp(`^${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:.*$`);
   if (!frontmatter) return line === null ? markdown : `---\n${line}\n---\n${markdown}`;
   const nl = frontmatter.includes("\r\n") ? "\r\n" : "\n";

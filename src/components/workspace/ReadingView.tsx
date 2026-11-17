@@ -7,6 +7,8 @@ import { splitLinkText } from "@/lib/links/parse";
 import { isDark } from "@/lib/appearance";
 import { renderMarkdown } from "@/lib/markdown/render";
 import type { LinkContext } from "@/lib/markdown/remark-links";
+import type { PropertyInfo } from "@/lib/editor/properties";
+import { PropertiesEditor } from "./PropertiesEditor";
 
 let mermaidId = 0;
 
@@ -46,6 +48,8 @@ export interface ReadingViewProps {
   markdown: string;
   links?: LinkContext;
   properties?: Record<string, unknown>;
+  /** Makes the properties editable in place, with suggestions (the main reading view). */
+  editProperties?: { info: PropertyInfo; onSet(key: string, value: unknown): void };
   /** `how`: this tab, a new tab (Ctrl/Cmd or middle click), or the side pane (Ctrl/Cmd+Alt). */
   onOpenLink?(target: string, heading?: string, how?: OpenHow): void;
   onTag?(tag: string): void;
@@ -59,6 +63,7 @@ export default function ReadingView({
   markdown,
   links,
   properties,
+  editProperties,
   onOpenLink,
   onTag,
   fileUrl,
@@ -107,7 +112,9 @@ export default function ReadingView({
   const props = Object.entries(properties ?? {});
   return (
     <div className="mx-auto px-6 pt-8 pb-[40vh]" style={{ maxWidth: "var(--line-width, 46rem)", fontSize: "var(--editor-font-size, 16px)" }}>
-      {props.length > 0 && (
+      {editProperties ? (
+        <PropertiesEditor properties={properties ?? {}} info={editProperties.info} onSet={editProperties.onSet} />
+      ) : props.length > 0 && (
         <dl aria-label="Properties" className="properties mb-6">
           {props.map(([k, v]) => (
             <div key={k} className="contents">

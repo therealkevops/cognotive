@@ -37,7 +37,7 @@ import { readPref, writePref } from "@/lib/prefs";
 import { editTableSource } from "@/lib/editor/table-keys";
 import { addProperty } from "@/lib/editor/properties-panel";
 import type { LinkHost } from "@/lib/editor/wikilinks";
-import { collectPropertyInfo, type PropertyInfo } from "@/lib/editor/properties";
+import { collectPropertyInfo, yamlValue, type PropertyInfo } from "@/lib/editor/properties";
 import type { LinkContext } from "@/lib/markdown/remark-links";
 import { serializeCanvas } from "@/lib/canvas/format";
 import { neighbourhoodCanvas, type Neighbour } from "@/lib/canvas/map";
@@ -1269,6 +1269,15 @@ export function Workspace() {
                   markdown={vault.activeText}
                   links={linkContext}
                   properties={vault.links.get(vault.active.path)?.properties}
+                  editProperties={{
+                    info: propertyInfo(),
+                    onSet: (key, value) => {
+                      const path = vault.active?.path;
+                      if (!path) return;
+                      const next = setFrontmatterProperty(vault.activeText, key, value === undefined ? undefined : yamlValue(value));
+                      if (next !== vault.activeText) void vault.writeNote(path, next);
+                    },
+                  }}
                   onOpenLink={(t, h, how) => void openLink(t, h, how)}
                   onTag={showTag}
                   fileUrl={(p) => vault.fileUrl(p, { dark: prefersDark() })}

@@ -75,3 +75,17 @@ describe("checkProperties", () => {
     expect(check("---\nhub: true\n")[0]).toContain("never end");
   });
 });
+
+describe("yamlValue", () => {
+  it("writes values that read back the same", async () => {
+    const { yamlValue } = await import("./properties");
+    const { parse } = await import("yaml");
+    for (const v of ["draft", "a: b", "#x", "true", "", "2026-01-02", "it's", "[x]", ["a", "b c", "d,e", "true"], true, 3]) {
+      const written = yamlValue(v);
+      const back = written === "" ? "" : parse(`k: ${written}`).k;
+      expect(back).toEqual(v);
+    }
+    expect(yamlValue(["idea", "work/home"])).toBe("[idea, work/home]");
+    expect(yamlValue("draft")).toBe("draft");
+  });
+});
