@@ -1,4 +1,5 @@
 import { drawingJson, isObsidianDrawing, replaceScene } from "../drawing/obsidian";
+import { drawingProperties } from "../drawing/properties";
 import { parseDrawing, rewriteDrawingLinks } from "../drawing/parse";
 import { canvasLinks, canvasRelations, parseCanvas, serializeCanvas } from "../canvas/format";
 import { canvasName, dirname, drawingName, isCanvas, isDrawing, isNote, noteTitle, relativePath } from "../vault/paths";
@@ -83,9 +84,18 @@ export class LinkIndex {
     this.resolver.add(path);
     if (isDrawing(path)) {
       const { links } = parseDrawing(drawingJson(path, content));
+      const properties = drawingProperties(path, content);
+      const list = (v: unknown) => (Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : []).map((x) => String(x).trim()).filter(Boolean);
       this.notes.set(path, {
         content,
-        parsed: { links, tags: [], properties: {}, aliases: [], headings: [], propertiesError: false },
+        parsed: {
+          links,
+          tags: [...new Set(list(properties.tags).map((t) => t.replace(/^#/, "").toLowerCase()))],
+          properties,
+          aliases: list(properties.aliases ?? properties.alias),
+          headings: [],
+          propertiesError: false,
+        },
       });
     } else if (isCanvas(path)) {
       const data = parseCanvas(content);

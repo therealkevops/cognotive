@@ -38,6 +38,7 @@ import { editTableSource } from "@/lib/editor/table-keys";
 import { addProperty } from "@/lib/editor/properties-panel";
 import type { LinkHost } from "@/lib/editor/wikilinks";
 import { collectPropertyInfo, yamlValue, type PropertyInfo } from "@/lib/editor/properties";
+import { drawingProperties, keepDrawingProperties, setDrawingProperty } from "@/lib/drawing/properties";
 import type { LinkContext } from "@/lib/markdown/remark-links";
 import { serializeCanvas } from "@/lib/canvas/format";
 import { neighbourhoodCanvas, type Neighbour } from "@/lib/canvas/map";
@@ -1266,8 +1267,19 @@ export function Workspace() {
                   initial={drawingJson(vault.active.path, vault.active.initial)}
                   onChange={(json) =>
                     // Obsidian plugin drawings keep their markdown wrapper; only the scene changes.
-                    vault.edit(isObsidianDrawing(activePathNow!) ? replaceScene(vault.activeText, json) : json)
+                    // Plain drawings keep their properties, which Excalidraw doesn't know about.
+                    vault.edit(
+                      isObsidianDrawing(activePathNow!)
+                        ? replaceScene(vault.activeText, json)
+                        : keepDrawingProperties(activePathNow!, json, vault.activeText),
+                    )
                   }
+                  properties={{
+                    properties: drawingProperties(vault.active.path, vault.activeText),
+                    info: propertyInfo(),
+                    // Saved like any edit, without reloading the drawing.
+                    onSet: (key, value) => vault.edit(setDrawingProperty(vault.active!.path, vault.activeText, key, value)),
+                  }}
                   onOpenLink={(t, h) => void openLink(t, h)}
                   vault={drawingVault}
                 />

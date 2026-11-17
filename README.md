@@ -43,6 +43,10 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   suggested from the repository), tick `hub`, pick dates from a calendar, type other values (with
   values used before suggested), remove a property, or **+ Add property** (names suggested, with
   what each does). Changes are written into the note's YAML
+- Drawings have properties too (the sliders button among the drawing's tools): kept in the
+  frontmatter of the Obsidian plugin's `.excalidraw.md` files (its own `excalidraw-…` keys are left
+  alone), and under a `properties` key in plain `.excalidraw` files, which Excalidraw ignores. A
+  drawing's tags and aliases count like a note's
 - Help with properties, as in a code editor: in the properties block, names are suggested as you
   type (with what each one does), then values: your tags, `true`/`false` for `hub`, today's date
   for `created`/`reviewed`, and values you've used before for your own properties. Hovering over a

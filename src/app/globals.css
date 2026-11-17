@@ -619,6 +619,18 @@ mark {
 .canvas-properties { width: 22rem; max-width: 80vw; padding: 0.6rem 0.7rem 0.3rem; cursor: default; }
 .canvas-properties .properties-editor { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
 
+/* A drawing's properties: a panel under its tools (DrawingView.tsx). */
+.drawing-properties {
+  position: absolute;
+  z-index: 20;
+  top: 3.6rem;
+  right: 1rem;
+  width: 22rem;
+  max-width: calc(100% - 2rem);
+  padding: 0.6rem 0.7rem 0.3rem;
+}
+.drawing-properties .properties-editor { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+
 /* ---------- Attachments and drawings ---------- */
 
 .cm-embed {

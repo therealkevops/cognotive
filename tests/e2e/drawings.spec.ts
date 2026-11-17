@@ -118,3 +118,34 @@ test("attachments sync to GitHub as binary files", async ({ page }) => {
   expect(bytes.subarray(0, 4)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47])); // PNG signature
   expect(github.files()["Notes.md"]).toContain(`![[${name.slice("attachments/".length)}]]`);
 });
+
+test("a drawing's properties can be edited, are indexed, and survive drawing", async ({ page }) => {
+  await page.goto("/");
+  await expect(editor(page)).toBeVisible();
+  await page.getByRole("button", { name: "New drawing" }).click();
+  await expect(title(page)).toHaveValue("Drawing");
+  await expect(page.getByTestId("drawing").locator("canvas.interactive")).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole("button", { name: "Properties", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: "Drawing properties" });
+  await panel.getByRole("button", { name: "Add property" }).click();
+  await panel.getByRole("combobox", { name: "New property name" }).fill("tags");
+  await page.keyboard.press("Enter");
+  // Letters typed here go to the text box, not Excalidraw's tool shortcuts.
+  await panel.getByRole("combobox", { name: "Add to tags" }).fill("sketches");
+  await page.keyboard.press("Enter");
+  await expect(panel).toContainText("#sketches");
+  await expect(page.getByRole("status")).toHaveText("Saved");
+
+  // The tag is in the Tags pane, and drawing keeps the properties.
+  await page.getByRole("tab", { name: "Tags" }).click();
+  await expect(page.getByRole("button", { name: "#sketches 1", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Properties", exact: true }).click();
+  await drawRectangle(page);
+  await expect(page.getByRole("status")).toHaveText("Saved");
+  await page.reload();
+  await expect(title(page)).toHaveValue("Drawing");
+  await expect(page.getByTestId("drawing").locator("canvas.interactive")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Properties", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Drawing properties" })).toContainText("#sketches");
+});

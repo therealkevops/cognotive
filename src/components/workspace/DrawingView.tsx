@@ -10,13 +10,16 @@ import {
   serializeAsJSON,
 } from "@excalidraw/excalidraw";
 import type { BinaryFileData, ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from "@excalidraw/excalidraw/types";
-import { FilePlus2, ImagePlus, Link2 } from "lucide-react";
+import { FilePlus2, ImagePlus, Link2, SlidersHorizontal } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isDark } from "@/lib/appearance";
 import { completeWikilink, newNoteName, openWikilink, textLinkUpdates } from "@/lib/drawing/links";
 import { elementLinkTarget } from "@/lib/drawing/parse";
 import { splitLinkText } from "@/lib/links/parse";
+import { isPluginKey } from "@/lib/drawing/properties";
+import type { PropertyInfo } from "@/lib/editor/properties";
 import { matches, Picker } from "./Picker";
+import { PropertiesEditor } from "./PropertiesEditor";
 
 type InitialData = ExcalidrawInitialDataState;
 
@@ -62,6 +65,8 @@ export interface DrawingViewProps {
   /** Follows a note link set on an element ("[[Note]]"). */
   onOpenLink(target: string, heading?: string): void;
   vault?: DrawingVault;
+  /** The drawing's own properties, editable from a panel (the Obsidian plugin's keys are left out). */
+  properties?: { properties: Record<string, unknown>; info: PropertyInfo; onSet(key: string, value: unknown): void };
 }
 
 /** Natural size of an image data URL, scaled to fit within `max` px. */
@@ -89,7 +94,8 @@ function imageSize(dataURL: string, max = 480): Promise<{ width: number; height:
  * selection (or adds a linked label); "Insert image or drawing" places vault
  * pictures, linked back to their file.
  */
-export default function DrawingView({ docKey, initial, onChange, onOpenLink, vault }: DrawingViewProps) {
+export default function DrawingView({ docKey, initial, onChange, onOpenLink, vault, properties }: DrawingViewProps) {
+  const [showProps, setShowProps] = useState(false);
   const dark = useDarkMode();
   const onChangeRef = useRef(onChange);
   const onOpenLinkRef = useRef(onOpenLink);
@@ -238,6 +244,18 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
               >
                 <ImagePlus size={16} aria-hidden />
               </button>
+              {properties && (
+                <button
+                  type="button"
+                  className="drawing-tool"
+                  aria-label="Properties"
+                  aria-expanded={showProps}
+                  title="Properties of this drawing (tags, aliases…)"
+                  onClick={() => setShowProps((v) => !v)}
+                >
+                  <SlidersHorizontal size={16} aria-hidden />
+                </button>
+              )}
             </div>
           ) : null
         }
@@ -281,6 +299,24 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
         </div>
       )}
       {vault && <TextLinkSuggestions vault={vault} />}
+      {properties && showProps && (
+        <div
+          role="dialog"
+          aria-label="Drawing properties"
+          className="drawing-properties menu-panel"
+          onKeyDown={(e) => {
+            // Keys typed here are for the text boxes, not Excalidraw's shortcuts.
+            e.stopPropagation();
+            if (e.key === "Escape") setShowProps(false);
+          }}
+        >
+          <PropertiesEditor
+            properties={Object.fromEntries(Object.entries(properties.properties).filter(([k]) => !isPluginKey(k)))}
+            info={properties.info}
+            onSet={properties.onSet}
+          />
+        </div>
+      )}
       {picker === "link" && vault && (
         <Picker
           title="Link to note"
