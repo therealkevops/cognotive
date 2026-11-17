@@ -153,7 +153,7 @@ test("a note can be marked as a hub, and missing notes many link to are hubs wai
 
 test("pinned hubs are listed in the sidebar", async ({ page }) => {
   await openApp(page);
-  const pinned = page.getByRole("region", { name: "Hubs" });
+  const pinned = page.getByRole("region", { name: "Hubs", exact: true });
   await expect(pinned).toHaveCount(0); // nothing pinned yet
   await page.keyboard.press("ControlOrMeta+p");
   await page.getByRole("dialog", { name: "Command palette" }).getByRole("combobox").fill("pin this note");
@@ -218,7 +218,7 @@ test("hubs waiting to be written are listed in the sidebar, and created pinned",
     "V/C.md": strToU8("[[Recipes]]"),
   });
   await page.getByLabel("Choose a zip to import").setInputFiles({ name: "v.zip", mimeType: "application/zip", buffer: Buffer.from(zip) });
-  const hubs = page.getByRole("region", { name: "Hubs" });
+  const hubs = page.getByRole("region", { name: "Hubs", exact: true });
   const toWrite = hubs.getByRole("list", { name: "Hubs to write" });
   await expect(toWrite.getByRole("button", { name: "Create hub Recipes" })).toContainText("3");
   await toWrite.getByRole("button", { name: "Create hub Recipes" }).click();
@@ -229,6 +229,47 @@ test("hubs waiting to be written are listed in the sidebar, and created pinned",
   await expect(title(page)).toHaveValue("Recipes");
   await expect(hubs.getByRole("button", { name: "Recipes", exact: true })).toBeVisible();
   await expect(toWrite).toHaveCount(0);
+});
+
+test("the Connections panel shows a note's hubs and suggests one to join", async ({ page }) => {
+  await openApp(page);
+  const zip = zipSync({
+    "V/Cooking.md": strToU8("---\nhub: true\n---\n# Cooking\n\n## Notes\n\n- \n\n## Open questions\n"),
+    "V/Risotto.md": strToU8("Slow cooking, lots of stirring."),
+  });
+  await page.getByLabel("Choose a zip to import").setInputFiles({ name: "v.zip", mimeType: "application/zip", buffer: Buffer.from(zip) });
+  await expect(page.getByRole("status").filter({ hasText: "Imported 2 files" })).toBeVisible();
+  await tree(page).getByRole("treeitem", { name: "Risotto" }).click();
+
+  const inHubs = page.getByRole("region", { name: "In hubs" });
+  await expect(inHubs).toContainText("Not in a hub yet.");
+  const suggested = inHubs.getByRole("list", { name: "Suggested hubs" });
+  await expect(suggested).toContainText("mentions Cooking");
+  await suggested.getByRole("button", { name: "Add to Cooking" }).click();
+  await expect(inHubs).toContainText("Cookinglists this note");
+
+  await inHubs.getByRole("button", { name: "Cooking", exact: true }).click();
+  await expect(title(page)).toHaveValue("Cooking");
+  await expect(page.getByRole("region", { name: "In hubs" })).toContainText("This note is a pinned hub.");
+  await page.getByRole("radio", { name: "Source" }).click();
+  await expect(editor(page)).toContainText("## Notes- [[Risotto]]## Open questions");
+});
+
+test("Repository health suggests a hub for an orphan", async ({ page }) => {
+  await openApp(page);
+  const zip = zipSync({
+    "V/Cooking.md": strToU8("---\nhub: true\ntags: [food]\n---\n# Cooking\n"),
+    "V/Soup.md": strToU8("Warming. #food"),
+  });
+  await page.getByLabel("Choose a zip to import").setInputFiles({ name: "v.zip", mimeType: "application/zip", buffer: Buffer.from(zip) });
+  await expect(page.getByRole("status").filter({ hasText: "Imported 2 files" })).toBeVisible();
+  await page.getByRole("button", { name: "Repository health" }).click();
+  const dialog = page.getByRole("dialog", { name: "Repository health" });
+  await dialog.getByRole("tab", { name: /Orphans/ }).click();
+  const orphans = dialog.getByRole("tabpanel", { name: "Orphans" });
+  await expect(orphans).toContainText("Could go in the hub Cooking: #food");
+  await orphans.getByRole("button", { name: "Add Soup to Cooking" }).click();
+  await expect(orphans.getByRole("button", { name: "Soup", exact: true })).toHaveCount(0);
 });
 
 test("deleting a linked note warns, and can turn the links into text", async ({ page }) => {

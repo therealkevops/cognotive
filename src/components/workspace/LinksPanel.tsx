@@ -1,8 +1,10 @@
 "use client";
 
-import { LayoutDashboard } from "lucide-react";
+import { LayoutDashboard, Waypoints } from "lucide-react";
 import { useMemo, useState } from "react";
 import { formatLink } from "@/lib/links/format";
+import { hubProperty } from "@/lib/links/health";
+import { addToHub, hubsFor, pinnedHubs } from "@/lib/links/hubs";
 import type { Backlink, CanvasRelation, Mention } from "@/lib/links/link-index";
 import { canvasName, displayName, noteTitle } from "@/lib/vault/paths";
 import { useVault } from "../vault/useVault";
@@ -97,7 +99,23 @@ export function LinksPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, vault.links, vault.indexVersion]);
 
+  const hubs = useMemo(() => {
+    const all = pinnedHubs(vault.links);
+    if (!path || all.length === 0) return null;
+    return { ...hubsFor(vault.links, path, all), isHub: hubProperty(vault.links.get(path)?.properties) === true };
+    // indexVersion signals index changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path, vault.links, vault.indexVersion]);
+
   if (!path) return null;
+
+  /** Lists this note in a hub (in its Notes section, or at the end). */
+  const addTo = async (hub: string) => {
+    const content = hub === vault.active?.path ? vault.activeText : vault.links.content(hub);
+    if (content === undefined) return;
+    const target = vault.links.linkText(path);
+    await vault.writeNote(hub, addToHub(content, formatLink(vault.settings.linkFormat, hub, { path, target }, target)));
+  };
 
   const linkMention = async (m: Mention) => {
     const content = vault.links.content(m.source);
@@ -127,6 +145,60 @@ export function LinksPanel({
           Map as canvas
         </button>
       )}
+      {hubs && (
+        <Section title="In hubs" count={hubs.connected.length}>
+          {hubs.isHub && <p className="mb-1.5 text-sm text-muted">This note is a pinned hub.</p>}
+          {hubs.connected.length > 0 ? (
+            <ul className="space-y-1">
+              {hubs.connected.map((h) => (
+                <li key={h.hub} className="flex items-center gap-2 text-sm">
+                  <Waypoints size={13} aria-hidden className="shrink-0 text-[#3f9d63]" />
+                  <button type="button" className="truncate font-medium hover:text-accent" onClick={() => void vault.open(h.hub)}>
+                    {noteTitle(h.hub)}
+                  </button>
+                  <span className="shrink-0 text-xs text-muted">
+                    {h.direction === "in" ? "lists this note" : h.direction === "out" ? "linked from here" : "linked both ways"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            !hubs.isHub && (
+              <>
+                <p className="text-sm text-muted">Not in a hub yet.</p>
+                {hubs.suggestions.length > 0 && (
+                  <ul aria-label="Suggested hubs" className="mt-2 space-y-1.5">
+                    {hubs.suggestions.map((s) => (
+                      <li key={s.hub} className="flex items-center gap-2 text-sm">
+                        <div className="min-w-0 flex-1">
+                          <button
+                            type="button"
+                            className="truncate font-medium hover:text-accent"
+                            onClick={() => void vault.open(s.hub)}
+                          >
+                            {noteTitle(s.hub)}
+                          </button>
+                          <p className="truncate text-xs text-muted">{s.reasons.join(" · ")}</p>
+                        </div>
+                        <button
+                          type="button"
+                          className="button-secondary shrink-0 px-2 py-0.5 text-xs"
+                          aria-label={`Add to ${noteTitle(s.hub)}`}
+                          title={`List this note in ${noteTitle(s.hub)}`}
+                          onClick={() => void addTo(s.hub)}
+                        >
+                          Add
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )
+          )}
+        </Section>
+      )}
+
       <Section title="Backlinks" count={backlinks.length}>
         {backlinks.length === 0 ? (
           <p className="text-sm text-muted">No notes link here yet.</p>

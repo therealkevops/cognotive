@@ -46,7 +46,9 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   links in, index notes linking out to many, and notes pinned with `hub: true` (with the command
   *Pin this note to the sidebar as a hub*, or **Pin** in the Hubs list; `hub: false` opts a note
   out). Pinned hubs are listed at the top of the sidebar's Files tab, with hubs waiting to be written listed under
-  *To write* (creating one offers to pin it); missing notes linked from three or more
+  *To write* (creating one offers to pin it). The Connections panel shows which pinned hubs the open note is in
+  and, if none, suggests up to three it mentions or shares tags or links with (**Add** lists it in
+  the hub's Notes section, or at the end); Repository health suggests a hub for orphans too; missing notes linked from three or more
   notes are listed as hubs waiting to be written. Quick fixes: create a missing note,
   link an orphan from a note that mentions it, link a dead end to a note it mentions, or ignore a
   note (kept in `.noted/settings.json`); the score updates as you go, with a count of what you fixed

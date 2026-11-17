@@ -3,6 +3,7 @@
 import { X } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { formatLink } from "@/lib/links/format";
+import { addToHub, hubsFor, pinnedHubs } from "@/lib/links/hubs";
 import { activityWeeks, scoreVerdict, todayStamp, vaultHealth } from "@/lib/links/health";
 import { setFrontmatterProperty } from "@/lib/markdown/frontmatter";
 import { readPref, writePref } from "@/lib/prefs";
@@ -82,6 +83,29 @@ export function HealthDialog({
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
   }, [tab, health, vault.links, vault.indexVersion]);
+
+  // Orphans with no mention to link: the pinned hub each most likely belongs in.
+  const hubFor = useMemo(() => {
+    const out = new Map<string, { hub: string; reasons: string[] }>();
+    if (tab !== "orphans") return out;
+    const hubs = pinnedHubs(vault.links);
+    if (hubs.length === 0) return out;
+    for (const p of health.orphans.slice(0, 100)) {
+      if (suggestions.has(p)) continue;
+      const s = hubsFor(vault.links, p, hubs).suggestions[0];
+      if (s) out.set(p, s);
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
+  }, [tab, health, suggestions, vault.links, vault.indexVersion]);
+
+  /** Lists a note in a hub (in its Notes section, or at the end). */
+  const addToHubNote = async (note: string, hub: string) => {
+    const content = hub === vault.active?.path ? vault.activeText : vault.links.content(hub);
+    if (content === undefined) return;
+    const target = vault.links.linkText(note);
+    await vault.writeNote(hub, addToHub(content, formatLink(vault.settings.linkFormat, hub, { path: note, target }, target)));
+  };
 
   /** Turns the mention into a link (in the repository's link format). */
   const linkMention = async (m: { source: string; target: string; from: number; text: string }) => {
@@ -303,6 +327,7 @@ export function HealthDialog({
             health[tab].map((p) => {
               const m = suggestions.get(p);
               const other = m ? (tab === "orphans" ? m.source : m.target) : null;
+              const h = hubFor.get(p);
               return row(
                 p,
                 noteButton(p),
@@ -311,10 +336,25 @@ export function HealthDialog({
                     {tab === "orphans" ? "Mentioned in " : "Mentions "}
                     <span className="text-foreground/80">{displayName(other)}</span>: “{m.context.trim()}”
                   </>
+                ) : h ? (
+                  <>
+                    Could go in the hub <span className="text-foreground/80">{displayName(h.hub)}</span>: {h.reasons.join(" · ")}
+                  </>
                 ) : (
                   dirname(p) || undefined
                 ),
                 <div className="flex shrink-0 gap-1.5">
+                  {h && (
+                    <button
+                      type="button"
+                      className="button-secondary px-2.5 py-1 text-xs"
+                      aria-label={`Add ${displayName(p)} to ${displayName(h.hub)}`}
+                      title={`List ${displayName(p)} in the hub ${displayName(h.hub)}`}
+                      onClick={() => void addToHubNote(p, h.hub)}
+                    >
+                      Add to {displayName(h.hub)}
+                    </button>
+                  )}
                   {m && other && (
                     <button
                       type="button"
