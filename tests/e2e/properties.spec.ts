@@ -137,3 +137,30 @@ test("the reading view edits properties in place, with suggestions", async ({ pa
   await expect(editor).toContainText("hub: true");
   await expect(editor).toContainText("status: draft");
 });
+
+test("the side pane edits the properties of the note it shows", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".cm-content")).toBeVisible();
+  const tree = page.getByRole("tree", { name: "Repository files" });
+  await tree.getByRole("treeitem", { name: "Linking notes" }).hover();
+  await page.getByRole("button", { name: "Open Linking notes in the side pane" }).click();
+  const side = page.getByRole("region", { name: "Side pane" });
+  const props = side.getByRole("region", { name: "Properties" });
+  await expect(props).toContainText("#guide");
+
+  await props.getByRole("combobox", { name: "Add to tags" }).fill("are");
+  await expect(props.getByRole("option", { name: "area", exact: true })).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(props).toContainText("#area");
+  await props.getByRole("button", { name: "Add property" }).click();
+  await props.getByRole("combobox", { name: "New property name" }).fill("hu");
+  await page.keyboard.press("Enter");
+  await expect(props.getByRole("checkbox", { name: "hub" })).toBeChecked();
+
+  // Welcome stays open in the main pane; the change is in Linking notes.
+  await expect(page.getByRole("textbox", { name: "Note title" })).toHaveValue("Welcome");
+  await tree.getByRole("treeitem", { name: "Linking notes" }).click();
+  await page.getByRole("radio", { name: "Source" }).click();
+  await expect(page.locator(".cm-content")).toContainText("tags: [guide, area]");
+  await expect(page.locator(".cm-content")).toContainText("hub: true");
+});

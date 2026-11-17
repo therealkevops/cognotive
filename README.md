@@ -38,7 +38,7 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   can tick, empty values marked. Click a row to edit its YAML (with the suggestions below);
   **+ Add property**, or the command *Add a property* (which also starts a block in a note without
   one), offers property names straight away. Notes with properties open with the cursor below them
-- In the reading view, properties can be edited in place: add or remove tags and aliases (tags
+- In the reading view (and the side pane), properties can be edited in place: add or remove tags and aliases (tags
   suggested from the repository), tick `hub`, pick dates from a calendar, type other values (with
   values used before suggested), remove a property, or **+ Add property** (names suggested, with
   what each does). Changes are written into the note's YAML

@@ -5,7 +5,9 @@ import dynamic from "next/dynamic";
 import { reloadOnChunkError } from "@/lib/chunk";
 import { createContext, useEffect, useMemo, useState } from "react";
 import { isDark } from "@/lib/appearance";
+import { collectPropertyInfo, yamlValue } from "@/lib/editor/properties";
 import { splitLinkText } from "@/lib/links/parse";
+import { setFrontmatterProperty } from "@/lib/markdown/frontmatter";
 import type { LinkContext } from "@/lib/markdown/remark-links";
 import { canvasName, drawingName, isCanvas, isDrawing, isNote, noteTitle } from "@/lib/vault/paths";
 import { useVault } from "../vault/useVault";
@@ -17,8 +19,9 @@ const ReadingView = dynamic(() => reloadOnChunkError(() => import("./ReadingView
 export const SidePaneContext = createContext<((path: string) => void) | null>(null);
 
 /**
- * A second note shown beside the open one, read-only: handy for referring to a
- * note while writing another. Links clicked here open in the side pane too.
+ * A second note shown beside the open one: handy for referring to a note while
+ * writing another. Its text is read-only; its properties can be edited. Links
+ * clicked here open in the side pane too.
  */
 export function SidePane({
   path,
@@ -37,6 +40,11 @@ export function SidePane({
     () => ({ resolve: (t) => vault.links.resolve(t, path), read: (p) => vault.links.content(p) }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
     [vault.links, path, vault.indexVersion],
+  );
+  const propertyInfo = useMemo(
+    () => collectPropertyInfo(vault.links),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
+    [vault.links, vault.indexVersion],
   );
   const [drawingUrl, setDrawingUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -68,6 +76,15 @@ export function SidePane({
             markdown={content}
             links={links}
             properties={vault.links.get(path)?.properties}
+            editProperties={{
+              info: propertyInfo,
+              onSet: (key, value) => {
+                // The open note's latest text (it may be in the main editor too), else the saved text.
+                const text = path === vault.active?.path ? vault.activeText : (vault.links.content(path) ?? "");
+                const next = setFrontmatterProperty(text, key, value === undefined ? undefined : yamlValue(value));
+                if (next !== text) void vault.writeNote(path, next);
+              },
+            }}
             fileUrl={(p) => vault.fileUrl(p, { dark: isDark() })}
             onOpenFile={onNavigate}
             onOpenLink={(target) => {
