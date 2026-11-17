@@ -164,3 +164,31 @@ test("a canvas that isn't valid JSON can be repaired as text", async ({ page }) 
   await page.getByRole("button", { name: "Show as canvas" }).click();
   await expect(card(page, "Saved")).toBeVisible();
 });
+
+test("a note card's properties can be edited from the canvas", async ({ page }) => {
+  await newCanvas(page);
+  await addNote(page, "Linking notes");
+  const noteCard = card(page, "Linking notes");
+  await expect(noteCard).toBeVisible();
+  // The button shows how many properties the note has.
+  const toggle = noteCard.getByRole("button", { name: "Properties of Linking notes" });
+  await expect(toggle).toHaveText("2");
+  await toggle.click();
+  const panel = page.getByRole("dialog", { name: "Properties of Linking notes" });
+  await expect(panel).toContainText("#guide");
+
+  const add = panel.getByRole("combobox", { name: "Add to tags" });
+  await add.fill("arex");
+  // Backspace edits the text box; it doesn't delete the card.
+  await page.keyboard.press("Backspace");
+  await expect(add).toHaveValue("are");
+  await expect(panel.getByRole("option", { name: "area", exact: true })).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(panel).toContainText("#area");
+  await expect(noteCard).toBeVisible();
+  await expect(page.getByRole("status")).toHaveText("Saved");
+
+  await tree(page).getByRole("treeitem", { name: "Linking notes" }).click();
+  await page.getByRole("radio", { name: "Source" }).click();
+  await expect(page.locator(".cm-content")).toContainText("tags: [guide, area]");
+});

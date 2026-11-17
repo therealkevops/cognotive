@@ -678,10 +678,19 @@ export function Workspace() {
       fileUrl: (p) => vault.fileUrl(p, { dark: prefersDark() }),
       exists: (p) => vault.entries.some((e) => e.path === p),
       links: linkContext,
+      noteProperties: (p) => ({
+        properties: vault.links.get(p)?.properties ?? {},
+        info: propertyInfo(),
+        set: (key, value) => {
+          const text = vault.links.content(p) ?? "";
+          const next = setFrontmatterProperty(text, key, value === undefined ? undefined : yamlValue(value));
+          if (next !== text) void vault.writeNote(p, next);
+        },
+      }),
     }),
     // indexVersion: cards showing notes re-render when those notes change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [vault.entries, vault.links, vault.indexVersion, vault.active?.path, linkContext],
+    [vault.entries, vault.links, vault.indexVersion, vault.active?.path, linkContext, propertyInfo],
   );
 
 

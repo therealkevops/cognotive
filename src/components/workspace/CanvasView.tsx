@@ -9,6 +9,7 @@ import {
   EdgeLabelRenderer,
   Handle,
   NodeResizer,
+  NodeToolbar,
   Position,
   ReactFlow,
   ReactFlowProvider,
@@ -25,7 +26,18 @@ import {
   type NodeChange,
   type NodeProps,
 } from "@xyflow/react";
-import { ExternalLink, FileText, Globe, Group, Image as ImageIcon, LayoutDashboard, StickyNote, Tag, Trash2 } from "lucide-react";
+import {
+  ExternalLink,
+  FileText,
+  Globe,
+  Group,
+  Image as ImageIcon,
+  LayoutDashboard,
+  SlidersHorizontal,
+  StickyNote,
+  Tag,
+  Trash2,
+} from "lucide-react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { isDark } from "@/lib/appearance";
 import {
@@ -45,7 +57,9 @@ import { renderMarkdown } from "@/lib/markdown/render";
 import type { LinkContext } from "@/lib/markdown/remark-links";
 import { TREE_DRAG_TYPE } from "@/lib/vault/drag";
 import { basename, isCanvas, isDrawing, isImage, isNote } from "@/lib/vault/paths";
+import type { PropertyInfo } from "@/lib/editor/properties";
 import { Modal } from "./Modal";
+import { PropertiesEditor } from "./PropertiesEditor";
 import { Picker } from "./Picker";
 
 /** What a canvas needs from the vault. */
@@ -59,6 +73,12 @@ export interface CanvasVault {
   exists(path: string): boolean;
   /** Resolving and reading notes, for rendering [[links]] and embeds in cards. */
   links: LinkContext;
+  /** A note's properties, to edit from its card (writes into the note). */
+  noteProperties?(path: string): {
+    properties: Record<string, unknown>;
+    info: PropertyInfo;
+    set(key: string, value: unknown): void;
+  } | null;
 }
 
 export interface CanvasViewProps {
@@ -730,23 +750,57 @@ function FileCard({ id, data, selected }: NodeProps<CardNode>) {
   const onClick = useLinkClicks();
   const title = preview?.title ?? basename(c.file);
   const Icon = isCanvas(c.file) ? LayoutDashboard : picture ? ImageIcon : FileText;
+  // The note's properties, edited in a panel beside the card.
+  const [showProps, setShowProps] = useState(false);
+  const props = exists && isNote(c.file) && !c.subpath ? vault.noteProperties?.(c.file) : null;
+  const propCount = props ? Object.keys(props.properties).length : 0;
+  const name = basename(c.file).replace(/\.md$/i, "");
 
   return (
     <Card id={id} selected={!!selected} color={c.color} className="flex flex-col">
-      <button
-        type="button"
-        className="nodrag flex shrink-0 items-center gap-1.5 border-b border-border px-3 py-1.5 text-left text-xs font-medium text-muted hover:text-accent"
-        title="Open (Ctrl/Cmd-click: new tab)"
-        onClick={(e) => {
-          if (!exists) return;
-          const how = openHow(e);
-          if (c.subpath) openLink(c.file, c.subpath.replace(/^#/, ""), how);
-          else openFile(c.file, how);
-        }}
-      >
-        <Icon size={13} aria-hidden className="shrink-0" />
-        <span className="truncate">{title}</span>
-      </button>
+      <div className="flex shrink-0 items-center border-b border-border">
+        <button
+          type="button"
+          className="nodrag flex min-w-0 flex-1 items-center gap-1.5 px-3 py-1.5 text-left text-xs font-medium text-muted hover:text-accent"
+          title="Open (Ctrl/Cmd-click: new tab)"
+          onClick={(e) => {
+            if (!exists) return;
+            const how = openHow(e);
+            if (c.subpath) openLink(c.file, c.subpath.replace(/^#/, ""), how);
+            else openFile(c.file, how);
+          }}
+        >
+          <Icon size={13} aria-hidden className="shrink-0" />
+          <span className="truncate">{title}</span>
+        </button>
+        {props && (
+          <button
+            type="button"
+            className={`nodrag mr-1 flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] ${
+              showProps ? "bg-accent/15 text-accent" : "text-muted hover:text-accent"
+            }`}
+            aria-label={`Properties of ${name}`}
+            aria-expanded={showProps}
+            title="Properties"
+            onClick={() => setShowProps((v) => !v)}
+          >
+            <SlidersHorizontal size={12} aria-hidden />
+            {propCount > 0 && propCount}
+          </button>
+        )}
+      </div>
+      {props && (
+        <NodeToolbar isVisible={showProps} position={Position.Right} align="start" offset={10}>
+          <div
+            role="dialog"
+            aria-label={`Properties of ${name}`}
+            className="canvas-properties menu-panel nodrag nowheel nopan"
+            onKeyDown={(e) => e.key === "Escape" && setShowProps(false)}
+          >
+            <PropertiesEditor properties={props.properties} info={props.info} onSet={props.set} />
+          </div>
+        </NodeToolbar>
+      )}
       <div className="min-h-0 flex-1">
         {!exists ? (
           <p className="p-3 text-sm text-muted">“{c.file}” isn&apos;t in this repository.</p>

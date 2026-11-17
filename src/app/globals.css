@@ -615,6 +615,10 @@ mark {
 .properties-suggestions li { padding: 0.3rem 0.5rem; border-radius: 0.4rem; cursor: pointer; }
 .properties-suggestions li[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 
+/* A note card's properties on a canvas: a panel beside the card. */
+.canvas-properties { width: 22rem; max-width: 80vw; padding: 0.6rem 0.7rem 0.3rem; cursor: default; }
+.canvas-properties .properties-editor { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+
 /* ---------- Attachments and drawings ---------- */
 
 .cm-embed {
