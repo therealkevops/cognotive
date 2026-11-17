@@ -69,6 +69,7 @@ export default function MarkdownEditor({
       saveFiles: async (f) => (await linksRef.current?.saveFiles?.(f)) ?? [],
       renderHtml: async (md) => (await linksRef.current?.renderHtml?.(md)) ?? "",
       noteEmbed: (t) => linksRef.current?.noteEmbed?.(t) ?? null,
+      propertyInfo: () => linksRef.current?.propertyInfo?.() ?? { keys: [], values: () => [], tags: [] },
     }),
     [],
   );

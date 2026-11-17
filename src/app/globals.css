@@ -898,6 +898,14 @@ mark {
 .conflict-choices button { white-space: nowrap; }
 .conflict-dropped pre { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--foreground) 35%, transparent); }
 
+/* Help with note properties (properties.ts): hover notes and completion details. */
+.cm-property-doc { max-width: 22rem; padding: 0.45rem 0.65rem; font-size: 0.8rem; line-height: 1.45; }
+.cm-property-doc strong { font-family: var(--font-mono), ui-monospace, monospace; font-weight: 600; }
+.cm-property-doc p { margin-top: 0.15rem; color: var(--muted); }
+.cm-tooltip.cm-completionInfo { max-width: 22rem; padding: 0.45rem 0.65rem; font-size: 0.8rem; line-height: 1.45; }
+.cm-tooltip-autocomplete .cm-completionDetail { margin-left: 0.6em; font-style: normal; font-size: 0.8em; color: var(--muted); }
+.cm-tooltip-lint { font-size: 0.8rem; }
+
 /* ---------- Touch screens ---------- */
 
 @media (hover: none) {

@@ -1,5 +1,4 @@
 import {
-  autocompletion,
   startCompletion,
   type Completion,
   type CompletionContext,
@@ -23,6 +22,7 @@ import { hasModKey, openHow, type OpenHow } from "../links/open";
 import { splitLinkText } from "../links/parse";
 import { blockIdChange, blockIds, listBlocks, newBlockId, type Block } from "../markdown/blocks";
 import { linkBoost } from "../links/rank";
+import type { PropertyInfo } from "./properties";
 import { TREE_DRAG_TYPE } from "../vault/drag";
 
 /** What the editor needs from the app to work with links. */
@@ -74,6 +74,8 @@ export interface LinkHost {
   renderHtml?(markdown: string): Promise<string>;
   /** If `inner` ("Note#Heading") embeds a note, the markdown to show and a title. */
   noteEmbed?(inner: string): { markdown: string; title: string } | null;
+  /** Property names, values and tags used across the repository, for suggestions in the properties block. */
+  propertyInfo?(): PropertyInfo;
 }
 
 export const linkHost = Facet.define<LinkHost, LinkHost | null>({
@@ -343,7 +345,7 @@ function decodeURIComponentSafe(s: string) {
 }
 
 /** Typing "[[" offers notes (and aliases); "[[Note#" offers that note's headings. */
-function completeLinks(ctx: CompletionContext): CompletionResult | null {
+export function completeLinks(ctx: CompletionContext): CompletionResult | null {
   const host = ctx.state.facet(linkHost);
   if (!host) return null;
   const before = ctx.matchBefore(/!?\[\[[^\[\]\n]*$/);
@@ -696,6 +698,5 @@ export function wikilinkExtensions(): Extension {
     trackMod,
     linkPreview,
     fileDrops,
-    autocompletion({ override: [completeLinks], icons: false }),
   ];
 }

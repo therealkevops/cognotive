@@ -36,6 +36,7 @@ import { EMPTY_HISTORY, goBack, goForward, renameInHistory, visit, type NavHisto
 import { readPref, writePref } from "@/lib/prefs";
 import { editTableSource } from "@/lib/editor/table-keys";
 import type { LinkHost } from "@/lib/editor/wikilinks";
+import { collectPropertyInfo, type PropertyInfo } from "@/lib/editor/properties";
 import type { LinkContext } from "@/lib/markdown/remark-links";
 import { serializeCanvas } from "@/lib/canvas/format";
 import { neighbourhoodCanvas, type Neighbour } from "@/lib/canvas/map";
@@ -495,6 +496,13 @@ export function Workspace() {
     [vault.links, vault.indexVersion],
   );
 
+  // Property names, values and tags across the repository, worked out when first asked for.
+  const propertyInfo = useMemo(() => {
+    let info: PropertyInfo | null = null;
+    return () => (info ??= collectPropertyInfo(vault.links));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
+  }, [vault.links, vault.indexVersion]);
+
   // What the editor needs for [[links]].
   const linkHost = useMemo<LinkHost>(
     () => ({
@@ -573,8 +581,9 @@ export function Workspace() {
         const markdown = heading ? (sectionUnder(body, heading) ?? "") : body;
         return { markdown, title: heading ? `${noteTitle(p)} › ${heading}` : noteTitle(p) };
       },
+      propertyInfo,
     }),
-    [vault, openLink, recent, inbound],
+    [vault, openLink, recent, inbound, propertyInfo],
   );
 
   /**

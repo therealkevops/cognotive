@@ -1,4 +1,4 @@
-import { closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
+import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, indentOnInput, syntaxHighlighting } from "@codemirror/language";
@@ -32,7 +32,8 @@ import { livePreview } from "./live-preview";
 import { tableGridExtensions, tableGridOn } from "./table-grid";
 import { tableEditing } from "./table-keys";
 import { tagHighlighter } from "./tags";
-import { linkHost, livePreviewOn, WikiLinkSyntax, wikilinkExtensions, type LinkHost } from "./wikilinks";
+import { completeProperties, propertyExtensions } from "./properties";
+import { completeLinks, linkHost, livePreviewOn, WikiLinkSyntax, wikilinkExtensions, type LinkHost } from "./wikilinks";
 
 /** Formatting shortcuts. "Mod" is Cmd on macOS and Ctrl elsewhere. */
 export const formattingKeymap = [
@@ -157,6 +158,8 @@ export function editorExtensions(opts: {
     syntaxHighlighting(markdownHighlight),
     tagHighlighter,
     ...(opts.links ? [linkHost.of(opts.links), wikilinkExtensions()] : []),
+    autocompletion({ override: [completeLinks, completeProperties], icons: false }),
+    propertyExtensions(),
     tableGridExtensions(),
     tableEditing(),
     keymap.of([
