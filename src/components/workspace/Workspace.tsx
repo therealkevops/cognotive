@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
+import { reloadOnChunkError } from "@/lib/chunk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell, RailButton } from "@/components/AppShell";
 import { isDark, loadAppearance } from "@/lib/appearance";
@@ -88,18 +89,18 @@ import { TagsPanel } from "./TagsPanel";
 import { addStarterTemplates, needsDialog, TemplatesPanel, UseTemplateDialog, useTemplatePaths } from "./Templates";
 import { Toolbar } from "./Toolbar";
 
-const MarkdownEditor = dynamic(() => import("./MarkdownEditor"), { ssr: false });
+const MarkdownEditor = dynamic(() => reloadOnChunkError(() => import("./MarkdownEditor"))(), { ssr: false });
 // Excalidraw is about 1 MB: loaded only when a drawing is opened.
-const DrawingView = dynamic(() => import("./DrawingView"), {
+const DrawingView = dynamic(() => reloadOnChunkError(() => import("./DrawingView"))(), {
   ssr: false,
   loading: () => <p className="p-8 text-muted">Loading drawing…</p>,
 });
 // React Flow, for canvases: loaded only when a canvas is opened.
-const CanvasView = dynamic(() => import("./CanvasView"), {
+const CanvasView = dynamic(() => reloadOnChunkError(() => import("./CanvasView"))(), {
   ssr: false,
   loading: () => <p className="p-8 text-muted">Loading canvas…</p>,
 });
-const ReadingView = dynamic(() => import("./ReadingView"), {
+const ReadingView = dynamic(() => reloadOnChunkError(() => import("./ReadingView"))(), {
   ssr: false,
   loading: () => <p className="p-8 text-muted">Rendering…</p>,
 });
@@ -168,6 +169,8 @@ export function Workspace() {
   const [sidePath, setSidePath] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   /** A note about to be created from a link, waiting for the user to confirm its name and folder. */
+  /** A canvas being edited as text (to repair one that isn't valid JSON). */
+  const [canvasAsText, setCanvasAsText] = useState<string | null>(null);
   const [creating, setCreating] = useState<{ name: string; folder: string; hub?: boolean } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [linkPickerOpen, setLinkPickerOpen] = useState(false);
@@ -1191,8 +1194,28 @@ export function Workspace() {
                 <p className="p-8 text-muted">Loading repository…</p>
               ) : !vault.active ? (
                 <EmptyState onCreate={() => void vault.createNote()} onFind={() => setSwitcherOpen(true)} />
+              ) : kind === "canvas" && canvasAsText === vault.active.path ? (
+                <div className="flex h-full flex-col">
+                  <div className="flex items-center gap-3 border-b border-border px-6 py-2 text-sm text-muted">
+                    <span className="flex-1">Editing the canvas file as text (JSON Canvas).</span>
+                    <button type="button" className="button-secondary px-2.5 py-1 text-xs" onClick={() => setCanvasAsText(null)}>
+                      Show as canvas
+                    </button>
+                  </div>
+                  <div className="min-h-0 flex-1">
+                    <MarkdownEditor
+                      docKey={`${vault.active.path}:text:${vault.active.version}`}
+                      initial={vault.activeText}
+                      livePreview={false}
+                      onChange={vault.edit}
+                      autoFocus
+                    />
+                  </div>
+                </div>
               ) : kind === "canvas" ? (
                 <CanvasView
+                  key={`${vault.active.path}:${vault.active.version}`}
+                  onEditAsText={() => setCanvasAsText(vault.active?.path ?? null)}
                   docKey={`${vault.active.path}:${vault.active.version}`}
                   initial={vault.activeText}
                   onChange={vault.edit}

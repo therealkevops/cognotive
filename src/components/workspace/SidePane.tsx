@@ -2,6 +2,7 @@
 
 import { ArrowLeftToLine, X } from "lucide-react";
 import dynamic from "next/dynamic";
+import { reloadOnChunkError } from "@/lib/chunk";
 import { createContext, useEffect, useMemo, useState } from "react";
 import { isDark } from "@/lib/appearance";
 import { splitLinkText } from "@/lib/links/parse";
@@ -10,7 +11,7 @@ import { canvasName, drawingName, isCanvas, isDrawing, isNote, noteTitle } from 
 import { useVault } from "../vault/useVault";
 import { FileView } from "./FileView";
 
-const ReadingView = dynamic(() => import("./ReadingView"), { ssr: false });
+const ReadingView = dynamic(() => reloadOnChunkError(() => import("./ReadingView"))(), { ssr: false });
 
 /** Opens a file in the side pane (provided by the workspace, used by the file tree). */
 export const SidePaneContext = createContext<((path: string) => void) | null>(null);

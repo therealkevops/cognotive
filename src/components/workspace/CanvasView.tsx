@@ -68,6 +68,8 @@ export interface CanvasViewProps {
   onChange(json: string): void;
   onOpenLink(target: string, sub?: string, how?: OpenHow): void;
   onOpenFile(path: string, how?: OpenHow): void;
+  /** Shows the file's text instead, to repair a canvas that can't be read. */
+  onEditAsText?(): void;
   vault: CanvasVault;
 }
 
@@ -170,7 +172,7 @@ export default function CanvasView(props: CanvasViewProps) {
   );
 }
 
-function Board({ initial, onChange, onOpenLink, onOpenFile, vault }: CanvasViewProps) {
+function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault }: CanvasViewProps) {
   const dark = useDarkMode();
   const rf = useReactFlow<CardNode, ArrowEdge>();
   const wrapper = useRef<HTMLDivElement>(null);
@@ -359,7 +361,20 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, vault }: CanvasViewP
   const edgeTypes = useMemo(() => ({ canvas: CanvasArrow }), []);
 
   if (!start) {
-    return <p className="p-8 text-red-600 dark:text-red-400">This canvas file isn&apos;t valid JSON, so it can&apos;t be opened.</p>;
+    return (
+      <div role="alert" className="mx-auto max-w-lg p-8">
+        <p className="font-medium">This canvas can&apos;t be opened: its file isn&apos;t valid JSON.</p>
+        <p className="mt-1 text-sm text-muted">
+          It may have been cut short or edited by hand. Fix it as text, or restore an earlier version from version history
+          if the repository syncs with GitHub. Nothing has been changed.
+        </p>
+        {onEditAsText && (
+          <button type="button" className="button-secondary mt-4" onClick={onEditAsText}>
+            Edit as text
+          </button>
+        )}
+      </div>
+    );
   }
 
   return (

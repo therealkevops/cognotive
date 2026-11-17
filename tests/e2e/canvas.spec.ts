@@ -118,3 +118,49 @@ test("grouping cards, and moving the group moves them", async ({ page }) => {
   expect(Math.round(after.y - before.y)).toBeGreaterThan(60);
   await expect(page.getByRole("status")).toHaveText("Saved");
 });
+
+test("the open canvas is opened again after a reload", async ({ page }) => {
+  await newCanvas(page);
+  await addNote(page, "Welcome");
+  await expect(card(page, "Welcome")).toBeVisible();
+  await expect(page.getByRole("status")).toHaveText("Saved");
+  await page.reload();
+  await expect(title(page)).toHaveValue("Canvas");
+  await expect(card(page, "Welcome")).toBeVisible();
+});
+
+test("a canvas whose code was replaced by a new deployment reloads the page and opens", async ({ page }) => {
+  await newCanvas(page);
+  await addNote(page, "Welcome");
+  await tree(page).getByRole("treeitem", { name: "Welcome" }).click();
+  await expect(title(page)).toHaveValue("Welcome");
+  await page.reload();
+  await expect(page.locator(".cm-content")).toBeVisible();
+
+  // As if a new version were deployed: this page's build files are gone, until it reloads.
+  let gone = true;
+  await page.route("**/_next/static/**", (route) => (gone ? route.abort() : route.continue()));
+  page.on("request", (r) => {
+    if (r.isNavigationRequest()) gone = false;
+  });
+  const reloaded = page.waitForEvent("load");
+  await tree(page).getByRole("treeitem", { name: "Canvas" }).click();
+  await reloaded;
+  await expect(title(page)).toHaveValue("Canvas");
+  await expect(card(page, "Welcome")).toBeVisible();
+});
+
+test("a canvas that isn't valid JSON can be repaired as text", async ({ page }) => {
+  await newCanvas(page);
+  // Break the file through the import path, as a hand edit or a cut-short download might.
+  const { strToU8, zipSync } = await import("fflate");
+  const zip = zipSync({ "V/Bad.canvas": strToU8('{"nodes":[{"id":"a","type":"text","text":"Saved","x":0,"y":0,"width":200,"height":60}]') });
+  await page.getByLabel("Choose a zip to import").setInputFiles({ name: "v.zip", mimeType: "application/zip", buffer: Buffer.from(zip) });
+  await tree(page).getByRole("treeitem", { name: "Bad" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "isn't valid JSON" })).toBeVisible();
+  await page.getByRole("button", { name: "Edit as text" }).click();
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type("}");
+  await page.getByRole("button", { name: "Show as canvas" }).click();
+  await expect(card(page, "Saved")).toBeVisible();
+});

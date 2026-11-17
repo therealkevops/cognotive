@@ -54,7 +54,8 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   note (kept in `.noted/settings.json`); the score updates as you go, with a count of what you fixed
   today
 - Canvases (`.canvas`, the JSON Canvas format Obsidian uses): cards for text, notes, images,
-  drawings and web links, groups, and labelled arrows, which become typed relations
+  drawings and web links, groups, and labelled arrows, which become typed relations. A canvas
+  file that isn't valid JSON opens with an explanation and *Edit as text*, rather than an empty board
 - Excalidraw drawings (`.excalidraw` files): create with the pen button in the file tree, edit
   full-screen, embed with `![[Drawing.excalidraw]]` (rendered as SVG, click to open). Element
   links like `[[Note]]` and links in drawing text count as links, so drawings appear in
@@ -99,7 +100,8 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 - Drawings also open from the Obsidian Excalidraw plugin's `.excalidraw.md` files; Excalidraw's
   fonts are served by the app itself, not a CDN
 - Installable as an app (desktop or phone) that opens offline, with shortcuts on its icon;
-  notes are kept in the browser
+  notes are kept in the browser. After a new version is deployed, a page opened before it reloads
+  itself the first time it needs a part of the app it hasn't loaded yet (the canvas or drawing editor)
 - Several repositories, with a switcher at the top of the sidebar; both sidebars collapse to
   icon rails
 - Sync with GitHub: paste a GitHub token, pick a repository, branch and optional subfolder.

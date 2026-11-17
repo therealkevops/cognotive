@@ -5,7 +5,8 @@ const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" }
 
 async function newDrawing(page: Page) {
   await page.goto("/");
-  await expect(page.locator(".cm-content")).toBeVisible();
+  // The last open file reopens (a note, or the image added just before).
+  await expect(page.getByRole("tree", { name: "Repository files" })).toBeVisible();
   await page.getByRole("button", { name: "New drawing" }).click();
   await expect(title(page)).toHaveValue("Drawing");
   const canvas = page.getByTestId("drawing").locator("canvas.interactive");

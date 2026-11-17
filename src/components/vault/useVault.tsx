@@ -274,7 +274,8 @@ export function VaultProvider({
       const start =
         last === ""
           ? null
-          : (notes.find((f) => f.path === last) ?? notes.find((f) => f.path === "Welcome.md") ?? notes[0]);
+          : // The last open file, whatever it was (a canvas, a drawing, a PDF…), else Welcome.
+            (list.find((f) => f.kind === "file" && f.path === last) ?? notes.find((f) => f.path === "Welcome.md") ?? notes[0]);
       await open(start?.path ?? null);
       if (!cancelled) setReady(true);
     })().catch(fail);
