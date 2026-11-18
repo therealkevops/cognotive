@@ -1,4 +1,4 @@
-import { isNote } from "../vault/paths";
+import { isNote, isWithin } from "../vault/paths";
 import type { LinkIndex } from "./link-index";
 
 export interface VaultHealth {
@@ -221,4 +221,10 @@ export function activityWeeks(mtimes: number[], opts: { now?: number; weeks?: nu
     out.push(week);
   }
   return out;
+}
+
+/** Notes Repository health leaves out: daily notes and templates (naturally unlinked), and ones the user ignored. */
+export function healthIgnored(s: { healthIgnore: string[]; dailyFolder: string; templateFolder: string }): (path: string) => boolean {
+  const skip = new Set(s.healthIgnore);
+  return (p) => skip.has(p) || (!!s.dailyFolder && isWithin(p, s.dailyFolder)) || (!!s.templateFolder && isWithin(p, s.templateFolder));
 }

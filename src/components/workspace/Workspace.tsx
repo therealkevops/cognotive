@@ -45,12 +45,13 @@ import { drawingProperties, keepDrawingProperties, setDrawingProperty } from "@/
 import type { LinkContext } from "@/lib/markdown/remark-links";
 import { ChatPanel } from "../ai/ChatPanel";
 import { AskDialog, type AskSource } from "../ai/AskDialog";
+import { AiActionsContext, useRunAction } from "../ai/useAsk";
 import { serializeCanvas } from "@/lib/canvas/format";
 import { neighbourhoodCanvas, type Neighbour } from "@/lib/canvas/map";
 import { convertLinks, formatLink, markdownLink } from "@/lib/links/format";
 import { splitLinkText } from "@/lib/links/parse";
 import { setFrontmatterProperty, splitFrontmatter } from "@/lib/markdown/frontmatter";
-import { hubProperty } from "@/lib/links/health";
+import { healthIgnored, hubProperty, vaultHealth } from "@/lib/links/health";
 import { extractHeadings } from "@/lib/markdown/outline";
 import { blockIdChange, listBlocks } from "@/lib/markdown/blocks";
 import { previewMarkdown } from "@/lib/markdown/preview";
@@ -985,6 +986,16 @@ export function Workspace() {
     setPanelTab(t);
     setRightCollapsed(false);
   };
+  const showChat = useCallback(() => {
+    setPanelTabState("chat");
+    writePref("panelTab", "chat");
+    setRightCollapsed(false);
+  }, [setRightCollapsed]);
+  const runAction = useRunAction(showChat);
+  const currentHealth = () => {
+    const mtimes = new Map(vault.entries.map((e) => [e.path, e.mtime]));
+    return vaultHealth(vault.links, { mtime: (p) => mtimes.get(p), ignore: healthIgnored(vault.settings) });
+  };
   const rightRail = (
     <>
       <RailButton label="Expand panel" onClick={() => setRightCollapsed(false)}>
@@ -1096,6 +1107,12 @@ export function Workspace() {
     { id: "table-to-lines", label: "Convert table to CSV lines", when: editing },
     { id: "link-selection", label: "Link selection to a note…", hint: "Ctrl/Cmd+Shift+K", when: editing },
     { id: "ask-selection", label: "Ask AI about the selection…", hint: "Ctrl/Cmd+Shift+Enter", when: editing },
+    { id: "ai-summarise", label: "AI: Summarise this note", when: kind === "note" },
+    { id: "ai-links", label: "AI: Suggest links for this note", when: kind === "note" },
+    { id: "ai-properties", label: "AI: Suggest tags and properties for this note", when: kind === "note" },
+    { id: "ai-week", label: "AI: What did I work on this week?" },
+    { id: "ai-orphans", label: "AI: Find homes for orphan notes" },
+    { id: "ai-stale", label: "AI: Review stale hubs" },
     { id: "links-to-markdown", label: "Convert links in this note to markdown links", when: kind === "note" },
     { id: "links-to-wikilinks", label: "Convert links in this note to wikilinks", when: kind === "note" },
     { id: "switcher", label: "Open a note…", hint: "Ctrl/Cmd+O" },
@@ -1171,6 +1188,12 @@ export function Workspace() {
       setSidebarOpen(true);
     },
     health: () => setHealthOpen(true),
+    "ai-summarise": () => activePathNow && runAction({ kind: "summarise", path: activePathNow }),
+    "ai-links": () => activePathNow && runAction({ kind: "suggest-links", path: activePathNow }),
+    "ai-properties": () => activePathNow && runAction({ kind: "suggest-properties", path: activePathNow }),
+    "ai-week": () => runAction({ kind: "daily-review" }),
+    "ai-orphans": () => runAction({ kind: "fix-orphans", paths: currentHealth().orphans }),
+    "ai-stale": () => runAction({ kind: "review-stale", paths: currentHealth().stale.map((h) => h.path) }),
     "map-canvas": () => void mapAsCanvas(),
     "hub-toggle": () => setActiveProperty("hub", activeIsMarkedHub ? undefined : true),
     "mode-live": () => setMode("live"),
@@ -1198,7 +1221,7 @@ export function Workspace() {
   };
 
   return (
-    <>
+    <AiActionsContext.Provider value={runAction}>
       <SidePaneContext.Provider value={setSidePath}>
         <AppShell
           sidebar={sidebar}
@@ -1545,7 +1568,7 @@ export function Workspace() {
       {reviewing && <ConflictDialog record={reviewing} onClose={() => setReviewing(null)} />}
       {healthOpen && <HealthDialog onClose={() => setHealthOpen(false)} onCreate={offerCreate} />}
       <Toasts />
-    </>
+    </AiActionsContext.Provider>
   );
 }
 

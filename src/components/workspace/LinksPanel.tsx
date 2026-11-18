@@ -1,12 +1,13 @@
 "use client";
 
-import { LayoutDashboard, Waypoints } from "lucide-react";
+import { LayoutDashboard, Sparkles, Waypoints } from "lucide-react";
 import { useMemo, useState } from "react";
 import { formatLink } from "@/lib/links/format";
 import { hubProperty } from "@/lib/links/health";
 import { addToHub, hubsFor, pinnedHubs } from "@/lib/links/hubs";
 import type { Backlink, CanvasRelation, Mention } from "@/lib/links/link-index";
-import { canvasName, displayName, noteTitle } from "@/lib/vault/paths";
+import { canvasName, displayName, isNote, noteTitle } from "@/lib/vault/paths";
+import { useAiActions } from "../ai/useAsk";
 import { useVault } from "../vault/useVault";
 
 function group<T extends { source: string }>(items: T[]): Array<[string, T[]]> {
@@ -60,6 +61,7 @@ export function LinksPanel({
   onMapCanvas?(): void;
 }) {
   const vault = useVault();
+  const aiAction = useAiActions();
   const path = vault.active?.path;
 
   const { backlinks, mentions, outgoing, relations, related, sameTags } = useMemo(() => {
@@ -134,6 +136,17 @@ export function LinksPanel({
 
   return (
     <div>
+      {aiAction && isNote(path) && (
+        <button
+          type="button"
+          className="button-secondary mb-2 w-full"
+          title="The AI looks for notes this one should link to (and that should link here), and proposes links for you to review"
+          onClick={() => aiAction({ kind: "suggest-links", path })}
+        >
+          <Sparkles size={15} aria-hidden />
+          Suggest links with AI
+        </button>
+      )}
       {onMapCanvas && (
         <button
           type="button"

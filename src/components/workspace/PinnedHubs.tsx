@@ -1,12 +1,13 @@
 "use client";
 
-import { ChevronRight, FilePlus2, PinOff, Waypoints } from "lucide-react";
+import { ChevronRight, FilePlus2, PinOff, Sparkles, Waypoints } from "lucide-react";
 import { useMemo, useState } from "react";
 import { hubCandidates, hubProperty } from "@/lib/links/health";
 import { setFrontmatterProperty } from "@/lib/markdown/frontmatter";
 import { readPref, writePref } from "@/lib/prefs";
 import { isNote, noteTitle } from "@/lib/vault/paths";
 import { useVault } from "../vault/useVault";
+import { useAiActions } from "../ai/useAsk";
 
 /**
  * Notes pinned as hubs (`hub: true`), above the file tree: the repository's
@@ -15,6 +16,7 @@ import { useVault } from "../vault/useVault";
  */
 export function PinnedHubs({ onCreate }: { onCreate(target: string, from: string): void }) {
   const vault = useVault();
+  const aiAction = useAiActions();
   const prefKey = `vault:${vault.vaultId}:hubs-open`;
   const [open, setOpen] = useState(() => readPref<boolean>(prefKey, true));
 
@@ -94,7 +96,7 @@ export function PinnedHubs({ onCreate }: { onCreate(target: string, from: string
           <h3 className="mt-1.5 mb-0.5 px-2 text-[11px] font-medium text-muted">To write</h3>
           <ul aria-label="Hubs to write" className="max-h-32 overflow-y-auto">
             {candidates.map((c) => (
-              <li key={c.target.toLowerCase()}>
+              <li key={c.target.toLowerCase()} className="group relative">
                 <button
                   type="button"
                   className="nav-item group w-full py-1 text-left"
@@ -104,8 +106,21 @@ export function PinnedHubs({ onCreate }: { onCreate(target: string, from: string
                 >
                   <FilePlus2 size={14} aria-hidden className="shrink-0 text-[#d9772b]" />
                   <span className="truncate italic text-foreground/75">{c.target}</span>
-                  <span className="ml-auto shrink-0 text-xs text-muted tabular-nums">{c.sources.length}</span>
+                  <span className={`ml-auto shrink-0 text-xs text-muted tabular-nums ${aiAction ? "group-hover:invisible group-focus-within:invisible" : ""}`}>
+                    {c.sources.length}
+                  </span>
                 </button>
+                {aiAction && (
+                  <button
+                    type="button"
+                    className="icon-button absolute top-1/2 right-1 h-6 w-6 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    aria-label={`Write hub ${c.target} with AI`}
+                    title="The AI drafts this hub from the notes linking here, for you to review"
+                    onClick={() => aiAction({ kind: "write-hub", target: c.target, sources: c.sources })}
+                  >
+                    <Sparkles size={13} aria-hidden />
+                  </button>
+                )}
               </li>
             ))}
           </ul>

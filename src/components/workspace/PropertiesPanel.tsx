@@ -1,9 +1,11 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import { collectPropertyInfo, kindOf, PROPERTY_DOCS, PROPERTY_TYPES, type PropertyType } from "@/lib/editor/properties";
 import { useVault } from "../vault/useVault";
+import { useAiActions } from "../ai/useAsk";
+import { displayName, isNote } from "@/lib/vault/paths";
 
 /**
  * Every property used in the repository, with how many files use it and its
@@ -24,6 +26,19 @@ export function PropertiesPanel({
   onDelete(key: string): Promise<number>;
 }) {
   const vault = useVault();
+  const aiAction = useAiActions();
+  const notePath = vault.active?.path && isNote(vault.active.path) ? vault.active.path : null;
+  const suggest = aiAction && notePath && (
+    <button
+      type="button"
+      className="button-secondary mx-2 mb-2 w-[calc(100%-1rem)] px-2 py-1 text-xs"
+      title="The AI proposes tags and properties for the open note, using the names and values already in use"
+      onClick={() => aiAction({ kind: "suggest-properties", path: notePath })}
+    >
+      <Sparkles size={12} aria-hidden />
+      <span className="truncate">Suggest for {displayName(notePath)} with AI</span>
+    </button>
+  );
   const types = vault.settings.propertyTypes;
   const info = useMemo(
     () => collectPropertyInfo(vault.links, types),
@@ -65,6 +80,7 @@ export function PropertiesPanel({
     return (
       <section aria-label="Properties" className="text-sm text-muted">
         <h2 className="mb-2 px-2 text-xs font-medium">Properties</h2>
+        {suggest}
         <p className="px-2">No properties yet. Add some to a note with the command “Add a property”.</p>
       </section>
     );
@@ -73,6 +89,7 @@ export function PropertiesPanel({
   return (
     <section aria-label="Properties" className="flex h-full flex-col text-sm">
       <h2 className="mb-2 px-2 text-xs font-medium text-muted">Properties</h2>
+      {suggest}
       {message && (
         <p role="status" className="mx-2 mb-2 rounded-md bg-accent/10 px-2 py-1 text-xs">
           {message}

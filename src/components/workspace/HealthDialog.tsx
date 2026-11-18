@@ -1,13 +1,14 @@
 "use client";
 
-import { X } from "lucide-react";
+import { Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { formatLink } from "@/lib/links/format";
 import { addToHub, hubsFor, pinnedHubs } from "@/lib/links/hubs";
-import { activityWeeks, scoreVerdict, todayStamp, vaultHealth } from "@/lib/links/health";
+import { activityWeeks, healthIgnored, scoreVerdict, todayStamp, vaultHealth } from "@/lib/links/health";
 import { setFrontmatterProperty } from "@/lib/markdown/frontmatter";
 import { readPref, writePref } from "@/lib/prefs";
-import { displayName, dirname, isWithin } from "@/lib/vault/paths";
+import { displayName, dirname } from "@/lib/vault/paths";
+import { useAiActions } from "../ai/useAsk";
 import { useVault } from "../vault/useVault";
 import { LinkMap } from "./LinkMap";
 
@@ -35,13 +36,9 @@ export function HealthDialog({
   }, [onClose]);
 
   // Daily notes and templates are naturally unlinked; leave them out, and notes the user chose to ignore.
-  const ignored = useMemo(() => {
-    const s = vault.settings;
-    const skip = new Set(s.healthIgnore);
-    return (p: string) =>
-      skip.has(p) || (!!s.dailyFolder && isWithin(p, s.dailyFolder)) || (!!s.templateFolder && isWithin(p, s.templateFolder));
-  }, [vault.settings]);
+  const ignored = useMemo(() => healthIgnored(vault.settings), [vault.settings]);
 
+  const aiAction = useAiActions();
   const health = useMemo(() => {
     const mtimes = new Map(vault.entries.map((e) => [e.path, e.mtime]));
     return vaultHealth(vault.links, { mtime: (p) => mtimes.get(p), ignore: ignored });
@@ -290,7 +287,35 @@ export function HealthDialog({
               </button>
             ))}
           </div>
-          <p className="mt-3 border-b border-border px-6 py-2.5 text-sm text-muted">{current.hint}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-b border-border px-6 py-2.5">
+            <p className="min-w-0 flex-1 text-sm text-muted">{current.hint}</p>
+            {aiAction && tab === "orphans" && health.orphans.length > 0 && (
+              <button
+                type="button"
+                className="button-secondary shrink-0 px-2.5 py-1 text-xs"
+                title="The AI looks for the hub or note each orphan belongs in, and proposes links for you to review"
+                onClick={() => {
+                  onClose();
+                  aiAction({ kind: "fix-orphans", paths: health.orphans });
+                }}
+              >
+                <Sparkles size={12} aria-hidden /> Find homes with AI
+              </button>
+            )}
+            {aiAction && tab === "stale" && health.stale.length > 0 && (
+              <button
+                type="button"
+                className="button-secondary shrink-0 px-2.5 py-1 text-xs"
+                title="The AI checks each hub against newer notes and proposes updates, then marking it reviewed"
+                onClick={() => {
+                  onClose();
+                  aiAction({ kind: "review-stale", paths: health.stale.map((h) => h.path) });
+                }}
+              >
+                <Sparkles size={12} aria-hidden /> Review with AI
+              </button>
+            )}
+          </div>
           <ul role="tabpanel" aria-label={current.label} className="divide-y divide-border px-4 py-1">
           {current.count === 0 && <li className="px-2 py-6 text-center text-sm text-muted">Nothing here. 🎉</li>}
           {tab === "broken" &&
@@ -387,17 +412,33 @@ export function HealthDialog({
                   <span className="hub-badge hub-badge-waiting">waiting to be written</span>
                 </>,
                 `${c.sources.length} notes already link here`,
-                <button
-                  type="button"
-                  className="button-secondary shrink-0 px-2.5 py-1 text-xs"
-                  aria-label={`Create hub ${c.target}`}
-                  onClick={() => {
-                    onClose();
-                    onCreate(c.target, c.sources[0], true);
-                  }}
-                >
-                  Create
-                </button>,
+                <div className="flex shrink-0 gap-1.5">
+                  {aiAction && (
+                    <button
+                      type="button"
+                      className="button-secondary px-2.5 py-1 text-xs"
+                      aria-label={`Write hub ${c.target} with AI`}
+                      title="The AI reads the notes that link here and drafts the hub, for you to review"
+                      onClick={() => {
+                        onClose();
+                        aiAction({ kind: "write-hub", target: c.target, sources: c.sources });
+                      }}
+                    >
+                      <Sparkles size={12} aria-hidden /> Write with AI
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="button-secondary px-2.5 py-1 text-xs"
+                    aria-label={`Create hub ${c.target}`}
+                    onClick={() => {
+                      onClose();
+                      onCreate(c.target, c.sources[0], true);
+                    }}
+                  >
+                    Create
+                  </button>
+                </div>,
               ),
             )}
           {tab === "hubs" &&

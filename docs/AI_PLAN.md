@@ -5,8 +5,10 @@ How to bring agentic AI into noted-ai, borrowing the provider design of
 OpenAI-compatible endpoint, called straight from the browser) and building the agent on the
 repository's own structure: links, hubs, properties, tags and health checks.
 
-**Status:** phases A (providers and chat), B (read agent) and C (write proposals, save chat as
-note, Ask) are done; phase D (agent actions) is next. Ask uses Ctrl/Cmd+Shift+Enter, because
+**Status:** phases A to D are done: providers and chat, the read agent, write proposals (with
+save chat as note and Ask), and the agent actions. Phase E (bridge and MCP) is optional. The
+weekly review lives in the empty chat and the palette rather than next to Today, and actions run
+in the chat panel so their proposals are reviewed in one place. Ask uses Ctrl/Cmd+Shift+Enter, because
 Chrome keeps Ctrl+Shift+A for tab search. `get_open_note` became part of the prompt instead of a tool: the open note's text goes with
 a question while its chip is on, and only its path otherwise.
 

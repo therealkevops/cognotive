@@ -1,11 +1,12 @@
 "use client";
 
-import { X } from "lucide-react";
+import { Sparkles, X } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { collectPropertyInfo, kindOf, type PropertyType } from "@/lib/editor/properties";
 import { valueText } from "@/lib/links/property-query";
 import { displayName } from "@/lib/vault/paths";
 import { useVault } from "../vault/useVault";
+import { useAiActions } from "../ai/useAsk";
 
 /**
  * Properties of many files at once, as a table: a row per file, a column per
@@ -14,6 +15,7 @@ import { useVault } from "../vault/useVault";
  */
 export function PropertyTable({ paths, onClose, onOpen }: { paths: string[]; onClose(): void; onOpen(path: string): void }) {
   const vault = useVault();
+  const aiAction = useAiActions();
   const types = vault.settings.propertyTypes;
   const info = useMemo(
     () => collectPropertyInfo(vault.links, types),
@@ -133,6 +135,21 @@ export function PropertyTable({ paths, onClose, onOpen }: { paths: string[]; onC
                           suggestions={k === "tags" ? info.tags : info.values(k)}
                           onCommit={(v) => v !== undefined && void writeAll(k, v)}
                         />
+                        {aiAction && paths.some((p) => props(p)[k] === undefined || props(p)[k] === null || props(p)[k] === "") && (
+                          <button
+                            type="button"
+                            className="icon-button h-6 w-6 shrink-0"
+                            aria-label={`Fill empty ${k} with AI`}
+                            title={`The AI proposes ${k} for the files without one, from their text`}
+                            onClick={() => {
+                              const empty = paths.filter((p) => props(p)[k] === undefined || props(p)[k] === null || props(p)[k] === "");
+                              onClose();
+                              aiAction({ kind: "fill-property", key: k, paths: empty });
+                            }}
+                          >
+                            <Sparkles size={12} aria-hidden />
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="icon-button h-6 w-6 shrink-0"

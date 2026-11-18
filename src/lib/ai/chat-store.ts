@@ -14,6 +14,8 @@ export interface ChatTurn {
   content: string;
   /** User turns: the note that was sent with the question. */
   note?: string;
+  /** User turns: what the model was asked, when it's longer than what's shown (agent actions). */
+  prompt?: string;
   /** Assistant turns: still arriving, stopped by the user, or failed. */
   pending?: boolean;
   stopped?: boolean;
@@ -53,6 +55,8 @@ export interface AskOptions {
   openPath?: string | null;
   /** Present when the agent may propose changes. */
   files?: FileView;
+  /** What to send instead of the question as shown. */
+  prompt?: string;
 }
 
 const allProposals = () => state.turns.flatMap((t) => t.proposals ?? []);
@@ -108,6 +112,11 @@ export const chatStore = {
     });
   },
   proposals: allProposals,
+  /** Shows a question that couldn't be sent, and why. */
+  fail(question: string, error: string) {
+    if (state.busy) return;
+    emit({ turns: [...state.turns, { role: "user", content: question }, { role: "assistant", content: "", error }] });
+  },
   /** Asks a question (or, with no question, asks the last one again). */
   async send(ep: Endpoint, model: string, question: string | null, note: NoteContext | null, opts: AskOptions = {}) {
     if (state.busy) return;
@@ -117,11 +126,11 @@ export const chatStore = {
       if (turns.at(-1)?.role === "assistant") turns = turns.slice(0, -1);
       if (turns.at(-1)?.role !== "user") return;
     } else {
-      turns = [...turns, { role: "user", content: question, ...(note ? { note: note.path } : {}) }];
+      turns = [...turns, { role: "user", content: question, ...(note ? { note: note.path } : {}), ...(opts.prompt ? { prompt: opts.prompt } : {}) }];
     }
     const history: ChatMessage[] = turns
       .filter((t) => !t.error && (t.role === "user" || t.content))
-      .map((t) => ({ role: t.role, content: t.content }));
+      .map((t) => ({ role: t.role, content: t.prompt ?? t.content }));
     const ctrl = new AbortController();
     controller = ctrl;
     const scope = state.scope;

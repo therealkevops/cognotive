@@ -147,6 +147,15 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
     **Edit** first, or **Reject** (or **Apply all**); nothing changes until you apply it. A change is
     merged onto edits made since it was proposed, and refused if they touch the same lines. Turn
     proposals off for a read-only agent
+  - **Agent actions**, where they belong (and in the command palette as *AI: …*); each runs in the
+    chat and comes back as proposals to review:
+    - *Summarise this note* (and propose a `summary` property)
+    - *Suggest links* (Connections panel): links where notes mention each other or are related
+    - *Suggest tags and properties* (Properties panel), in the repository's own vocabulary
+    - *Write with AI* for a hub waiting to be written (Repository health, and Hubs → To write)
+    - *Find homes with AI* for orphans, and *Review with AI* for stale hubs (Repository health)
+    - *Fill empty with AI* for a column of the property table
+    - *What did I work on this week?* (the empty chat, or the palette), from recently changed notes
   - **Save as note** keeps a chat in the `AI/` folder (set in **Settings → AI**), with its sources
   - **Ask** about a selection (Ctrl/Cmd+Shift+Enter, or *Ask AI about the selection…*): the answer
     can be saved as a note that the selection then links to, inserted below, or copied

@@ -2,14 +2,13 @@
 
 import { ArrowUp, ChevronRight, FileDown, FileText, RotateCcw, Search, Settings, Sparkles, Square, SquarePen } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
-import { endpointFor } from "@/lib/ai/endpoint";
-import { chatStore, type ChatTurn, type FileView } from "@/lib/ai/chat-store";
+import { chatStore, type ChatTurn } from "@/lib/ai/chat-store";
 import { chatMarkdown, chatTitle } from "@/lib/ai/context";
 import { formatLink } from "@/lib/links/format";
 import { todayStamp } from "@/lib/links/health";
 import { joinPath, uniquePath } from "@/lib/vault/paths";
 import { ProposalList } from "./Proposals";
-import { useToolEnv } from "./useToolEnv";
+import { useAiActions, useAsk } from "./useAsk";
 import { loadKey } from "@/lib/ai/keys";
 import { PROVIDERS, remoteAllowed } from "@/lib/ai/providers";
 import { useAiSettings } from "@/lib/ai/useAiSettings";
@@ -82,17 +81,8 @@ export function ChatPanel({
     if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 120) el.scrollTop = el.scrollHeight;
   }, [last?.content, chat.turns.length]);
 
-  const env = useToolEnv();
-
-  // The files proposals are built on: the open note as typed, others as saved.
-  const files = useMemo<FileView>(
-    () => ({
-      text: (p) => (p === vault.active?.path ? vault.activeText : vault.links.content(p)),
-      exists: (p) => vault.exists(p),
-      linkFormat: vault.settings.linkFormat,
-    }),
-    [vault],
-  );
+  const ask = useAsk();
+  const aiAction = useAiActions();
 
   const saveAsNote = async () => {
     const first = chat.turns.find((t) => t.role === "user");
@@ -107,17 +97,7 @@ export function ChatPanel({
 
   const send = async (question: string | null) => {
     if (setup || chat.busy) return;
-    const note = withNote && notePath ? { path: notePath, text: vault.activeText } : null;
-    // OpenRouter says which models can't use tools; others are tried, and fall back to search.
-    const target = await endpointFor(ai, { remoteAllowed: !blocked });
-    if ("error" in target) return;
-    void chatStore.send(target.ep, target.model, question, note, {
-      env: ai.agent ? env : undefined,
-      tools: target.tools,
-      maxSteps: ai.maxSteps,
-      openPath: notePath,
-      files: ai.agent && ai.write ? files : undefined,
-    });
+    void ask(question, { note: withNote ? notePath : null, openPath: notePath });
   };
 
   const submit = () => {
@@ -187,7 +167,26 @@ export function ChatPanel({
                 </button>
               </>
             ) : (
-              <p>Ask about {notePath ? `“${displayName(notePath)}”` : "your notes"}: summarise it, find gaps, or think it through.</p>
+              <>
+                <p>Ask about {notePath ? `“${displayName(notePath)}”` : "your notes"}: summarise it, find gaps, or think it through.</p>
+                {aiAction && (
+                  <div className="mt-3 flex flex-wrap justify-center gap-1.5" aria-label="Suggestions">
+                    {notePath && (
+                      <button type="button" className="properties-chip px-2" onClick={() => aiAction({ kind: "summarise", path: notePath })}>
+                        Summarise this note
+                      </button>
+                    )}
+                    {notePath && ai.agent && (
+                      <button type="button" className="properties-chip px-2" onClick={() => aiAction({ kind: "suggest-links", path: notePath })}>
+                        Suggest links
+                      </button>
+                    )}
+                    <button type="button" className="properties-chip px-2" onClick={() => aiAction({ kind: "daily-review" })}>
+                      What did I work on this week?
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
