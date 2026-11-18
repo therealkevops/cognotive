@@ -96,6 +96,8 @@ export function AiSection() {
         {s.provider === "custom" && <CustomModel key={slot.baseUrl} settings={s} onModel={(model) => patch({ model })} />}
       </Group>
 
+      <AgentGroup settings={s} onSettings={set} />
+
       <PrivacyGroup />
     </section>
   );
@@ -421,6 +423,42 @@ function CustomModel({ settings: s, onModel }: { settings: AiSettings; onModel(m
         </datalist>
       )}
     </Row>
+  );
+}
+
+/** How far the model may look through the notes by itself. */
+function AgentGroup({ settings: s, onSettings }: { settings: AiSettings; onSettings(s: AiSettings): void }) {
+  const stepsId = useId();
+  return (
+    <Group title="Agent">
+      <Row
+        label="Let the model search and read notes"
+        description="It looks things up with tools (search, read, follow links and hubs) and lists every note it read. Off: it only sees the open note."
+      >
+        <div className="flex sm:justify-end">
+          <Switch label="Let the model search and read notes" checked={s.agent} onChange={(agent) => onSettings({ ...s, agent })} />
+        </div>
+      </Row>
+      {s.agent && (
+        <Row label="Most steps per question" id={stepsId} description="Each step is one round of lookups. More steps can find more, and cost more.">
+          <input
+            id={stepsId}
+            type="number"
+            min={1}
+            max={30}
+            className="input"
+            defaultValue={s.maxSteps}
+            key={s.maxSteps}
+            onBlur={(e) => {
+              const n = Math.min(30, Math.max(1, Math.round(Number(e.target.value) || s.maxSteps)));
+              if (n !== s.maxSteps) onSettings({ ...s, maxSteps: n });
+              else e.target.value = String(n);
+            }}
+            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+          />
+        </Row>
+      )}
+    </Group>
   );
 }
 

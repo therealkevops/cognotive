@@ -136,7 +136,12 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   icon rails
 - Sync with GitHub: paste a GitHub token, pick a repository, branch and optional subfolder.
   Notes sync both ways; see [How sync works](#how-sync-works)
-- AI chat about the open note, in the **Chat** tab of the right panel. Set it up in **Settings → AI**:
+- AI chat about your notes, in the **Chat** tab of the right panel. The model searches and reads
+  notes by itself (search, read a note or a section, follow links and backlinks, hubs, tags,
+  properties, folders, repository health), cites them as `[[links]]`, and each answer lists every
+  note it read and every step it took. Models that can't use tools (many small local ones) are given
+  the notes that best match the question instead. The agent can be turned off, and the steps per
+  question limited, in **Settings → AI**. Set it up there:
   - **OpenRouter** (one key, hundreds of models): the key is checked and shows its spend limit, and
     the model list is searchable, with prices and which models can use tools
   - **Local**: Ollama (`http://localhost:11434/v1`) or LM Studio (`http://localhost:1234/v1`), with a

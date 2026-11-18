@@ -1200,3 +1200,9 @@ mark {
 .chat-answer h3 {
   font-size: 1em;
 }
+.chat-activity[open] .chat-activity-chevron {
+  transform: rotate(90deg);
+}
+.chat-activity summary::-webkit-details-marker {
+  display: none;
+}

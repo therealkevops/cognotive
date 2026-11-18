@@ -1,8 +1,10 @@
 "use client";
 
-import { ArrowUp, FileText, RotateCcw, Settings, Sparkles, Square, SquarePen } from "lucide-react";
+import { ArrowUp, ChevronRight, FileText, RotateCcw, Search, Settings, Sparkles, Square, SquarePen } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
+import { fetchModels } from "@/lib/ai/catalog";
 import { chatStore, type ChatTurn } from "@/lib/ai/chat-store";
+import type { ToolEnv } from "@/lib/ai/tools";
 import { loadKey } from "@/lib/ai/keys";
 import { PROVIDERS, remoteAllowed } from "@/lib/ai/providers";
 import { useAiSettings } from "@/lib/ai/useAiSettings";
@@ -75,11 +77,31 @@ export function ChatPanel({
     if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 120) el.scrollTop = el.scrollHeight;
   }, [last?.content, chat.turns.length]);
 
+  // What the agent may read: the repository's indexes, as they are when it looks.
+  const env = useMemo<ToolEnv>(
+    () => ({
+      links: vault.links,
+      search: vault.index,
+      files: () => vault.entries.filter((e) => e.kind === "file").map((e) => e.path),
+      mtime: (p) => vault.entries.find((e) => e.path === p)?.mtime,
+      ignored: (p) => vault.settings.healthIgnore.includes(p),
+    }),
+    [vault.links, vault.index, vault.entries, vault.settings.healthIgnore],
+  );
+
   const send = async (question: string | null) => {
     if (setup || chat.busy) return;
+    const openRouter = ai.provider === "openrouter";
     const apiKey = preset.allowsKey ? await loadKey(ai.provider) : "";
     const note = withNote && notePath ? { path: notePath, text: vault.activeText } : null;
-    void chatStore.send({ baseUrl, apiKey, openRouter: ai.provider === "openrouter" }, model, question, note);
+    // OpenRouter says which models can't use tools; others are tried, and fall back to search.
+    const info = openRouter ? (await fetchModels({ baseUrl, openRouter }).catch(() => [])).find((m) => m.id === model) : undefined;
+    void chatStore.send({ baseUrl, apiKey, openRouter }, model, question, note, {
+      env: ai.agent ? env : undefined,
+      tools: info?.tools,
+      maxSteps: ai.maxSteps,
+      openPath: notePath,
+    });
   };
 
   const submit = () => {
@@ -144,7 +166,15 @@ export function ChatPanel({
           </div>
         )}
         {chat.turns.map((t, i) => (
-          <Turn key={i} turn={t} links={links} last={i === chat.turns.length - 1} onRetry={() => void send(null)} busy={chat.busy} />
+          <Turn
+            key={i}
+            turn={t}
+            links={links}
+            last={i === chat.turns.length - 1}
+            onRetry={() => void send(null)}
+            onOpen={onOpenLink}
+            busy={chat.busy}
+          />
         ))}
       </div>
 
@@ -212,12 +242,14 @@ function Turn({
   last,
   busy,
   onRetry,
+  onOpen,
 }: {
   turn: ChatTurn;
   links: LinkContext;
   last: boolean;
   busy: boolean;
   onRetry(): void;
+  onOpen(path: string): void;
 }) {
   const html = useMemo(() => (turn.role === "assistant" && turn.content ? renderMarkdown(turn.content, links) : ""), [turn.role, turn.content, links]);
   if (turn.role === "user") {
@@ -229,12 +261,19 @@ function Turn({
   }
   return (
     <div data-role="assistant" aria-busy={turn.pending || undefined}>
+      <Activity turn={turn} onOpen={onOpen} />
       {html ? (
         <div className="prose-note chat-answer" dangerouslySetInnerHTML={{ __html: html }} />
       ) : turn.pending ? (
         <p className="animate-pulse text-muted">Thinking…</p>
       ) : null}
       {turn.stopped && <p className="mt-1 text-xs text-muted">Stopped.</p>}
+      {turn.limited && <p className="mt-1 text-xs text-muted">Reached the step limit (Settings → AI), so this answer may be incomplete.</p>}
+      {!turn.pending && turn.tokens ? (
+        <p className="mt-1 text-[11px] text-muted tabular-nums">
+          {turn.tokens >= 1000 ? `${(turn.tokens / 1000).toFixed(1)}k` : turn.tokens} tokens
+        </p>
+      ) : null}
       {turn.error && (
         <div role="alert" className="mt-1 rounded-md bg-[#c2412d]/10 px-2 py-1.5 text-xs">
           {turn.error}
@@ -246,5 +285,54 @@ function Turn({
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * What the agent did for an answer: while it works, its latest step; after,
+ * "Read N notes" opening to every step and the notes whose text it was sent.
+ */
+function Activity({ turn, onOpen }: { turn: ChatTurn; onOpen(path: string): void }) {
+  const steps = turn.steps ?? [];
+  const read = turn.read ?? [];
+  if (turn.pending && steps.length) {
+    return (
+      <p className="mb-1 flex items-center gap-1.5 text-xs text-muted" role="status">
+        <Search size={11} aria-hidden className="animate-pulse" />
+        {steps.at(-1)}…
+      </p>
+    );
+  }
+  if (!read.length && !steps.length && !turn.bySearch) return null;
+  const summary = read.length ? `Read ${read.length} ${read.length === 1 ? "note" : "notes"}` : `${steps.length} ${steps.length === 1 ? "step" : "steps"}`;
+  return (
+    <details className="chat-activity mb-1.5 text-xs text-muted">
+      <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded px-1 hover:text-foreground">
+        <ChevronRight size={11} aria-hidden className="chat-activity-chevron transition-transform" />
+        {summary}
+        {turn.bySearch && " · answered from search results"}
+      </summary>
+      <div className="mt-1 ml-1 space-y-1.5 border-l border-border pl-3">
+        {read.length > 0 && (
+          <ul aria-label="Notes read" className="flex flex-wrap gap-1">
+            {read.map((p) => (
+              <li key={p}>
+                <button type="button" className="properties-chip px-2" title={p} onClick={() => onOpen(p)}>
+                  {displayName(p)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {steps.length > 0 && (
+          <ol aria-label="Steps" className="space-y-0.5">
+            {steps.map((st, i) => (
+              <li key={i}>{st}</li>
+            ))}
+          </ol>
+        )}
+        {turn.bySearch && <p>This model can&apos;t use tools, so it was given the notes that best match the question.</p>}
+      </div>
+    </details>
   );
 }

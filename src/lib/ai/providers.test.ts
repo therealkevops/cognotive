@@ -15,6 +15,7 @@ describe("settings", () => {
     expect(s.providers.openrouter).toEqual({ baseUrl: "https://openrouter.ai/api/v1", model: "x/y" });
     expect(normalizeAiSettings({ provider: "evil" })).toEqual(defaultAiSettings());
     expect(normalizeAiSettings("junk")).toEqual(defaultAiSettings());
+    expect(normalizeAiSettings({ maxSteps: 99, agent: false })).toMatchObject({ maxSteps: 30, agent: false });
   });
 
   it("normalizes base URLs", () => {

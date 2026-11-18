@@ -1,3 +1,4 @@
+import { AGENT_PROMPT } from "./agent";
 import type { ChatMessage } from "./openai-compatible";
 
 /** About how much note text goes with a question (characters; ~6k tokens). */
@@ -22,9 +23,20 @@ export function fitText(text: string, budget = NOTE_BUDGET): { text: string; cut
   return { text: text.slice(0, at > budget * 0.8 ? at : budget) + "\n\n[…the rest of the note was left out]", cut: true };
 }
 
-/** The messages sent for a conversation: instructions, the open note, then the turns so far. */
-export function buildMessages(turns: ChatMessage[], note: NoteContext | null): ChatMessage[] {
-  const out: ChatMessage[] = [{ role: "system", content: SYSTEM_PROMPT }];
+/**
+ * The messages sent for a conversation: instructions, the open note, then the
+ * turns so far. `agent`: the model can use tools to read notes. `openPath`: the
+ * note on screen when its text isn't sent, so "this note" can still be looked up.
+ */
+export function buildMessages(
+  turns: ChatMessage[],
+  note: NoteContext | null,
+  opts: { agent?: boolean; openPath?: string | null } = {},
+): ChatMessage[] {
+  const out: ChatMessage[] = [{ role: "system", content: opts.agent ? `${SYSTEM_PROMPT} ${AGENT_PROMPT}` : SYSTEM_PROMPT }];
+  if (!note && opts.openPath && opts.agent) {
+    out.push({ role: "system", content: `The user has "${opts.openPath}" open, but didn't include it. Read it only if the question is about it.` });
+  }
   if (note) {
     const { text } = fitText(note.text);
     out.push({

@@ -68,7 +68,9 @@ test("set up OpenRouter, then chat about the open note", async ({ page }) => {
   await chat.getByLabel("Message").fill("And then?");
   await chat.getByRole("button", { name: "Send" }).click();
   await expect(chat.locator('[data-role="assistant"]').last()).toContainText("No note was sent.");
-  expect(llm.calls[1].messages.map((m) => m.role)).toEqual(["system", "user", "assistant", "user"]);
+  // The note's text isn't sent, only that it's open (so the agent can read it if asked).
+  expect(llm.calls[1].messages.map((m) => m.role)).toEqual(["system", "system", "user", "assistant", "user"]);
+  expect(JSON.stringify(llm.calls[1].messages)).not.toContain("<note path=");
 
   // Links in answers open notes.
   await chat.getByLabel("Message").fill("Link me");
@@ -130,7 +132,7 @@ test("a local model: diagnosis, models, and chat that stays on the machine", asy
   llm.localBlocksOrigin = false;
   await ai.getByRole("button", { name: "Check again" }).click();
   await expect(status).toContainText("Connected. 2 models available.");
-  await ai.getByLabel("Model").selectOption("qwen3:8b");
+  await ai.getByLabel("Model", { exact: true }).selectOption("qwen3:8b");
 
   // LM Studio's address is one click away (and nothing answers there).
   await ai.getByRole("button", { name: "LM Studio" }).click();

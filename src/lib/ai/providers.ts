@@ -69,6 +69,10 @@ export interface AiSettings {
   providers: Record<ProviderId, { baseUrl: string; model: string }>;
   /** Keep keys in memory for this session only, not in the browser's storage. */
   sessionOnlyKeys: boolean;
+  /** Let the model search and read notes with tools (off: it only sees the open note). */
+  agent: boolean;
+  /** Most tool rounds per question. */
+  maxSteps: number;
 }
 
 export function defaultAiSettings(): AiSettings {
@@ -80,6 +84,8 @@ export function defaultAiSettings(): AiSettings {
       custom: { baseUrl: "", model: "" },
     },
     sessionOnlyKeys: false,
+    agent: true,
+    maxSteps: 12,
   };
 }
 
@@ -90,6 +96,8 @@ export function normalizeAiSettings(raw: unknown): AiSettings {
   const r = raw as Partial<AiSettings>;
   if (r.provider && r.provider in PROVIDERS) out.provider = r.provider;
   if (typeof r.sessionOnlyKeys === "boolean") out.sessionOnlyKeys = r.sessionOnlyKeys;
+  if (typeof r.agent === "boolean") out.agent = r.agent;
+  if (typeof r.maxSteps === "number" && Number.isFinite(r.maxSteps)) out.maxSteps = Math.min(30, Math.max(1, Math.round(r.maxSteps)));
   for (const id of Object.keys(PROVIDERS) as ProviderId[]) {
     const slot = r.providers?.[id];
     if (!slot || typeof slot !== "object") continue;

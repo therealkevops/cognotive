@@ -17,9 +17,9 @@ describe("chatStore", () => {
     const fetchFn = vi.fn(async () => stream(["Two ", "ideas."]));
     vi.stubGlobal("fetch", fetchFn);
     await chatStore.send(ep, "m", "What's here?", { path: "Ideas.md", text: "- a\n- b" });
-    expect(chatStore.get().turns).toEqual([
+    expect(chatStore.get().turns).toMatchObject([
       { role: "user", content: "What's here?", note: "Ideas.md" },
-      { role: "assistant", content: "Two ideas." },
+      { role: "assistant", content: "Two ideas.", read: ["Ideas.md"] },
     ]);
     await chatStore.send(ep, "m", "And?", null);
     const body = JSON.parse((fetchFn.mock.calls[1] as unknown as [string, RequestInit])[1].body as string);

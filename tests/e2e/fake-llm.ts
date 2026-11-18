@@ -1,10 +1,14 @@
 import type { Page, Route } from "@playwright/test";
 
-type Message = { role: string; content: string };
+type Message = { role: string; content: string; tool_call_id?: string; tool_calls?: unknown[] };
+/** A scripted reply: text, or tool calls (with optional text first). */
+export type Reply = string | { text?: string; calls: Array<{ name: string; args: Record<string, unknown> }> };
 export interface ChatCall {
   host: string;
   model: string;
   messages: Message[];
+  /** Names of the tools offered. */
+  tools: string[];
   auth?: string;
   headers: Record<string, string>;
 }
@@ -21,9 +25,13 @@ export class FakeLLM {
   /** Ollama answers without CORS headers, as it does when OLLAMA_ORIGINS doesn't allow the site. */
   localBlocksOrigin = false;
   localModels = ["llama3.2:latest", "qwen3:8b"];
+  /** The local server refuses tools, as Ollama does for models without tool support. */
+  localNoTools = false;
+  /** Replies used in order before falling back to `reply`. */
+  script: Reply[] = [];
   /** Replies: a function of the request, or the default (echoes the question and the note it saw). */
-  reply: (call: ChatCall) => string = (call) => {
-    const q = call.messages.at(-1)?.content ?? "";
+  reply: (call: ChatCall) => Reply = (call) => {
+    const q = [...call.messages].reverse().find((m) => m.role === "user")?.content ?? "";
     const note = call.messages.find((m) => m.role === "system" && m.content.includes("<note path="));
     const path = note ? /<note path="([^"]+)"/.exec(note.content)![1] : null;
     return `You asked **${q}**.${path ? ` I read [[${path.replace(/\.md$/, "")}]].` : " No note was sent."}`;
@@ -83,8 +91,12 @@ export class FakeLLM {
     if (path === "/chat/completions" && req.method() === "POST") {
       if (!keyOk) return json({ error: { message: "No auth credentials found", code: 401 } }, 401);
       const body = JSON.parse(req.postData() ?? "{}");
-      const call: ChatCall = { host, model: body.model, messages: body.messages, auth, headers: req.headers() };
+      const tools = (body.tools ?? []).map((t: { function: { name: string } }) => t.function.name);
+      const call: ChatCall = { host, model: body.model, messages: body.messages, tools, auth, headers: req.headers() };
       this.calls.push(call);
+      if (host === "local" && this.localNoTools && tools.length) {
+        return json({ error: { message: `registry.ollama.ai/library/${body.model} does not support tools` } }, 400);
+      }
       if (this.failNext) {
         const f = this.failNext;
         this.failNext = null;
@@ -95,11 +107,18 @@ export class FakeLLM {
         // The page stopped waiting: nothing more to send.
         return route.abort().catch(() => {});
       }
-      const words = this.reply(call).split(/(?<= )/);
-      const events = [
-        ...words.map((w) => ({ choices: [{ index: 0, delta: { content: w } }] })),
-        { choices: [{ index: 0, delta: {}, finish_reason: "stop" }] },
-      ];
+      const r = this.script.length ? this.script.shift()! : this.reply(call);
+      const reply = typeof r === "string" ? { text: r, calls: [] } : r;
+      const words = (reply.text ?? "").split(/(?<= )/).filter(Boolean);
+      const events: unknown[] = words.map((w) => ({ choices: [{ index: 0, delta: { content: w } }] }));
+      reply.calls.forEach((c, index) => {
+        // Arguments arrive in pieces, as real providers send them.
+        const args = JSON.stringify(c.args);
+        const cut = Math.ceil(args.length / 2);
+        events.push({ choices: [{ index: 0, delta: { tool_calls: [{ index, id: `call_${this.calls.length}_${index}`, type: "function", function: { name: c.name, arguments: args.slice(0, cut) } }] } }] });
+        events.push({ choices: [{ index: 0, delta: { tool_calls: [{ index, function: { arguments: args.slice(cut) } }] } }] });
+      });
+      events.push({ choices: [{ index: 0, delta: {}, finish_reason: reply.calls.length ? "tool_calls" : "stop" }], usage: { prompt_tokens: 900, completion_tokens: 100 } });
       return route.fulfill({
         status: 200,
         headers: { ...cors, "Content-Type": "text/event-stream" },

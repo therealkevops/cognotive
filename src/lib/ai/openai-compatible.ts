@@ -159,6 +159,8 @@ export async function streamChat(ep: Endpoint, req: ChatRequest): Promise<ChatRe
         stream: true,
         ...(req.tools?.length ? { tools: req.tools } : {}),
         ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
+        // OpenRouter reports tokens used at the end of the stream when asked.
+        ...(ep.openRouter ? { stream_options: { include_usage: true } } : {}),
       }),
       signal: req.signal,
       ...addressSpaceHint(url),

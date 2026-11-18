@@ -75,6 +75,16 @@ export class NoteIndex {
       .map((r) => toHit(r));
   }
 
+  /** Notes matching any of the words, best first (for questions in plain language). */
+  searchAny(query: string, limit = 50): NoteHit[] {
+    const q = query.trim();
+    if (!q) return [];
+    return this.search_
+      .search(q, { combineWith: "OR" })
+      .slice(0, limit)
+      .map((r) => toHit(r));
+  }
+
   /** Title-only search for the quick switcher. */
   searchTitles(query: string, limit = 20): NoteHit[] {
     const q = query.trim();
