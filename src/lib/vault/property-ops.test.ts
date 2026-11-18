@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deletePropertyIn, renamePropertyIn } from "./property-ops";
+import { deletePropertyIn, renamePropertyIn, setPropertyIn } from "./property-ops";
 
 describe("renaming and deleting properties", () => {
   const note = "---\nstate: draft\ntags:\n  - a\n---\n# Note\nstate: not a property";
@@ -25,5 +25,16 @@ describe("renaming and deleting properties", () => {
     expect(deletePropertyIn("n.md", note, "nope")).toBe("unchanged");
     const d = JSON.stringify({ elements: [], properties: { a: 1 } });
     expect("properties" in JSON.parse(deletePropertyIn("x.excalidraw", d, "a") as string)).toBe(false);
+  });
+});
+
+describe("setPropertyIn", () => {
+  it("sets in notes, drawings and canvases, and leaves attachments", () => {
+    expect(setPropertyIn("n.md", "# Hi", "status", "draft")).toBe("---\nstatus: draft\n---\n# Hi");
+    expect(setPropertyIn("n.md", "---\nstatus: draft\n---\n# Hi", "status", undefined)).toBe("# Hi");
+    expect(JSON.parse(setPropertyIn("d.excalidraw", '{"elements":[]}', "tags", ["a"]) as string).properties).toEqual({ tags: ["a"] });
+    expect(JSON.parse(setPropertyIn("c.canvas", '{"nodes":[],"edges":[]}', "hub", true) as string).properties).toEqual({ hub: true });
+    expect(setPropertyIn("p.png", "", "a", 1)).toBe("unchanged");
+    expect(setPropertyIn("n.md", "# Hi", "status", undefined)).toBe("unchanged");
   });
 });

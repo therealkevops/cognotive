@@ -12,6 +12,8 @@ import type { LinkContext } from "@/lib/markdown/remark-links";
 import { canvasName, drawingName, isCanvas, isDrawing, isNote, noteTitle } from "@/lib/vault/paths";
 import { useVault } from "../vault/useVault";
 import { FileView } from "./FileView";
+import { PropertiesEditor } from "./PropertiesEditor";
+import { isPluginKey } from "@/lib/drawing/properties";
 
 const ReadingView = dynamic(() => reloadOnChunkError(() => import("./ReadingView"))(), { ssr: false });
 
@@ -45,6 +47,14 @@ export function SidePane({
     () => collectPropertyInfo(vault.links, vault.settings.propertyTypes),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
     [vault.links, vault.indexVersion, vault.settings.propertyTypes],
+  );
+  // Drawings and canvases: their own properties, above the picture or the link to open it.
+  const sideProperties = (
+    <PropertiesEditor
+      properties={Object.fromEntries(Object.entries(vault.links.get(path)?.properties ?? {}).filter(([k]) => !isPluginKey(k)))}
+      info={propertyInfo}
+      onSet={(key, value) => void vault.setProperty(path, key, value)}
+    />
   );
   const [drawingUrl, setDrawingUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -93,10 +103,14 @@ export function SidePane({
             }}
           />
         ) : isDrawing(path) ? (
-          // eslint-disable-next-line @next/next/no-img-element -- SVG object URL from the vault
-          drawingUrl ? <img src={drawingUrl} alt="" className="mx-auto max-w-full p-4" /> : <p className="p-6 text-muted">Rendering…</p>
+          <>
+            <div className="px-6 pt-6">{sideProperties}</div>
+            {/* eslint-disable-next-line @next/next/no-img-element -- SVG object URL from the vault */}
+            {drawingUrl ? <img src={drawingUrl} alt="" className="mx-auto max-w-full p-4" /> : <p className="p-6 text-muted">Rendering…</p>}
+          </>
         ) : isCanvas(path) ? (
           <div className="p-6 text-sm text-muted">
+            {sideProperties}
             <p className="mb-3">Canvases open in the main pane.</p>
             <button type="button" className="button-secondary" onClick={() => onOpenHere(path)}>
               Open the canvas

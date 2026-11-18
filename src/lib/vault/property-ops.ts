@@ -1,4 +1,6 @@
 import { isObsidianDrawing } from "../drawing/obsidian";
+import { setDrawingProperty } from "../drawing/properties";
+import { yamlValue } from "../editor/properties";
 import { setFrontmatterProperty, splitFrontmatter } from "../markdown/frontmatter";
 import { isCanvas, isDrawing, isNote } from "./paths";
 
@@ -64,6 +66,36 @@ export function deletePropertyIn(path: string, content: string, key: string): st
       if (Object.keys(rest).length) data.properties = rest;
       else delete data.properties;
       return JSON.stringify(data, null, isCanvas(path) ? "\t" : 2) + (isCanvas(path) ? "\n" : "");
+    } catch {
+      return "unchanged";
+    }
+  }
+  return "unchanged";
+}
+
+/**
+ * The file with property `key` set to `value` (undefined removes it), for any
+ * text file that holds properties; "unchanged" for other files.
+ */
+export function setPropertyIn(path: string, content: string, key: string, value: unknown): string | "unchanged" {
+  if (isYaml(path)) {
+    const next = setFrontmatterProperty(content, key, value === undefined ? undefined : yamlValue(value));
+    return next === content ? "unchanged" : next;
+  }
+  if (isDrawing(path)) {
+    const next = setDrawingProperty(path, content, key, value);
+    return next === content ? "unchanged" : next;
+  }
+  if (isCanvas(path)) {
+    try {
+      const data = JSON.parse(content) as Record<string, unknown>;
+      const props = { ...((data.properties as Record<string, unknown> | undefined) ?? {}) };
+      if (value === undefined) delete props[key];
+      else props[key] = value;
+      if (Object.keys(props).length) data.properties = props;
+      else delete data.properties;
+      const next = JSON.stringify(data, null, "\t") + "\n";
+      return next === content ? "unchanged" : next;
     } catch {
       return "unchanged";
     }

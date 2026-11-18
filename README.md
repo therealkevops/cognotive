@@ -55,6 +55,10 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   (text, list, number, date, checkbox: kept in `.noted/settings.json`), or click a value to find
   the files. Search finds files by property with `[status]` or `[status:draft]`, alone or with
   words. Canvases have properties too (the sliders button in the canvas toolbar)
+- Editing many files' properties at once: **Edit properties** on search results (or *Edit as
+  table* in the Properties tab) opens a table with a row per file and a column per property. Edit
+  any cell (lists as `a, b`; an empty cell removes the property), add a column, or set or remove a
+  property for every file. The side pane also edits the properties of drawings and canvases
 - Help with properties, as in a code editor: in the properties block, names are suggested as you
   type (with what each one does), then values: your tags, `true`/`false` for `hub`, today's date
   for `created`/`reviewed`, and values you've used before for your own properties. Hovering over a

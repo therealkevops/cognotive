@@ -33,6 +33,7 @@ import {
   extensionFor,
   extname,
   isBinary,
+  isCanvas,
   isDrawing,
   isMarkdown,
   isNote,
@@ -44,6 +45,7 @@ import {
 } from "@/lib/vault/paths";
 import type { VaultEntry, VaultStore } from "@/lib/vault/types";
 import { withNewNoteProperties } from "@/lib/vault/new-note-properties";
+import { setPropertyIn } from "@/lib/vault/property-ops";
 import {
   movedFileProperties,
   parseFileProperties,
@@ -134,6 +136,8 @@ export interface VaultApi {
   fileProperties(path: string): Record<string, unknown>;
   /** Sets (or, with undefined, removes) a property of an attachment. */
   setFileProperty(path: string, key: string, value: unknown): Promise<void>;
+  /** Sets (or removes) a property of any file: note, drawing, canvas or attachment. */
+  setProperty(path: string, key: string, value: unknown): Promise<void>;
   updateSettings(patch: Partial<VaultSettings>): Promise<void>;
   /** Creates a note with content (e.g. from a template) and opens it. */
   createNoteWith(path: string, content: string): Promise<string | undefined>;
@@ -763,6 +767,18 @@ export function VaultProvider({
     [writeNote, flush, store, indexes, bumpIndex, open, changed, fail],
   );
 
+  const setProperty = useCallback(
+    async (path: string, key: string, value: unknown) => {
+      if (!isNote(path) && !isDrawing(path) && !isCanvas(path)) return setFileProperty(path, key, value);
+      await flush();
+      const file = await store.read(path);
+      if (!file) return;
+      const next = setPropertyIn(path, file.content, key, value);
+      if (next !== "unchanged") await writeNote(path, next);
+    },
+    [setFileProperty, flush, store, writeNote],
+  );
+
   const reload = useCallback(
     async (paths: string[]) => {
       if (paths.length === 0) return;
@@ -834,6 +850,7 @@ export function VaultProvider({
       updateSettings,
       fileProperties,
       setFileProperty,
+      setProperty,
       createNoteWith,
       createDrawing,
       createCanvas,
@@ -871,6 +888,7 @@ export function VaultProvider({
       updateSettings,
       fileProperties,
       setFileProperty,
+      setProperty,
       createNoteWith,
       createDrawing,
       createCanvas,

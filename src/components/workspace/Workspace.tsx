@@ -81,6 +81,8 @@ import { VaultSwitcher } from "../vault/VaultSwitcher";
 import { ConflictBanner, ConflictDialog } from "./ConflictReview";
 import { CreateNoteDialog } from "./CreateNoteDialog";
 import { PropertiesPanel } from "./PropertiesPanel";
+import { PropertyTable } from "./PropertyTable";
+import { filesWithProperties } from "@/lib/links/property-query";
 import { DeleteDialog } from "./DeleteDialog";
 import { FileTree } from "./FileTree";
 import { PinnedHubs } from "./PinnedHubs";
@@ -177,6 +179,8 @@ export function Workspace() {
   const [sidePath, setSidePath] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   /** A note about to be created from a link, waiting for the user to confirm its name and folder. */
+  /** Files whose properties are open as a table. */
+  const [propertyTable, setPropertyTable] = useState<string[] | null>(null);
   /** A sync conflict open for review. */
   const [reviewing, setReviewing] = useState<ConflictRecord | null>(null);
   /** A canvas being edited as text (to repair one that isn't valid JSON). */
@@ -854,7 +858,7 @@ export function Workspace() {
             </div>
           </div>
         ) : tab === "search" ? (
-          <SearchPanel query={searchQuery} onQuery={setSearchQuery} autoFocus />
+          <SearchPanel query={searchQuery} onQuery={setSearchQuery} autoFocus onEditProperties={setPropertyTable} />
         ) : tab === "tags" ? (
           <TagsPanel onTag={showTag} />
         ) : tab === "properties" ? (
@@ -865,6 +869,7 @@ export function Workspace() {
             }}
             onRename={renamePropertyEverywhere}
             onDelete={deletePropertyEverywhere}
+            onTable={(key) => setPropertyTable(filesWithProperties(vault.links, [{ key }]))}
           />
         ) : (
           <TemplatesPanel onUse={applyTemplate} canInsert={editing} />
@@ -1478,6 +1483,9 @@ export function Workspace() {
       {creating && <CreateNoteDialog {...creating} onClose={() => setCreating(null)} />}
       {deleting && <DeleteDialog path={deleting} isFolder={false} onClose={() => setDeleting(null)} />}
       {settingsOpen && <SettingsDialog initial={settingsOpen} onClose={() => setSettingsOpen(false)} />}
+      {propertyTable && (
+        <PropertyTable paths={propertyTable} onClose={() => setPropertyTable(null)} onOpen={(p) => void vault.open(p)} />
+      )}
       {reviewing && <ConflictDialog record={reviewing} onClose={() => setReviewing(null)} />}
       {healthOpen && <HealthDialog onClose={() => setHealthOpen(false)} onCreate={offerCreate} />}
       <Toasts />

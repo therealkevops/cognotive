@@ -16,10 +16,13 @@ export function SearchPanel({
   query,
   onQuery,
   autoFocus,
+  onEditProperties,
 }: {
   query: string;
   onQuery(q: string): void;
   autoFocus?: boolean;
+  /** Opens the results' properties as a table. */
+  onEditProperties?(paths: string[]): void;
 }) {
   const vault = useVault();
   const deferred = useDeferredValue(query);
@@ -68,9 +71,21 @@ export function SearchPanel({
         onChange={(e) => onQuery(e.target.value)}
       />
       {deferred.trim() && (
-        <p className="mb-1 text-xs text-muted" aria-live="polite">
-          {hits.length === 0 ? "No matches" : `${hits.length} ${hits.length === 1 ? "note" : "notes"}`}
-        </p>
+        <div className="mb-1 flex items-center gap-2 text-xs text-muted">
+          <p className="flex-1" aria-live="polite">
+            {hits.length === 0 ? "No matches" : `${hits.length} ${hits.length === 1 ? "note" : "notes"}`}
+          </p>
+          {onEditProperties && hits.length > 0 && (
+            <button
+              type="button"
+              className="rounded px-1.5 py-0.5 hover:bg-foreground/5 hover:text-accent"
+              title="Edit the properties of these files as a table"
+              onClick={() => onEditProperties(hits.map((h) => h.path))}
+            >
+              Edit properties
+            </button>
+          )}
+        </div>
       )}
       <ul className="-mx-2 flex-1 overflow-y-auto">
         {hits.map((h) => (

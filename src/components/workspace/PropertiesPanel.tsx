@@ -14,8 +14,11 @@ export function PropertiesPanel({
   onSearch,
   onRename,
   onDelete,
+  onTable,
 }: {
   onSearch(query: string): void;
+  /** Opens the files that have a property as a table, to edit them together. */
+  onTable?(key: string): void;
   /** Renames everywhere; reports files changed, and files left as they were (they already had the new name). */
   onRename(from: string, to: string): Promise<{ changed: number; clashes: number }>;
   onDelete(key: string): Promise<number>;
@@ -135,6 +138,11 @@ export function PropertiesPanel({
                     <button type="button" className="button-secondary px-2 py-0.5 text-xs" onClick={() => onSearch(`[${key}]`)}>
                       Show {count} {count === 1 ? "file" : "files"}
                     </button>
+                    {onTable && (
+                      <button type="button" className="button-secondary px-2 py-0.5 text-xs" onClick={() => onTable(key)}>
+                        Edit as table
+                      </button>
+                    )}
                     {!builtIn && (
                       <button
                         type="button"

@@ -274,3 +274,63 @@ test("a canvas has properties of its own", async ({ page }) => {
   await page.getByRole("button", { name: "Canvas properties" }).click();
   await expect(page.getByRole("dialog", { name: "Properties of this canvas" })).toContainText("#boards");
 });
+
+test("search results' properties can be edited together as a table", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".cm-content")).toBeVisible();
+  const { strToU8, zipSync } = await import("fflate");
+  const zip = zipSync({
+    "V/A.md": strToU8("---\nstate: draft\n---\nA"),
+    "V/B.md": strToU8("---\nstate: done\ntags: [x]\n---\nB"),
+  });
+  await page.getByLabel("Choose a zip to import").setInputFiles({ name: "v.zip", mimeType: "application/zip", buffer: Buffer.from(zip) });
+  await expect(page.getByRole("status").filter({ hasText: "Imported 2 files" })).toBeVisible();
+  await page.getByRole("tab", { name: "Search" }).click();
+  await page.getByRole("searchbox", { name: "Search all notes" }).fill("[state]");
+  await page.getByRole("button", { name: "Edit properties" }).click();
+
+  const table = page.getByRole("dialog", { name: "Edit properties" });
+  await expect(table).toContainText("2 files");
+  // One cell.
+  const cell = table.getByLabel("state of A", { exact: true });
+  await cell.fill("review");
+  await cell.press("Enter");
+  // A new column, set for every file.
+  await table.getByRole("combobox", { name: "Add a property column" }).fill("priority");
+  await table.getByRole("button", { name: "Add" }).click();
+  const all = table.getByLabel("priority for all files", { exact: true });
+  await all.fill("high");
+  await all.press("Enter");
+  await expect(table.getByLabel("priority of B", { exact: true })).toHaveValue("high");
+  // And remove one from every file.
+  await table.getByRole("button", { name: "Remove state from all files" }).click();
+  await expect(table.getByLabel("state of B", { exact: true })).toHaveCount(0);
+  // Lists are typed with commas.
+  const tags = table.getByLabel("tags of A", { exact: true });
+  await tags.fill("one, two");
+  await tags.press("Enter");
+
+  await table.getByRole("button", { name: "A", exact: true }).click();
+  await page.getByRole("radio", { name: "Source" }).click();
+  await expect(page.locator(".cm-content")).toHaveText("---priority: hightags: [one, two]---A");
+});
+
+test("the side pane edits a drawing's properties", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".cm-content")).toBeVisible();
+  await page.getByRole("button", { name: "New drawing" }).click();
+  await expect(page.getByTestId("drawing").locator("canvas.interactive")).toBeVisible({ timeout: 30_000 });
+  const tree = page.getByRole("tree", { name: "Repository files" });
+  await tree.getByRole("treeitem", { name: "Welcome" }).click();
+  await tree.getByRole("treeitem", { name: "Drawing" }).hover();
+  await page.getByRole("button", { name: "Open Drawing in the side pane" }).click();
+  const props = page.getByRole("region", { name: "Side pane" }).getByRole("region", { name: "Properties" });
+  await props.getByRole("button", { name: "Add property" }).click();
+  await props.getByRole("combobox", { name: "New property name" }).fill("tags");
+  await page.keyboard.press("Enter");
+  await props.getByRole("combobox", { name: "Add to tags" }).fill("diagrams");
+  await page.keyboard.press("Enter");
+  await expect(props).toContainText("#diagrams");
+  await page.getByRole("tab", { name: "Tags" }).click();
+  await expect(page.getByRole("button", { name: "#diagrams 1", exact: true })).toBeVisible();
+});
