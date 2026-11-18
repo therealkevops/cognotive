@@ -24,6 +24,7 @@ import {
   Tags,
   LayoutTemplate,
   SlidersHorizontal,
+  Sparkles,
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -42,6 +43,7 @@ import type { LinkHost } from "@/lib/editor/wikilinks";
 import { collectPropertyInfo, yamlValue, type PropertyInfo } from "@/lib/editor/properties";
 import { drawingProperties, keepDrawingProperties, setDrawingProperty } from "@/lib/drawing/properties";
 import type { LinkContext } from "@/lib/markdown/remark-links";
+import { ChatPanel } from "../ai/ChatPanel";
 import { serializeCanvas } from "@/lib/canvas/format";
 import { neighbourhoodCanvas, type Neighbour } from "@/lib/canvas/map";
 import { convertLinks, formatLink, markdownLink } from "@/lib/links/format";
@@ -117,7 +119,7 @@ const ReadingView = dynamic(() => reloadOnChunkError(() => import("./ReadingView
 
 type Mode = "live" | "source" | "reading";
 type SidebarTab = "files" | "search" | "tags" | "templates" | "properties";
-type PanelTab = "outline" | "links";
+type PanelTab = "outline" | "links" | "chat";
 
 const MODES: Array<{ id: Mode; label: string; icon: typeof Pencil }> = [
   { id: "live", label: "Live preview", icon: Pencil },
@@ -135,7 +137,7 @@ export function Workspace() {
   const [settingsOpen, setSettingsOpen] = useState<false | SettingsSection>(false);
   const [healthOpen, setHealthOpen] = useState(false);
   const [panelTab, setPanelTabState] = useState<PanelTab>(() =>
-    readPref<string>("panelTab", "links") === "outline" ? "outline" : "links",
+    (["outline", "chat"] as const).find((t) => t === readPref<string>("panelTab", "links")) ?? "links",
   );
   const setPanelTab = (t: PanelTab) => {
     setPanelTabState(t);
@@ -965,6 +967,9 @@ export function Workspace() {
       <RailButton label="Outline" onClick={() => openPanelTab("outline")}>
         <ListTree size={18} aria-hidden />
       </RailButton>
+      <RailButton label="Chat" onClick={() => openPanelTab("chat")}>
+        <Sparkles size={18} aria-hidden />
+      </RailButton>
     </>
   );
 
@@ -1180,6 +1185,7 @@ export function Workspace() {
                     [
                       ["links", "Connections"],
                       ["outline", "Outline"],
+                      ["chat", "Chat"],
                     ] as const
                   ).map(([id, label]) => (
                     <button
@@ -1207,7 +1213,9 @@ export function Workspace() {
                   <Outline markdown={vault.activeText} onJump={jumpTo} />
                 ) : panelTab === "links" ? (
                   <LinksPanel onOpenLink={(t) => void openLink(t)} onMapCanvas={kind === "note" ? () => void mapAsCanvas() : undefined} />
-                ) : null}
+                ) : (
+                  <ChatPanel links={linkContext} onOpenLink={(t) => void openLink(t)} onOpenSettings={() => setSettingsOpen("ai")} />
+                )}
               </>
             ) : null
           }

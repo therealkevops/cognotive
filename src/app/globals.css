@@ -1186,3 +1186,17 @@ mark {
   border: 1px solid var(--border);
   pointer-events: all;
 }
+
+/* AI chat answers: the note typography, a size down. */
+.chat-answer {
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+.chat-answer > * + * {
+  margin-top: 0.6em;
+}
+.chat-answer h1,
+.chat-answer h2,
+.chat-answer h3 {
+  font-size: 1em;
+}

@@ -24,6 +24,11 @@ export interface VaultSettings {
   newNoteProperties: string[];
   /** Types chosen for the repository's own properties (built-in ones have theirs). */
   propertyTypes: Record<string, "text" | "list" | "number" | "date" | "boolean">;
+  /**
+   * Whether the AI chat may send this repository's notes to a remote provider.
+   * "auto": yes, unless the repository is encrypted. "never": local models only.
+   */
+  aiRemote: "auto" | "allow" | "never";
 }
 
 export const SETTINGS_PATH = ".noted/settings.json";
@@ -41,6 +46,7 @@ export const DEFAULT_SETTINGS: VaultSettings = {
   healthIgnore: [],
   newNoteProperties: [],
   propertyTypes: {},
+  aiRemote: "auto",
 };
 
 export function parseSettings(text: string | undefined): VaultSettings {
@@ -53,6 +59,7 @@ export function parseSettings(text: string | undefined): VaultSettings {
       if (typeof v === typeof DEFAULT_SETTINGS[key]) (out as Record<string, unknown>)[key] = v;
     }
     if (!["current", "root", "folder"].includes(out.newNoteLocation)) out.newNoteLocation = "current";
+    if (!["auto", "allow", "never"].includes(out.aiRemote)) out.aiRemote = "auto";
     if (out.linkFormat !== "wikilink" && out.linkFormat !== "markdown") out.linkFormat = "wikilink";
     out.healthIgnore = Array.isArray(raw.healthIgnore) ? raw.healthIgnore.filter((p): p is string => typeof p === "string") : [];
     const types: VaultSettings["propertyTypes"] = {};

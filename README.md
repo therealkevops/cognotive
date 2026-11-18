@@ -136,6 +136,18 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   icon rails
 - Sync with GitHub: paste a GitHub token, pick a repository, branch and optional subfolder.
   Notes sync both ways; see [How sync works](#how-sync-works)
+- AI chat about the open note, in the **Chat** tab of the right panel. Set it up in **Settings → AI**:
+  - **OpenRouter** (one key, hundreds of models): the key is checked and shows its spend limit, and
+    the model list is searchable, with prices and which models can use tools
+  - **Local**: Ollama (`http://localhost:11434/v1`) or LM Studio (`http://localhost:1234/v1`), with a
+    connection check that explains what's wrong (not running, no models, or the server not allowing
+    this site: start Ollama with `OLLAMA_ORIGINS="https://your-app.example" ollama serve`)
+  - **Custom**: any OpenAI-compatible endpoint, with an optional key
+  - Requests go straight from the browser to the provider; keys stay on the device (or only for the
+    session) and never go into the repository. Answers stream in, can be stopped (Esc) and retried,
+    and their `[[links]]` open notes. The open note goes with a question unless you click its chip off
+  - A repository can be kept to local models only (**Settings → AI → This repository**); encrypted
+    repositories are, unless you allow remote providers
 
 ## Develop
 
@@ -170,7 +182,7 @@ CI (`.github/workflows/ci.yml`) runs all of the above on every push to `main` an
 Check a deployment at `/api/health`, which reports the commit it was built from.
 
 The app is designed for the Hobby plan's limits: pages and `/api/health` are static, and
-the only server function planned is a thin Claude proxy for the AI features. See
+there are no server functions: GitHub and AI providers are called from the browser. See
 [docs/PLAN.md § Guiding constraints](docs/PLAN.md#1-guiding-constraints).
 
 ## Set up GitHub storage
@@ -228,8 +240,9 @@ attachments and their names are encrypted in the browser before they reach GitHu
 - Repositories that already hold unencrypted notes can't be switched over, because older versions
   stay readable in the git history. To encrypt existing notes, connect a new empty repository with
   encryption on and copy the notes in (with the commands *Export repository as zip* and *Import notes from a zip…*).
-- Notes you send to Claude (once the AI features arrive) go through the app's proxy unencrypted;
-  encryption protects what's stored on GitHub.
+- Notes you send to a remote AI provider are sent in the clear (over HTTPS) to that provider;
+  encryption protects what's stored on GitHub. By default an encrypted repository only talks to a
+  local model; you can allow remote providers in **Settings → AI**.
 
 How it works: a random 256-bit repository key, locked with a key derived from your passphrase
 (PBKDF2-SHA256, 600,000 iterations). Files and names are encrypted with AES-256-GCM using an IV
@@ -253,6 +266,9 @@ src/lib/            framework-free logic with unit tests alongside:
   links/            link and tag parsing, Obsidian-style resolution, LinkIndex (backlinks,
                     mentions, graph, rename rewriting)
   drawing/          Excalidraw file parsing (text, links), link rewriting, SVG rendering
+  ai/               AI providers, keys, model catalog, local diagnostics, streaming
+                    OpenAI-compatible client, chat state
 tests/e2e/          Playwright tests
 docs/PLAN.md        design and roadmap
+docs/AI_PLAN.md     AI and agent plan (phases A–E)
 ```

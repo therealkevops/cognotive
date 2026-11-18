@@ -5,6 +5,8 @@ How to bring agentic AI into noted-ai, borrowing the provider design of
 OpenAI-compatible endpoint, called straight from the browser) and building the agent on the
 repository's own structure: links, hubs, properties, tags and health checks.
 
+**Status:** phase A (providers and chat) is done; phase B (read agent) is next.
+
 This replaces section 5 ("Querying with the LLM") and phase 5 of [PLAN.md](PLAN.md), which assumed
 a server-side Claude proxy with a key held on Vercel.
 
