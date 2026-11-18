@@ -1,7 +1,8 @@
 import { splitFrontmatter } from "../markdown/frontmatter";
 import { displayName } from "../vault/paths";
 import { AiError, streamChat, type ChatMessage, type Endpoint } from "./openai-compatible";
-import { READ_TOOLS, runTool, type ToolEnv } from "./tools";
+import { READ_TOOLS, runTool, WRITE_TOOLS, type ToolEnv } from "./tools";
+import type { Proposal } from "./proposals";
 
 /**
  * The agent loop: ask the model, run the tools it calls against the
@@ -13,7 +14,8 @@ export type AgentEvent =
   /** A step ended in tool calls: any text so far was the model thinking aloud. */
   | { type: "reset" }
   | { type: "step"; label: string; read: string[] }
-  | { type: "mode"; mode: "search" };
+  | { type: "mode"; mode: "search" }
+  | { type: "proposal"; proposal: Proposal };
 
 export interface AgentOptions {
   ep: Endpoint;
@@ -42,6 +44,12 @@ export interface AgentResult {
 export const DEFAULT_MAX_STEPS = 12;
 /** Roughly how much text the conversation may hold before old tool results are dropped (characters). */
 export const CONTEXT_BUDGET = 120_000;
+
+export const WRITE_PROMPT = [
+  "You can also propose changes: create_note, append_to_note, edit_note, set_property and add_link.",
+  "The user reviews each one and applies or rejects it; nothing changes until then.",
+  "Propose only what the user asked for, read a note before changing it, and say briefly what you proposed.",
+].join(" ");
 
 export const AGENT_PROMPT = [
   "You can search and read the user's notes with tools. Look things up rather than guessing:",
@@ -114,7 +122,7 @@ export async function runAgent(o: AgentOptions): Promise<AgentResult> {
     const r = await streamChat(o.ep, {
       model: o.model,
       messages: fitMessages(messages),
-      tools: tools ? READ_TOOLS : undefined,
+      tools: tools ? (o.env.proposals ? [...READ_TOOLS, ...WRITE_TOOLS] : READ_TOOLS) : undefined,
       signal: o.signal,
       onText: (delta) => emit({ type: "text", delta }),
     });
@@ -155,6 +163,7 @@ export async function runAgent(o: AgentOptions): Promise<AgentResult> {
       addRead(res.read);
       steps.push(res.label);
       emit({ type: "step", label: res.label, read: res.read });
+      if (res.proposal) emit({ type: "proposal", proposal: res.proposal });
       messages.push({ role: "tool", tool_call_id: call.id, name: call.function.name, content: res.content });
     }
   }

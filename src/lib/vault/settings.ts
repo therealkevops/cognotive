@@ -29,6 +29,8 @@ export interface VaultSettings {
    * "auto": yes, unless the repository is encrypted. "never": local models only.
    */
   aiRemote: "auto" | "allow" | "never";
+  /** Where chats saved as notes, and answers from "Ask", go. */
+  aiFolder: string;
 }
 
 export const SETTINGS_PATH = ".noted/settings.json";
@@ -47,6 +49,7 @@ export const DEFAULT_SETTINGS: VaultSettings = {
   newNoteProperties: [],
   propertyTypes: {},
   aiRemote: "auto",
+  aiFolder: "AI",
 };
 
 export function parseSettings(text: string | undefined): VaultSettings {

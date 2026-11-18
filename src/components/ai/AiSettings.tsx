@@ -440,6 +440,16 @@ function AgentGroup({ settings: s, onSettings }: { settings: AiSettings; onSetti
         </div>
       </Row>
       {s.agent && (
+        <Row
+          label="Let the model propose changes"
+          description="New notes, additions, edits, properties and links, each shown as a change you apply or reject. Off: it only reads."
+        >
+          <div className="flex sm:justify-end">
+            <Switch label="Let the model propose changes" checked={s.write} onChange={(write) => onSettings({ ...s, write })} />
+          </div>
+        </Row>
+      )}
+      {s.agent && (
         <Row label="Most steps per question" id={stepsId} description="Each step is one round of lookups. More steps can find more, and cost more.">
           <input
             id={stepsId}
@@ -468,6 +478,7 @@ function PrivacyGroup() {
   const { active } = useVaults();
   const encrypted = active.kind === "github" && !!active.encrypted;
   const id = useId();
+  const folderId = useId();
   const setting = vault.settings.aiRemote;
   return (
     <Group title="This repository">
@@ -491,6 +502,14 @@ function PrivacyGroup() {
           <option value="never">Local models only</option>
         </select>
         {!remoteAllowed(setting, encrypted) && <p className="mt-1 text-xs text-muted">The chat will only use the Local provider.</p>}
+      </Row>
+      <Row label="Folder for saved chats" id={folderId} description="Where “Save as note” puts chats, and answers to “Ask”.">
+        <TextSetting
+          id={folderId}
+          value={vault.settings.aiFolder}
+          placeholder="AI"
+          onSave={(v) => void vault.updateSettings({ aiFolder: v.trim().replace(/^\/+|\/+$/g, "") || "AI" })}
+        />
       </Row>
     </Group>
   );

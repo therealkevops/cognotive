@@ -1,4 +1,4 @@
-import { AGENT_PROMPT } from "./agent";
+import { AGENT_PROMPT, WRITE_PROMPT } from "./agent";
 import type { ChatMessage } from "./openai-compatible";
 
 /** About how much note text goes with a question (characters; ~6k tokens). */
@@ -31,9 +31,10 @@ export function fitText(text: string, budget = NOTE_BUDGET): { text: string; cut
 export function buildMessages(
   turns: ChatMessage[],
   note: NoteContext | null,
-  opts: { agent?: boolean; openPath?: string | null } = {},
+  opts: { agent?: boolean; write?: boolean; openPath?: string | null } = {},
 ): ChatMessage[] {
-  const out: ChatMessage[] = [{ role: "system", content: opts.agent ? `${SYSTEM_PROMPT} ${AGENT_PROMPT}` : SYSTEM_PROMPT }];
+  const prompt = [SYSTEM_PROMPT, opts.agent && AGENT_PROMPT, opts.agent && opts.write && WRITE_PROMPT].filter(Boolean).join(" ");
+  const out: ChatMessage[] = [{ role: "system", content: prompt }];
   if (!note && opts.openPath && opts.agent) {
     out.push({ role: "system", content: `The user has "${opts.openPath}" open, but didn't include it. Read it only if the question is about it.` });
   }
@@ -51,4 +52,21 @@ export function buildMessages(
 export function chatTitle(question: string): string {
   const line = question.trim().split("\n")[0].replace(/[\\/:*?"<>|#^[\]]/g, "").trim();
   return line.length > 60 ? line.slice(0, 57).trimEnd() + "…" : line || "Chat";
+}
+
+/** A conversation as a note: a title, when and with what it was asked, each question and answer, and sources. */
+export function chatMarkdown(
+  turns: Array<{ role: "user" | "assistant"; content: string; read?: string[]; error?: string }>,
+  opts: { title: string; date: string; model: string; link(path: string): string },
+): string {
+  const out = [`---`, `created: ${opts.date}`, `model: ${opts.model}`, `tags: [ai-chat]`, `---`, `# ${opts.title}`, ""];
+  for (const t of turns) {
+    if (t.role === "user") {
+      out.push(...t.content.trim().split("\n").map((l) => `> ${l}`), "");
+    } else if (!t.error && t.content.trim()) {
+      out.push(t.content.trim(), "");
+      if (t.read?.length) out.push(`Sources: ${t.read.map(opts.link).join(", ")}`, "");
+    }
+  }
+  return out.join("\n").replace(/\n+$/, "\n");
 }

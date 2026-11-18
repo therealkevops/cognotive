@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addressSpaceHint, defaultAiSettings, normalizeAiSettings, normalizeBaseUrl } from "./providers";
 import { keyHint } from "./keys";
-import { buildMessages, chatTitle, fitText } from "./context";
+import { buildMessages, chatMarkdown, chatTitle, fitText } from "./context";
 import { localAdvice } from "./diagnostics";
 
 describe("settings", () => {
@@ -59,6 +59,21 @@ describe("context", () => {
     expect(text.length).toBeLessThan(1100);
     expect(text).toContain("left out");
     expect(fitText("short").cut).toBe(false);
+  });
+
+  it("writes a conversation as a note", () => {
+    const md = chatMarkdown(
+      [
+        { role: "user", content: "What's in Bread?\nBriefly." },
+        { role: "assistant", content: "A starter.", read: ["Bread.md"] },
+        { role: "user", content: "Again" },
+        { role: "assistant", content: "", error: "Too many requests" },
+      ],
+      { title: "What's in Bread", date: "2026-11-18", model: "m", link: (p) => `[[${p.replace(/\.md$/, "")}]]` },
+    );
+    expect(md).toBe(
+      "---\ncreated: 2026-11-18\nmodel: m\ntags: [ai-chat]\n---\n# What's in Bread\n\n> What's in Bread?\n> Briefly.\n\nA starter.\n\nSources: [[Bread]]\n\n> Again\n",
+    );
   });
 
   it("titles a chat from its first line", () => {

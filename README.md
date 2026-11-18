@@ -141,7 +141,17 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   properties, folders, repository health), cites them as `[[links]]`, and each answer lists every
   note it read and every step it took. Models that can't use tools (many small local ones) are given
   the notes that best match the question instead. The agent can be turned off, and the steps per
-  question limited, in **Settings → AI**. Set it up there:
+  question limited, in **Settings → AI**.
+  - **Proposed changes:** asked to, the agent proposes new notes, additions (at the end or under a
+    heading), edits, properties and links. Each shows as a diff under the answer, to **Apply**,
+    **Edit** first, or **Reject** (or **Apply all**); nothing changes until you apply it. A change is
+    merged onto edits made since it was proposed, and refused if they touch the same lines. Turn
+    proposals off for a read-only agent
+  - **Save as note** keeps a chat in the `AI/` folder (set in **Settings → AI**), with its sources
+  - **Ask** about a selection (Ctrl/Cmd+Shift+Enter, or *Ask AI about the selection…*): the answer
+    can be saved as a note that the selection then links to, inserted below, or copied
+
+  Set it up in **Settings → AI**:
   - **OpenRouter** (one key, hundreds of models): the key is checked and shows its spend limit, and
     the model list is searchable, with prices and which models can use tools
   - **Local**: Ollama (`http://localhost:11434/v1`) or LM Studio (`http://localhost:1234/v1`), with a

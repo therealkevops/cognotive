@@ -5,8 +5,9 @@ How to bring agentic AI into noted-ai, borrowing the provider design of
 OpenAI-compatible endpoint, called straight from the browser) and building the agent on the
 repository's own structure: links, hubs, properties, tags and health checks.
 
-**Status:** phases A (providers and chat) and B (read agent) are done; phase C (write proposals)
-is next. `get_open_note` became part of the prompt instead of a tool: the open note's text goes with
+**Status:** phases A (providers and chat), B (read agent) and C (write proposals, save chat as
+note, Ask) are done; phase D (agent actions) is next. Ask uses Ctrl/Cmd+Shift+Enter, because
+Chrome keeps Ctrl+Shift+A for tab search. `get_open_note` became part of the prompt instead of a tool: the open note's text goes with
 a question while its chip is on, and only its path otherwise.
 
 This replaces section 5 ("Querying with the LLM") and phase 5 of [PLAN.md](PLAN.md), which assumed

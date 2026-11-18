@@ -1206,3 +1206,32 @@ mark {
 .chat-activity summary::-webkit-details-marker {
   display: none;
 }
+
+/* Proposed changes from the AI, as a line diff. */
+.proposal-diff {
+  max-height: 16rem;
+  overflow: auto;
+  border-radius: 0.375rem;
+  background: color-mix(in oklab, var(--foreground) 4%, transparent);
+  padding: 0.375rem 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+.proposal-diff > span {
+  display: block;
+  padding: 0 0.5rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.proposal-add {
+  background: color-mix(in oklab, #2f9e5b 16%, transparent);
+}
+.proposal-del {
+  background: color-mix(in oklab, #c2412d 14%, transparent);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in oklab, #c2412d 50%, transparent);
+}
+.proposal-skip {
+  color: var(--muted);
+  font-style: italic;
+}

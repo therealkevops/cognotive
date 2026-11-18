@@ -1,7 +1,9 @@
 import { runAgent } from "./agent";
 import { buildMessages, type NoteContext } from "./context";
 import { AiError, streamChat, type ChatMessage, type Endpoint } from "./openai-compatible";
-import type { ToolEnv } from "./tools";
+import type { LinkFormat } from "../links/format";
+import { proposalId, type Proposal } from "./proposals";
+import type { ProposalSink, ToolEnv } from "./tools";
 
 /**
  * The current conversation, kept outside React so it survives switching panel
@@ -24,6 +26,15 @@ export interface ChatTurn {
   /** Ran out of steps. */
   limited?: boolean;
   tokens?: number;
+  /** Changes proposed in this answer, waiting for the user (or applied, or rejected). */
+  proposals?: Proposal[];
+}
+
+/** The repository's files as they are now, for building proposals on. */
+export interface FileView {
+  text(path: string): string | undefined;
+  exists(path: string): boolean;
+  linkFormat: LinkFormat;
 }
 
 export interface ChatState {
@@ -40,6 +51,28 @@ export interface AskOptions {
   maxSteps?: number;
   /** The open note's path, when its text isn't sent. */
   openPath?: string | null;
+  /** Present when the agent may propose changes. */
+  files?: FileView;
+}
+
+const allProposals = () => state.turns.flatMap((t) => t.proposals ?? []);
+
+/** Proposals still waiting, and the files as they'd be with them applied. */
+function sinkFor(files: FileView, add: (p: Proposal) => void): ProposalSink {
+  const pendingText = (path: string) =>
+    allProposals()
+      .filter((p) => p.path === path && p.status === "pending" && p.kind !== "property")
+      .at(-1)?.after;
+  return {
+    linkFormat: files.linkFormat,
+    textOf: (path) => pendingText(path) ?? files.text(path),
+    exists: (path) => files.exists(path) || pendingText(path) !== undefined,
+    add(p) {
+      const full: Proposal = { ...p, id: proposalId(), status: "pending" };
+      add(full);
+      return full;
+    },
+  };
 }
 
 let state: ChatState = { scope: "", turns: [], busy: false };
@@ -66,6 +99,15 @@ export const chatStore = {
   stop() {
     controller?.abort();
   },
+  /** Changes a proposal (its status after applying or rejecting, or its text after editing). */
+  updateProposal(id: string, patch: Partial<Proposal>) {
+    emit({
+      turns: state.turns.map((t) =>
+        t.proposals?.some((p) => p.id === id) ? { ...t, proposals: t.proposals.map((p) => (p.id === id ? { ...p, ...patch } : p)) } : t,
+      ),
+    });
+  },
+  proposals: allProposals,
   /** Asks a question (or, with no question, asks the last one again). */
   async send(ep: Endpoint, model: string, question: string | null, note: NoteContext | null, opts: AskOptions = {}) {
     if (state.busy) return;
@@ -83,15 +125,18 @@ export const chatStore = {
     const ctrl = new AbortController();
     controller = ctrl;
     const scope = state.scope;
-    const env = opts.env;
+    const env = opts.env && opts.files ? { ...opts.env, proposals: sinkFor(opts.files, (p) => update((a) => ({ proposals: [...(a.proposals ?? []), p] }))) } : opts.env;
     let answer: ChatTurn = { role: "assistant", content: "", pending: true, steps: [], read: note ? [note.path] : [] };
-    const update = (patch: Partial<ChatTurn>) => {
+    const update = (patch: Partial<ChatTurn> | ((a: ChatTurn) => Partial<ChatTurn>)) => {
       if (controller !== ctrl || state.scope !== scope) return; // reset meanwhile
-      answer = { ...answer, ...patch };
+      // Proposals may have been applied or rejected meanwhile: keep that.
+      const live = state.turns[turns.length];
+      if (live?.role === "assistant" && live.proposals) answer = { ...answer, proposals: live.proposals };
+      answer = { ...answer, ...(typeof patch === "function" ? patch(answer) : patch) };
       emit({ turns: [...turns, answer] });
     };
     emit({ turns: [...turns, answer], busy: true });
-    const messages = buildMessages(history, note, { agent: !!env && opts.tools !== false, openPath: opts.openPath });
+    const messages = buildMessages(history, note, { agent: !!env && opts.tools !== false, write: !!opts.files, openPath: opts.openPath });
     const addRead = (paths: string[]) => [...(answer.read ?? []), ...paths.filter((p) => !answer.read?.includes(p))];
     try {
       if (!env) {
@@ -116,6 +161,7 @@ export const chatStore = {
             if (e.type === "text") update({ content: answer.content + e.delta });
             else if (e.type === "reset") update({ content: "" });
             else if (e.type === "mode") update({ bySearch: true });
+            else if (e.type === "proposal") return; // added by the sink as it's made
             else update({ steps: [...(answer.steps ?? []), e.label], read: addRead(e.read) });
           },
         });

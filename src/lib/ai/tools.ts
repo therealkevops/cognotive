@@ -1,11 +1,15 @@
-import { splitFrontmatter } from "../markdown/frontmatter";
+import { yamlValue } from "../editor/properties";
+import { setFrontmatterProperty, splitFrontmatter } from "../markdown/frontmatter";
+import { formatLink, type LinkFormat } from "../links/format";
+import { addToHub } from "../links/hubs";
 import { sectionUnder } from "../markdown/remark-links";
 import { vaultHealth } from "../links/health";
 import { hubsFor, pinnedHubs } from "../links/hubs";
+import { appendText, notePathFrom, replaceOnce, type Proposal } from "./proposals";
 import type { LinkIndex } from "../links/link-index";
 import { filesWithProperties, parsePropertyQuery, valueText } from "../links/property-query";
 import type { NoteIndex } from "../search/note-index";
-import { displayName, isNote } from "../vault/paths";
+import { displayName, isNote, validateName } from "../vault/paths";
 import type { ToolSpec } from "./openai-compatible";
 
 /**
@@ -20,6 +24,17 @@ export interface ToolEnv {
   mtime(path: string): number | undefined;
   /** Notes Repository health leaves out. */
   ignored?(path: string): boolean;
+  /** Present when the agent may propose changes. */
+  proposals?: ProposalSink;
+}
+
+/** Where proposed changes go, and the repository as it would be with the pending ones. */
+export interface ProposalSink {
+  /** A file's text with pending proposals applied (undefined: no such file). */
+  textOf(path: string): string | undefined;
+  exists(path: string): boolean;
+  linkFormat: LinkFormat;
+  add(p: Omit<Proposal, "id" | "status">): Proposal;
 }
 
 /** One tool's answer: text for the model, and the notes whose text it sent. */
@@ -28,6 +43,7 @@ export interface ToolResult {
   read: string[];
   /** A short line for the chat, e.g. "Searched “budget”". */
   label: string;
+  proposal?: Proposal;
 }
 
 /** Most text one tool result may hold (characters), to keep the context small. */
@@ -99,6 +115,134 @@ export const READ_TOOLS: ToolSpec[] = [
   fn("list_folder", "Files and folders in a folder (\"\" for the top).", { path: { type: "string" } }),
   fn("repository_health", "How well connected the notes are: score, orphans, dead ends, broken links, stale hubs, hubs to write.", {}),
 ];
+
+export const WRITE_TOOLS: ToolSpec[] = [
+  fn(
+    "create_note",
+    "Proposes a new note. It can't replace an existing one.",
+    {
+      path: { type: "string", description: "e.g. Projects/Garden plan.md" },
+      content: { type: "string", description: "Markdown, without frontmatter" },
+      properties: { type: "object", description: "Properties for its frontmatter, e.g. {\"tags\": [\"garden\"]}" },
+    },
+    ["path", "content"],
+  ),
+  fn(
+    "append_to_note",
+    "Proposes adding text at the end of a note, or at the end of one heading's section.",
+    { path: { type: "string" }, text: { type: "string" }, under_heading: { type: "string" } },
+    ["path", "text"],
+  ),
+  fn(
+    "edit_note",
+    "Proposes replacing text in a note. `find` must match the note's text exactly, once: read the note first.",
+    { path: { type: "string" }, find: { type: "string" }, replace: { type: "string" } },
+    ["path", "find", "replace"],
+  ),
+  fn(
+    "set_property",
+    "Proposes setting a property of any file (null removes it). Lists are JSON arrays.",
+    { path: { type: "string" }, key: { type: "string" }, value: { description: "Text, number, true/false, a list, or null" } },
+    ["path", "key", "value"],
+  ),
+  fn(
+    "add_link",
+    "Proposes linking one note from another: an unlinked mention becomes a link, otherwise the link is listed (in a hub's Notes section, or at the end).",
+    { from: { type: "string" }, to: { type: "string" } },
+    ["from", "to"],
+  ),
+];
+
+const proposed = (r: Proposal, label: string): ToolResult => ({
+  content: `Proposed (${r.id}): ${r.summary}. The user will review it; nothing changes until they apply it. Don't propose it again.`,
+  read: [],
+  label,
+  proposal: r,
+});
+
+/** A file for writing: an existing one (by name or path), or one proposed in this conversation. */
+function writable(env: ToolEnv, sink: ProposalSink, ref: string): string | null {
+  const found = findFile(env, ref);
+  if (found) return found;
+  const asNote = notePathFrom(ref);
+  return sink.textOf(asNote) !== undefined ? asNote : null;
+}
+
+const WRITE_HANDLERS: Record<string, (env: ToolEnv, sink: ProposalSink, args: Record<string, unknown>) => ToolResult> = {
+  create_note(env, sink, a) {
+    const path = notePathFrom(str(a.path));
+    const label = `Proposed ${displayName(path)}`;
+    const bad = path.split("/").map((seg) => validateName(seg.replace(/\.md$/i, ""))).find(Boolean);
+    if (bad) return { content: `Can't use "${path}": ${bad}`, read: [], label: "Tried to create a note" };
+    if (sink.exists(path) || findFile(env, path)) {
+      return { content: `"${path}" already exists. Use append_to_note or edit_note to change it.`, read: [], label: "Tried to create a note" };
+    }
+    let text = str(a.content).replace(/^\n+/, "");
+    if (!text.endsWith("\n")) text += "\n";
+    const props = a.properties && typeof a.properties === "object" && !Array.isArray(a.properties) ? (a.properties as Record<string, unknown>) : {};
+    for (const [k, v] of Object.entries(props)) if (/^[A-Za-z][\w-]*$/.test(k)) text = setFrontmatterProperty(text, k, yamlValue(v));
+    return proposed(sink.add({ kind: "create", path, summary: `Create ${displayName(path)}`, before: null, after: text }), label);
+  },
+
+  append_to_note(env, sink, a) {
+    const ref = str(a.path);
+    const path = writable(env, sink, ref);
+    if (!path || !isNote(path)) return notFound(ref, "Tried to add to a note");
+    const before = sink.textOf(path) ?? "";
+    const heading = str(a.under_heading).trim();
+    const after = appendText(before, str(a.text), heading || undefined);
+    if (after === null) return { content: `"${path}" has no heading "${heading}".`, read: [], label: "Tried to add to a note" };
+    const where = heading ? `under “${heading}” in ${displayName(path)}` : `to the end of ${displayName(path)}`;
+    return proposed(sink.add({ kind: "append", path, summary: `Add ${where}`, before, after }), `Proposed adding to ${displayName(path)}`);
+  },
+
+  edit_note(env, sink, a) {
+    const ref = str(a.path);
+    const path = writable(env, sink, ref);
+    if (!path || !isNote(path)) return notFound(ref, "Tried to edit a note");
+    const before = sink.textOf(path) ?? "";
+    const r = replaceOnce(before, str(a.find), str(a.replace));
+    if ("error" in r) return { content: r.error, read: [], label: `Tried to edit ${displayName(path)}` };
+    return proposed(sink.add({ kind: "edit", path, summary: `Edit ${displayName(path)}`, before, after: r.text }), `Proposed an edit to ${displayName(path)}`);
+  },
+
+  set_property(env, sink, a) {
+    const ref = str(a.path);
+    const path = findFile(env, ref);
+    if (!path) return notFound(ref, "Tried to set a property");
+    const key = str(a.key).trim();
+    if (!/^[A-Za-z][\w-]*$/.test(key)) return { content: `"${key}" isn't a valid property name.`, read: [], label: "Tried to set a property" };
+    const value = a.value === null ? undefined : a.value;
+    const old = env.links.get(path)?.properties[key];
+    const summary = value === undefined ? `Remove ${key} from ${displayName(path)}` : `Set ${key} of ${displayName(path)} to ${valueText(value)}`;
+    const line = (v: unknown) => (v === undefined ? "" : `${key}: ${yamlValue(v)}`);
+    return proposed(
+      sink.add({ kind: "property", path, summary, before: line(old), after: line(value), property: { key, value, old } }),
+      `Proposed ${key} for ${displayName(path)}`,
+    );
+  },
+
+  add_link(env, sink, a) {
+    const from = writable(env, sink, str(a.from));
+    if (!from || !isNote(from)) return notFound(str(a.from), "Tried to add a link");
+    const toRef = str(a.to).replace(/^\[\[|\]\]$/g, "");
+    const to = findFile(env, toRef);
+    const target = to ? env.links.linkText(to) : toRef.replace(/\.md$/i, "");
+    const before = sink.textOf(from) ?? "";
+    const label = `Proposed a link to ${to ? displayName(to) : target}`;
+    // An unlinked mention of the note becomes the link.
+    const mention = to ? env.links.unlinkedMentions(to).find((m) => m.source === from && before.slice(m.from, m.from + m.text.length) === m.text) : undefined;
+    let after: string;
+    if (mention) {
+      const link = formatLink(sink.linkFormat, from, { path: to, target, alias: target === mention.text ? undefined : mention.text }, target);
+      after = before.slice(0, mention.from) + link + before.slice(mention.from + mention.text.length);
+    } else {
+      after = addToHub(before, formatLink(sink.linkFormat, from, { path: to, target }, target));
+    }
+    const summary = `Link ${to ? displayName(to) : target} from ${displayName(from)}`;
+    return proposed(sink.add({ kind: "link", path: from, summary, before, after }), label);
+  },
+};
 
 type Handler = (env: ToolEnv, args: Record<string, unknown>) => ToolResult;
 
@@ -307,7 +451,9 @@ function plainStart(env: ToolEnv, path: string): string {
 
 /** Runs a tool call. Unknown tools and bad arguments come back as text the model can correct. */
 export function runTool(env: ToolEnv, name: string, rawArgs: string): ToolResult {
-  const handler = HANDLERS[name];
+  const sink = env.proposals;
+  const write = Object.hasOwn(WRITE_HANDLERS, name) ? WRITE_HANDLERS[name] : undefined;
+  const handler: Handler | undefined = Object.hasOwn(HANDLERS, name) ? HANDLERS[name] : write && sink ? (e, a) => write(e, sink, a) : undefined;
   if (!handler) return { content: `There's no tool "${name}".`, read: [], label: `Tried ${name}` };
   let args: Record<string, unknown> = {};
   if (rawArgs.trim()) {

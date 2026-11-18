@@ -56,6 +56,8 @@ export interface LinkHost {
   addBlockId?(path: string, block: Block, id: string): void;
   /** Opens a note picker that links the selection to the chosen note (Ctrl/Cmd+Shift+K). */
   linkSelection?(): void;
+  /** Asks the AI about the selection (Ctrl/Cmd+Shift+Enter; Ctrl+Shift+A is taken by Chrome's tab search). */
+  askSelection?(): void;
   headings(path: string): string[];
   /**
    * What a hover card shows for a link: the note (or its heading section or
@@ -651,6 +653,15 @@ const linkSelectionKey = Prec.high(
         const host = view.state.facet(linkHost);
         if (!host?.linkSelection) return false;
         host.linkSelection();
+        return true;
+      },
+    },
+    {
+      key: "Mod-Shift-Enter",
+      run: (view) => {
+        const host = view.state.facet(linkHost);
+        if (!host?.askSelection || view.state.selection.main.empty) return false;
+        host.askSelection();
         return true;
       },
     },

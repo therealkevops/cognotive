@@ -73,6 +73,8 @@ export interface AiSettings {
   agent: boolean;
   /** Most tool rounds per question. */
   maxSteps: number;
+  /** Let the model propose changes (shown for review; off: a read-only agent). */
+  write: boolean;
 }
 
 export function defaultAiSettings(): AiSettings {
@@ -86,6 +88,7 @@ export function defaultAiSettings(): AiSettings {
     sessionOnlyKeys: false,
     agent: true,
     maxSteps: 12,
+    write: true,
   };
 }
 
@@ -97,6 +100,7 @@ export function normalizeAiSettings(raw: unknown): AiSettings {
   if (r.provider && r.provider in PROVIDERS) out.provider = r.provider;
   if (typeof r.sessionOnlyKeys === "boolean") out.sessionOnlyKeys = r.sessionOnlyKeys;
   if (typeof r.agent === "boolean") out.agent = r.agent;
+  if (typeof r.write === "boolean") out.write = r.write;
   if (typeof r.maxSteps === "number" && Number.isFinite(r.maxSteps)) out.maxSteps = Math.min(30, Math.max(1, Math.round(r.maxSteps)));
   for (const id of Object.keys(PROVIDERS) as ProviderId[]) {
     const slot = r.providers?.[id];

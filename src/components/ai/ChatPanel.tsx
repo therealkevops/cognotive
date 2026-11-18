@@ -1,10 +1,15 @@
 "use client";
 
-import { ArrowUp, ChevronRight, FileText, RotateCcw, Search, Settings, Sparkles, Square, SquarePen } from "lucide-react";
+import { ArrowUp, ChevronRight, FileDown, FileText, RotateCcw, Search, Settings, Sparkles, Square, SquarePen } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
-import { fetchModels } from "@/lib/ai/catalog";
-import { chatStore, type ChatTurn } from "@/lib/ai/chat-store";
-import type { ToolEnv } from "@/lib/ai/tools";
+import { endpointFor } from "@/lib/ai/endpoint";
+import { chatStore, type ChatTurn, type FileView } from "@/lib/ai/chat-store";
+import { chatMarkdown, chatTitle } from "@/lib/ai/context";
+import { formatLink } from "@/lib/links/format";
+import { todayStamp } from "@/lib/links/health";
+import { joinPath, uniquePath } from "@/lib/vault/paths";
+import { ProposalList } from "./Proposals";
+import { useToolEnv } from "./useToolEnv";
 import { loadKey } from "@/lib/ai/keys";
 import { PROVIDERS, remoteAllowed } from "@/lib/ai/providers";
 import { useAiSettings } from "@/lib/ai/useAiSettings";
@@ -77,30 +82,41 @@ export function ChatPanel({
     if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 120) el.scrollTop = el.scrollHeight;
   }, [last?.content, chat.turns.length]);
 
-  // What the agent may read: the repository's indexes, as they are when it looks.
-  const env = useMemo<ToolEnv>(
+  const env = useToolEnv();
+
+  // The files proposals are built on: the open note as typed, others as saved.
+  const files = useMemo<FileView>(
     () => ({
-      links: vault.links,
-      search: vault.index,
-      files: () => vault.entries.filter((e) => e.kind === "file").map((e) => e.path),
-      mtime: (p) => vault.entries.find((e) => e.path === p)?.mtime,
-      ignored: (p) => vault.settings.healthIgnore.includes(p),
+      text: (p) => (p === vault.active?.path ? vault.activeText : vault.links.content(p)),
+      exists: (p) => vault.exists(p),
+      linkFormat: vault.settings.linkFormat,
     }),
-    [vault.links, vault.index, vault.entries, vault.settings.healthIgnore],
+    [vault],
   );
+
+  const saveAsNote = async () => {
+    const first = chat.turns.find((t) => t.role === "user");
+    if (!first) return;
+    const title = chatTitle(first.content);
+    const date = todayStamp();
+    const folder = vault.settings.aiFolder || "AI";
+    const path = uniquePath(joinPath(folder, `${date} ${title}.md`), (p) => vault.exists(p));
+    const link = (p: string) => formatLink(vault.settings.linkFormat, path, { path: p, target: vault.links.linkText(p) }, vault.links.linkText(p));
+    await vault.createNoteWith(path, chatMarkdown(chat.turns, { title, date, model, link }));
+  };
 
   const send = async (question: string | null) => {
     if (setup || chat.busy) return;
-    const openRouter = ai.provider === "openrouter";
-    const apiKey = preset.allowsKey ? await loadKey(ai.provider) : "";
     const note = withNote && notePath ? { path: notePath, text: vault.activeText } : null;
     // OpenRouter says which models can't use tools; others are tried, and fall back to search.
-    const info = openRouter ? (await fetchModels({ baseUrl, openRouter }).catch(() => [])).find((m) => m.id === model) : undefined;
-    void chatStore.send({ baseUrl, apiKey, openRouter }, model, question, note, {
+    const target = await endpointFor(ai, { remoteAllowed: !blocked });
+    if ("error" in target) return;
+    void chatStore.send(target.ep, target.model, question, note, {
       env: ai.agent ? env : undefined,
-      tools: info?.tools,
+      tools: target.tools,
       maxSteps: ai.maxSteps,
       openPath: notePath,
+      files: ai.agent && ai.write ? files : undefined,
     });
   };
 
@@ -130,6 +146,16 @@ export function ChatPanel({
         >
           {preset.label}
           {model && ` · ${model}`}
+        </button>
+        <button
+          type="button"
+          className="icon-button h-7 w-7"
+          aria-label="Save chat as a note"
+          title={`Save chat as a note (in ${vault.settings.aiFolder || "AI"}/)`}
+          disabled={chat.busy || !chat.turns.some((t) => t.role === "assistant" && t.content)}
+          onClick={() => void saveAsNote()}
+        >
+          <FileDown size={15} aria-hidden />
         </button>
         <button
           type="button"
@@ -267,6 +293,7 @@ function Turn({
       ) : turn.pending ? (
         <p className="animate-pulse text-muted">Thinking…</p>
       ) : null}
+      {turn.proposals?.length ? <ProposalList proposals={turn.proposals} onOpen={onOpen} /> : null}
       {turn.stopped && <p className="mt-1 text-xs text-muted">Stopped.</p>}
       {turn.limited && <p className="mt-1 text-xs text-muted">Reached the step limit (Settings → AI), so this answer may be incomplete.</p>}
       {!turn.pending && turn.tokens ? (

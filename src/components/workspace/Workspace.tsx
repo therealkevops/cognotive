@@ -44,6 +44,7 @@ import { collectPropertyInfo, yamlValue, type PropertyInfo } from "@/lib/editor/
 import { drawingProperties, keepDrawingProperties, setDrawingProperty } from "@/lib/drawing/properties";
 import type { LinkContext } from "@/lib/markdown/remark-links";
 import { ChatPanel } from "../ai/ChatPanel";
+import { AskDialog, type AskSource } from "../ai/AskDialog";
 import { serializeCanvas } from "@/lib/canvas/format";
 import { neighbourhoodCanvas, type Neighbour } from "@/lib/canvas/map";
 import { convertLinks, formatLink, markdownLink } from "@/lib/links/format";
@@ -190,6 +191,7 @@ export function Workspace() {
   const [creating, setCreating] = useState<{ name: string; folder: string; hub?: boolean } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [linkPickerOpen, setLinkPickerOpen] = useState(false);
+  const [asking, setAsking] = useState<AskSource | null>(null);
   /** Notes opened in this session, most recent first, for ranking link suggestions. */
   const [recent, setRecent] = useState<string[]>([]);
   const [importNote, setImportNote] = useState<string | null>(null);
@@ -535,6 +537,7 @@ export function Workspace() {
           })),
       linkText: (p) => (vault.entries.some((e) => e.path === p && e.kind === "file") ? vault.links.linkText(p) : null),
       linkSelection: () => setLinkPickerOpen(true),
+      askSelection: () => askRef.current(),
       currentPath: () => vault.active?.path ?? null,
       formatLink: (inner, embed) => {
         const from = vault.active?.path;
@@ -601,6 +604,33 @@ export function Workspace() {
    * Links the editor's selection to `path`, in the vault's link format:
    * "[[Note|selection]]", or "[[Note]]" if nothing (or the link text) is selected.
    */
+  /** Opens "Ask" on the editor's selection. */
+  const askSelection = () => {
+    const path = vault.active?.path;
+    if (!view || !path) return;
+    const { from, to } = view.state.selection.main;
+    const text = view.state.sliceDoc(from, to);
+    if (!text.trim()) return;
+    setAsking({ path, from, to, text });
+  };
+  const askRef = useRef(askSelection);
+  useEffect(() => {
+    askRef.current = askSelection;
+  });
+  /** Replaces a passage (if it's still there) with `insert`. */
+  const replacePassage = (src: AskSource, insert: string) => {
+    if (!view || vault.active?.path !== src.path || view.state.sliceDoc(src.from, src.to) !== src.text) return;
+    view.dispatch({ changes: { from: src.from, to: src.to, insert }, userEvent: "input" });
+  };
+  /** Adds text after the paragraph holding a passage. */
+  const insertAfterPassage = (src: AskSource, text: string) => {
+    if (!view || vault.active?.path !== src.path) return;
+    const doc = view.state.doc;
+    let line = doc.lineAt(Math.min(src.to, doc.length));
+    while (line.number < doc.lines && doc.line(line.number + 1).text.trim()) line = doc.line(line.number + 1);
+    view.dispatch({ changes: { from: line.to, insert: `\n\n${text}` }, userEvent: "input" });
+  };
+
   const linkSelectionTo = (path: string) => {
     if (!view) return;
     const target = vault.links.linkText(path);
@@ -1065,6 +1095,7 @@ export function Workspace() {
     { id: "table-from-lines", label: "Convert selected lines (CSV) to a table", when: editing },
     { id: "table-to-lines", label: "Convert table to CSV lines", when: editing },
     { id: "link-selection", label: "Link selection to a note…", hint: "Ctrl/Cmd+Shift+K", when: editing },
+    { id: "ask-selection", label: "Ask AI about the selection…", hint: "Ctrl/Cmd+Shift+Enter", when: editing },
     { id: "links-to-markdown", label: "Convert links in this note to markdown links", when: kind === "note" },
     { id: "links-to-wikilinks", label: "Convert links in this note to wikilinks", when: kind === "note" },
     { id: "switcher", label: "Open a note…", hint: "Ctrl/Cmd+O" },
@@ -1131,6 +1162,7 @@ export function Workspace() {
     "table-from-lines": () => view && editTableSource(view, "from-lines"),
     "table-to-lines": () => view && editTableSource(view, "to-lines"),
     "link-selection": () => setLinkPickerOpen(true),
+    "ask-selection": () => askSelection(),
     "links-to-markdown": () => convertActiveLinks("markdown"),
     "links-to-wikilinks": () => convertActiveLinks("wikilink"),
     switcher: () => setSwitcherOpen(true),
@@ -1485,6 +1517,22 @@ export function Workspace() {
           onClose={() => {
             setLinkPickerOpen(false);
             view?.focus();
+          }}
+        />
+      )}
+      {asking && (
+        <AskDialog
+          source={asking}
+          links={linkContext}
+          onClose={() => {
+            setAsking(null);
+            view?.focus();
+          }}
+          onLinkSelection={replacePassage}
+          onInsert={insertAfterPassage}
+          onOpenSettings={() => {
+            setAsking(null);
+            setSettingsOpen("ai");
           }}
         />
       )}
