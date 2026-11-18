@@ -21,6 +21,10 @@ describe("parseSettings", () => {
     });
   });
 
+  it("keeps only known property types", () => {
+    expect(parseSettings('{"propertyTypes": {"priority": "number", "x": "colour", "y": 3}}').propertyTypes).toEqual({ priority: "number" });
+  });
+
   it("keeps only strings in the health ignore list", () => {
     expect(parseSettings('{"healthIgnore": ["A.md", 3, null]}').healthIgnore).toEqual(["A.md"]);
     expect(parseSettings('{"healthIgnore": "A.md"}').healthIgnore).toEqual([]);

@@ -22,6 +22,8 @@ export interface VaultSettings {
   healthIgnore: string[];
   /** Properties every new note starts with (e.g. ["created", "tags"]), in this order. */
   newNoteProperties: string[];
+  /** Types chosen for the repository's own properties (built-in ones have theirs). */
+  propertyTypes: Record<string, "text" | "list" | "number" | "date" | "boolean">;
 }
 
 export const SETTINGS_PATH = ".noted/settings.json";
@@ -38,6 +40,7 @@ export const DEFAULT_SETTINGS: VaultSettings = {
   linkFormat: "wikilink",
   healthIgnore: [],
   newNoteProperties: [],
+  propertyTypes: {},
 };
 
 export function parseSettings(text: string | undefined): VaultSettings {
@@ -52,6 +55,13 @@ export function parseSettings(text: string | undefined): VaultSettings {
     if (!["current", "root", "folder"].includes(out.newNoteLocation)) out.newNoteLocation = "current";
     if (out.linkFormat !== "wikilink" && out.linkFormat !== "markdown") out.linkFormat = "wikilink";
     out.healthIgnore = Array.isArray(raw.healthIgnore) ? raw.healthIgnore.filter((p): p is string => typeof p === "string") : [];
+    const types: VaultSettings["propertyTypes"] = {};
+    if (raw.propertyTypes && typeof raw.propertyTypes === "object" && !Array.isArray(raw.propertyTypes)) {
+      for (const [k, v] of Object.entries(raw.propertyTypes as Record<string, unknown>)) {
+        if (typeof v === "string" && ["text", "list", "number", "date", "boolean"].includes(v)) types[k] = v as VaultSettings["propertyTypes"][string];
+      }
+    }
+    out.propertyTypes = types;
     out.newNoteProperties = Array.isArray(raw.newNoteProperties)
       ? [...new Set(raw.newNoteProperties.filter((p): p is string => typeof p === "string" && /^[A-Za-z][\w-]*$/.test(p)))]
       : [];

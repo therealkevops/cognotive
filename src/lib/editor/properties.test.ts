@@ -74,6 +74,15 @@ describe("checkProperties", () => {
     expect(check("---\ntags: [a\n---\n")[0]).toContain("aren't valid YAML");
     expect(check("---\nhub: true\n")[0]).toContain("never end");
   });
+
+  it("checks your own properties against the types chosen for them", () => {
+    const state = EditorState.create({ doc: "---\npriority: high\ndue: soon\n---\n" });
+    expect(checkProperties(state, { priority: "number", due: "date" }).map((d) => d.message)).toEqual([
+      "priority should be a number.",
+      expect.stringContaining("due should be a date"),
+    ]);
+    expect(checkProperties(state)).toEqual([]);
+  });
 });
 
 describe("yamlValue", () => {

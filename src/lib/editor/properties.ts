@@ -18,10 +18,27 @@ export interface PropertyInfo {
   /** Values used for a property across the repository, most used first. */
   values(key: string): string[];
   tags: string[];
+  /** Types chosen for the repository's own properties (Settings → Properties). */
+  types?: Record<string, PropertyType>;
+}
+
+/** The kinds of value a property can hold. */
+export type PropertyType = "text" | "list" | "number" | "date" | "boolean";
+export const PROPERTY_TYPES: Array<[PropertyType, string]> = [
+  ["text", "Text"],
+  ["list", "List"],
+  ["number", "Number"],
+  ["date", "Date"],
+  ["boolean", "Checkbox"],
+];
+
+/** A property's type: built in, chosen in settings, or none (undefined). */
+export function kindOf(key: string, info?: Pick<PropertyInfo, "types"> | null): PropertyType | undefined {
+  return PROPERTY_DOCS[key]?.kind ?? info?.types?.[key];
 }
 
 /** Gathers what the repository's notes use, for suggestions. */
-export function collectPropertyInfo(index: LinkIndex): PropertyInfo {
+export function collectPropertyInfo(index: LinkIndex, types: Record<string, PropertyType> = {}): PropertyInfo {
   const keys = new Map<string, number>();
   const values = new Map<string, Map<string, number>>();
   for (const path of index.paths()) {
@@ -45,10 +62,11 @@ export function collectPropertyInfo(index: LinkIndex): PropertyInfo {
     keys: [...keys].map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count || a.key.localeCompare(b.key)),
     values: (key) => [...(values.get(key) ?? [])].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([v]) => v).slice(0, 50),
     tags,
+    types,
   };
 }
 
-type Kind = "list" | "date" | "boolean" | "text";
+type Kind = PropertyType;
 
 /** Properties noted-ai understands. */
 export const PROPERTY_DOCS: Record<string, { kind: Kind; doc: string }> = {
@@ -120,14 +138,15 @@ export function completeProperties(ctx: CompletionContext): CompletionResult | n
     const options: Completion[] = names.map((key) => {
       const known = PROPERTY_DOCS[key];
       const used = counts.get(key) ?? 0;
+      const typed = kindOf(key, info);
       return {
         label: key,
         type: "property",
-        detail: known ? known.kind : `used in ${used} ${used === 1 ? "note" : "notes"}`,
+        detail: known ? known.kind : `${typed ? `${typed}, ` : ""}used in ${used} ${used === 1 ? "note" : "notes"}`,
         info: known?.doc,
         boost: (known ? 10 : 0) + Math.min(9, used),
         apply: (view: EditorView, _c: Completion, from: number, to: number) => {
-          const kind = known?.kind;
+          const kind = typed;
           const value = kind === "date" ? today() : kind === "list" ? "[]" : "";
           const insert = `${key}: ${value}`;
           const cursor = from + insert.length - (kind === "list" ? 1 : 0);
@@ -155,7 +174,7 @@ export function completeProperties(ctx: CompletionContext): CompletionResult | n
   const typed = valuePart.replace(/^\s+/, "");
   if (/[\]"']/.test(typed)) return null;
   const from = ctx.pos - typed.length;
-  const kind = PROPERTY_DOCS[key]?.kind;
+  const kind = kindOf(key, info);
 
   let values: Array<{ label: string; info?: string; detail?: string }> = [];
   if (kind === "boolean") {
@@ -215,7 +234,7 @@ const propertyHover = hoverTooltip((view, pos) => {
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Mistakes in a note's properties, underlined like errors in code. */
-export function checkProperties(state: EditorState): Diagnostic[] {
+export function checkProperties(state: EditorState, types: Record<string, PropertyType> = {}): Diagnostic[] {
   const fm = frontmatterLines(state);
   if (!fm) return [];
   const out: Diagnostic[] = [];
@@ -264,9 +283,11 @@ export function checkProperties(state: EditorState): Diagnostic[] {
     const key = m[1];
     const value = l.text.slice(m[0].length).trim().replace(/^["']|["']$/g, "");
     const valueRange = { from: l.from + l.text.indexOf(":") + 1, to: l.to };
-    const kind = PROPERTY_DOCS[key]?.kind;
+    const kind = kindOf(key, { types });
     if (!value) continue;
-    if (kind === "boolean" && !/^(true|false|yes|no)$/i.test(value)) {
+    if (kind === "number" && !/^-?\d+(\.\d+)?$/.test(value)) {
+      out.push({ ...valueRange, severity: "warning", message: `${key} should be a number.` });
+    } else if (kind === "boolean" && !/^(true|false|yes|no)$/i.test(value)) {
       out.push({ ...valueRange, severity: "warning", message: `${key} should be true or false.` });
     } else if (kind === "date" && !DATE.test(value)) {
       out.push({ ...valueRange, severity: "warning", message: `${key} should be a date like ${today()}.` });
@@ -280,7 +301,7 @@ export function checkProperties(state: EditorState): Diagnostic[] {
 }
 
 export function propertyExtensions(): Extension {
-  return [propertyHover, linter((view) => checkProperties(view.state), { delay: 400 })];
+  return [propertyHover, linter((view) => checkProperties(view.state, view.state.facet(linkHost)?.propertyInfo?.().types), { delay: 400 })];
 }
 
 /** A value written the way it goes after "name: " in YAML (lists as [a, b]); "" for an empty value. */

@@ -90,6 +90,8 @@ export interface CanvasViewProps {
   onOpenFile(path: string, how?: OpenHow): void;
   /** Shows the file's text instead, to repair a canvas that can't be read. */
   onEditAsText?(): void;
+  /** Suggestions for the canvas's own properties (kept under "properties" in its JSON). */
+  propertyInfo?: PropertyInfo;
   vault: CanvasVault;
 }
 
@@ -192,7 +194,7 @@ export default function CanvasView(props: CanvasViewProps) {
   );
 }
 
-function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault }: CanvasViewProps) {
+function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault, propertyInfo }: CanvasViewProps) {
   const dark = useDarkMode();
   const rf = useReactFlow<CardNode, ArrowEdge>();
   const wrapper = useRef<HTMLDivElement>(null);
@@ -204,6 +206,22 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault 
     const { nodes, edges, ...extra } = data;
     return { nodes: nodes.map(toCard), edges: edges.map(toArrow), extra };
   });
+  // Top-level keys other than nodes and edges (the canvas's properties among them), kept as they are.
+  const [extra, setExtra] = useState<Record<string, unknown>>(start?.extra ?? {});
+  const [showProps, setShowProps] = useState(false);
+  const canvasProps = (extra.properties && typeof extra.properties === "object" && !Array.isArray(extra.properties)
+    ? extra.properties
+    : {}) as Record<string, unknown>;
+  const setCanvasProperty = (key: string, value: unknown) =>
+    setExtra((x) => {
+      const props = { ...((x.properties as Record<string, unknown> | undefined) ?? {}) };
+      if (value === undefined) delete props[key];
+      else props[key] = value;
+      const next = { ...x };
+      if (Object.keys(props).length) next.properties = props;
+      else delete next.properties;
+      return next;
+    });
   const [nodes, setNodes] = useState<CardNode[]>(start?.nodes ?? []);
   const [edges, setEdges] = useState<ArrowEdge[]>(start?.edges ?? []);
   const [editing, setEditing] = useState<string | null>(null);
@@ -220,7 +238,7 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault 
   }, [onChange]);
   useEffect(() => {
     if (!start || busy.current) return;
-    const json = serializeCanvas(toCanvas(nodes, edges, start.extra));
+    const json = serializeCanvas(toCanvas(nodes, edges, extra));
     if (lastSaved.current === null) {
       lastSaved.current = json; // what was loaded isn't an edit
       return;
@@ -228,7 +246,7 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault 
     if (json === lastSaved.current) return;
     lastSaved.current = json;
     onChangeRef.current(json);
-  }, [nodes, edges, start]);
+  }, [nodes, edges, start, extra]);
 
   const update = useCallback((id: string, patch: Partial<CanvasNode>) => {
     setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, data: { c: { ...n.data.c, ...patch } as CanvasNode } } : n)));
@@ -469,6 +487,11 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault 
           <ToolButton label={selectedNodes.length ? "Group the selected cards" : "Add group"} onClick={addGroup}>
             <Group size={16} aria-hidden />
           </ToolButton>
+          {propertyInfo && (
+            <ToolButton label="Canvas properties" onClick={() => setShowProps((v) => !v)}>
+              <SlidersHorizontal size={16} aria-hidden />
+            </ToolButton>
+          )}
           {hasSelection && (
             <>
               <span className="mx-1 h-5 w-px bg-border" aria-hidden />
@@ -503,6 +526,20 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault 
             </>
           )}
         </div>
+
+        {propertyInfo && showProps && (
+          <div
+            role="dialog"
+            aria-label="Properties of this canvas"
+            className="drawing-properties menu-panel"
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Escape") setShowProps(false);
+            }}
+          >
+            <PropertiesEditor properties={canvasProps} info={propertyInfo} onSet={setCanvasProperty} />
+          </div>
+        )}
 
         {nodes.length === 0 && (
           <p className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm text-muted">

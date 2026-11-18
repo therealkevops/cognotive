@@ -99,9 +99,13 @@ export class LinkIndex {
       this.notes.set(path, { content, parsed: { ...fromProperties(drawingProperties(path, content)), links } });
     } else if (isCanvas(path)) {
       const data = parseCanvas(content);
+      const props = (data as { properties?: unknown } | null)?.properties;
       this.notes.set(path, {
         content,
-        parsed: { ...EMPTY_PARSED, links: data ? canvasLinks(data) : [] },
+        parsed: {
+          ...fromProperties(props && typeof props === "object" && !Array.isArray(props) ? (props as Record<string, unknown>) : {}),
+          links: data ? canvasLinks(data) : [],
+        },
         relations: data ? canvasRelations(data) : [],
       });
     } else if (isNote(path)) this.notes.set(path, { content, parsed: parseNote(content) });

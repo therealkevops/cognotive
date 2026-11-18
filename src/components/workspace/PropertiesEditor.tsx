@@ -2,7 +2,7 @@
 
 import { Plus, X } from "lucide-react";
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { PROPERTY_DOCS, type PropertyInfo } from "@/lib/editor/properties";
+import { kindOf, PROPERTY_DOCS, type PropertyInfo } from "@/lib/editor/properties";
 
 /**
  * A note's properties in the reading view, editable in place with the same
@@ -34,7 +34,7 @@ export function PropertiesEditor({
   const add = (key: string) => {
     const k = key.trim();
     if (!/^[A-Za-z][\w-]*$/.test(k) || k in properties) return;
-    const kind = PROPERTY_DOCS[k]?.kind;
+    const kind = kindOf(k, info);
     const d = new Date();
     const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     onSet(k, kind === "date" ? today : kind === "list" ? [] : kind === "boolean" ? true : "");
@@ -96,7 +96,9 @@ function ValueEditor({
   onSet(v: unknown): void;
   autoFocus: boolean;
 }) {
-  const kind = PROPERTY_DOCS[name]?.kind ?? (Array.isArray(value) ? "list" : typeof value === "boolean" ? "boolean" : "text");
+  const kind =
+    kindOf(name, info) ??
+    (Array.isArray(value) ? "list" : typeof value === "boolean" ? "boolean" : typeof value === "number" ? "number" : "text");
 
   if (kind === "boolean") {
     const on = value === true || /^(true|yes)$/i.test(String(value ?? ""));
@@ -131,6 +133,24 @@ function ValueEditor({
           />
         </div>
       </div>
+    );
+  }
+
+  if (kind === "number") {
+    return (
+      <input
+        type="number"
+        aria-label={name}
+        className="properties-input w-32"
+        defaultValue={typeof value === "number" ? value : value === null || value === undefined ? "" : String(value)}
+        autoFocus={autoFocus}
+        onBlur={(e) => {
+          const v = e.target.value.trim();
+          const n = v === "" ? "" : Number(v);
+          if (n !== value && !(v === "" && (value === null || value === undefined || value === ""))) onSet(n);
+        }}
+        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+      />
     );
   }
 

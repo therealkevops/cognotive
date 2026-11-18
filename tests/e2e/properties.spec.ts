@@ -195,3 +195,82 @@ test("an attachment's properties are edited above it, and follow a rename", asyn
   await expect(title).toHaveValue("beach");
   await expect(page.getByTestId("file-view").getByRole("region", { name: "Properties" })).toContainText("#photos");
 });
+
+test("search finds files by property", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".cm-content")).toBeVisible();
+  await page.getByRole("tab", { name: "Search" }).click();
+  const search = page.getByRole("searchbox", { name: "Search all notes" });
+  await search.fill("[tags:guide]");
+  const results = page.getByRole("region", { name: "Search" });
+  await expect(results).toContainText("1 note");
+  await expect(results).toContainText("Linking notes");
+  await expect(results).toContainText("tags: guide");
+  await search.fill("[aliases] link");
+  await expect(results).toContainText("Linking notes");
+  await search.fill("[status]");
+  await expect(results).toContainText("No matches");
+});
+
+test("the Properties tab renames, types and deletes properties everywhere", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".cm-content")).toBeVisible();
+  const { strToU8, zipSync } = await import("fflate");
+  const zip = zipSync({
+    "V/A.md": strToU8("---\nstate: draft\npriority: 2\n---\nA"),
+    "V/B.md": strToU8("---\nstate: done\n---\nB"),
+    "V/C.md": strToU8("---\nstate: old\nstatus: kept\n---\nC"),
+  });
+  await page.getByLabel("Choose a zip to import").setInputFiles({ name: "v.zip", mimeType: "application/zip", buffer: Buffer.from(zip) });
+  await expect(page.getByRole("status").filter({ hasText: "Imported 3 files" })).toBeVisible();
+
+  await page.getByRole("tab", { name: "Properties" }).click();
+  const panel = page.getByRole("region", { name: "Properties" }).first();
+  await panel.getByRole("button", { name: /^state/ }).click();
+  const details = panel.getByRole("group", { name: "state details" });
+  await expect(details).toContainText("draft");
+  await details.getByRole("button", { name: "Rename…" }).click();
+  await details.getByRole("textbox", { name: "New name for state" }).fill("status");
+  await details.getByRole("button", { name: "Rename everywhere" }).click();
+  await expect(panel.getByRole("status")).toContainText("Renamed in 2 files. 1 already had status");
+
+  // A type for one of your own properties: numbers get a number box.
+  await panel.getByRole("button", { name: /^priority/ }).click();
+  await panel.getByRole("group", { name: "priority details" }).getByRole("combobox").selectOption("number");
+  // Clicking a value searches for it.
+  await panel.getByRole("button", { name: /^status/ }).click();
+  await panel.getByRole("group", { name: "status details" }).getByRole("button", { name: "draft" }).click();
+  const results = page.getByRole("region", { name: "Search" });
+  await expect(results).toContainText("1 note");
+  await results.getByRole("button", { name: /^A/ }).click();
+  await page.getByRole("radio", { name: "Reading" }).click();
+  await expect(page.getByRole("region", { name: "Properties" }).getByRole("spinbutton", { name: "priority" })).toHaveValue("2");
+
+  // Delete everywhere.
+  await page.getByRole("tab", { name: "Properties" }).click();
+  await panel.getByRole("button", { name: /^status/ }).click();
+  await panel.getByRole("group", { name: "status details" }).getByRole("button", { name: "Delete…" }).click();
+  await panel.getByRole("alertdialog", { name: "Delete status" }).getByRole("button", { name: "Delete everywhere" }).click();
+  await expect(panel.getByRole("status")).toContainText("Removed status from 3 files.");
+  await page.getByRole("radio", { name: "Source" }).click();
+  await expect(page.locator(".cm-content")).toHaveText("---priority: 2---A");
+});
+
+test("a canvas has properties of its own", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".cm-content")).toBeVisible();
+  await page.getByRole("button", { name: "New canvas" }).click();
+  await page.getByRole("button", { name: "Canvas properties" }).click();
+  const panel = page.getByRole("dialog", { name: "Properties of this canvas" });
+  await panel.getByRole("button", { name: "Add property" }).click();
+  await panel.getByRole("combobox", { name: "New property name" }).fill("tags");
+  await page.keyboard.press("Enter");
+  await panel.getByRole("combobox", { name: "Add to tags" }).fill("boards");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("status")).toHaveText("Saved");
+  await page.getByRole("tab", { name: "Tags" }).click();
+  await expect(page.getByRole("button", { name: "#boards 1", exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Canvas properties" }).click();
+  await expect(page.getByRole("dialog", { name: "Properties of this canvas" })).toContainText("#boards");
+});

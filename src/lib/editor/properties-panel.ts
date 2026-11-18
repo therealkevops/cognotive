@@ -81,7 +81,7 @@ class PropertiesWidget extends WidgetType {
       dt.textContent = row.key;
       const dd = document.createElement("dd");
 
-      if (kind === "boolean") {
+      if (kind === "boolean" || typeof row.value === "boolean") {
         const box = document.createElement("input");
         box.type = "checkbox";
         box.checked = row.value === true || /^(true|yes)$/i.test(String(row.value ?? ""));

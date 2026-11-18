@@ -1,6 +1,7 @@
 "use client";
 
 import { useDeferredValue, useMemo } from "react";
+import { filesWithProperties, parsePropertyQuery, valueText } from "@/lib/links/property-query";
 import type { NoteHit } from "@/lib/search/note-index";
 import { dirname, displayName } from "@/lib/vault/paths";
 import { useVault } from "../vault/useVault";
@@ -8,7 +9,8 @@ import { Highlighted } from "./Highlighted";
 
 /**
  * Full-text search across every note. "tag:name" or a lone "#name" lists the
- * notes with that tag (including nested tags under it).
+ * notes with that tag (including nested tags under it). "[key]" and
+ * "[key:value]" find files by property, alone or with search words.
  */
 export function SearchPanel({
   query,
@@ -32,6 +34,24 @@ export function SearchPanel({
         score: 1,
       }));
     }
+    const byProperty = parsePropertyQuery(deferred);
+    if (byProperty) {
+      const found = filesWithProperties(vault.links, byProperty.terms);
+      const describe = (path: string) => {
+        const props = vault.links.get(path)?.properties ?? {};
+        return byProperty.terms
+          .map((t) => {
+            const key = Object.keys(props).find((k) => k.toLowerCase() === t.key.toLowerCase()) ?? t.key;
+            return `${key}: ${valueText(props[key])}`;
+          })
+          .join(" · ");
+      };
+      if (!byProperty.text) {
+        return found.map((path) => ({ path, title: displayName(path), snippet: describe(path), matches: [], score: 1 }));
+      }
+      const allowed = new Set(found);
+      return vault.index.search(byProperty.text).filter((h) => allowed.has(h.path));
+    }
     return vault.index.search(deferred);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
   }, [deferred, vault.index, vault.links, vault.indexVersion]);
@@ -42,7 +62,7 @@ export function SearchPanel({
         type="search"
         autoFocus={autoFocus}
         aria-label="Search all notes"
-        placeholder="Search notes, or tag:name…"
+        placeholder="Search notes, tag:name or [property:value]…"
         className="mb-2 w-full rounded border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-accent"
         value={query}
         onChange={(e) => onQuery(e.target.value)}

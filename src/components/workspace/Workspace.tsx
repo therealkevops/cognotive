@@ -23,6 +23,7 @@ import {
   Settings,
   Tags,
   LayoutTemplate,
+  SlidersHorizontal,
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -36,6 +37,7 @@ import { EMPTY_HISTORY, goBack, goForward, renameInHistory, visit, type NavHisto
 import { readPref, writePref } from "@/lib/prefs";
 import { editTableSource } from "@/lib/editor/table-keys";
 import { addProperty } from "@/lib/editor/properties-panel";
+import { deletePropertyIn, renamePropertyIn } from "@/lib/vault/property-ops";
 import type { LinkHost } from "@/lib/editor/wikilinks";
 import { collectPropertyInfo, yamlValue, type PropertyInfo } from "@/lib/editor/properties";
 import { drawingProperties, keepDrawingProperties, setDrawingProperty } from "@/lib/drawing/properties";
@@ -78,6 +80,7 @@ import { useVaults } from "../vault/useVaults";
 import { VaultSwitcher } from "../vault/VaultSwitcher";
 import { ConflictBanner, ConflictDialog } from "./ConflictReview";
 import { CreateNoteDialog } from "./CreateNoteDialog";
+import { PropertiesPanel } from "./PropertiesPanel";
 import { DeleteDialog } from "./DeleteDialog";
 import { FileTree } from "./FileTree";
 import { PinnedHubs } from "./PinnedHubs";
@@ -111,7 +114,7 @@ const ReadingView = dynamic(() => reloadOnChunkError(() => import("./ReadingView
 });
 
 type Mode = "live" | "source" | "reading";
-type SidebarTab = "files" | "search" | "tags" | "templates";
+type SidebarTab = "files" | "search" | "tags" | "templates" | "properties";
 type PanelTab = "outline" | "links";
 
 const MODES: Array<{ id: Mode; label: string; icon: typeof Pencil }> = [
@@ -501,9 +504,9 @@ export function Workspace() {
   // Property names, values and tags across the repository, worked out when first asked for.
   const propertyInfo = useMemo(() => {
     let info: PropertyInfo | null = null;
-    return () => (info ??= collectPropertyInfo(vault.links));
+    return () => (info ??= collectPropertyInfo(vault.links, vault.settings.propertyTypes));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-  }, [vault.links, vault.indexVersion]);
+  }, [vault.links, vault.indexVersion, vault.settings.propertyTypes]);
 
   // What the editor needs for [[links]].
   const linkHost = useMemo<LinkHost>(
@@ -740,6 +743,57 @@ export function Workspace() {
     view.focus();
   });
 
+  /** The latest text of a file: the open file's (with unsaved edits), or the saved one. */
+  const latestText = (path: string) => (path === vault.active?.path ? vault.activeText : (vault.links.content(path) ?? ""));
+  const isAttachment = (path: string) => !isNote(path) && !isDrawing(path) && !isCanvas(path);
+
+  /** Renames a property in every file that has it (not where the new name is already taken). */
+  const renamePropertyEverywhere = async (from: string, to: string) => {
+    let changed = 0;
+    let clashes = 0;
+    for (const path of vault.links.paths()) {
+      const props = vault.links.get(path)?.properties ?? {};
+      if (!(from in props)) continue;
+      if (isAttachment(path)) {
+        if (to in props) {
+          clashes++;
+          continue;
+        }
+        await vault.setFileProperty(path, to, props[from]);
+        await vault.setFileProperty(path, from, undefined);
+        changed++;
+        continue;
+      }
+      const next = renamePropertyIn(path, latestText(path), from, to);
+      if (next === "clash") clashes++;
+      else if (next !== "unchanged") {
+        await vault.writeNote(path, next);
+        changed++;
+      }
+    }
+    return { changed, clashes };
+  };
+
+  /** Removes a property from every file that has it. */
+  const deletePropertyEverywhere = async (key: string) => {
+    let changed = 0;
+    for (const path of vault.links.paths()) {
+      const props = vault.links.get(path)?.properties ?? {};
+      if (!(key in props)) continue;
+      if (isAttachment(path)) {
+        await vault.setFileProperty(path, key, undefined);
+        changed++;
+        continue;
+      }
+      const next = deletePropertyIn(path, latestText(path), key);
+      if (next !== "unchanged") {
+        await vault.writeNote(path, next);
+        changed++;
+      }
+    }
+    return changed;
+  };
+
   const sidebar = (
     <>
       <div className="flex items-start gap-1">
@@ -764,6 +818,7 @@ export function Workspace() {
             ["search", "Search", Search],
             ["tags", "Tags", Tags],
             ["templates", "Templates", LayoutTemplate],
+            ["properties", "Properties", SlidersHorizontal],
           ] as const
         ).map(([id, label, Icon]) => (
           <button
@@ -802,6 +857,15 @@ export function Workspace() {
           <SearchPanel query={searchQuery} onQuery={setSearchQuery} autoFocus />
         ) : tab === "tags" ? (
           <TagsPanel onTag={showTag} />
+        ) : tab === "properties" ? (
+          <PropertiesPanel
+            onSearch={(q) => {
+              setSearchQuery(q);
+              setTab("search");
+            }}
+            onRename={renamePropertyEverywhere}
+            onDelete={deletePropertyEverywhere}
+          />
         ) : (
           <TemplatesPanel onUse={applyTemplate} canInsert={editing} />
         )}
@@ -1254,6 +1318,7 @@ export function Workspace() {
                 <CanvasView
                   key={`${vault.active.path}:${vault.active.version}`}
                   onEditAsText={() => setCanvasAsText(vault.active?.path ?? null)}
+                  propertyInfo={propertyInfo()}
                   docKey={`${vault.active.path}:${vault.active.version}`}
                   initial={vault.activeText}
                   onChange={vault.edit}

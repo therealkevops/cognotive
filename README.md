@@ -50,6 +50,11 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 - Attachments (images, PDFs, audio, video) have properties too, edited above the file. They're
   kept in `.noted/properties.json` (by path; it syncs, and follows renames, moves and deletes), and
   their tags and aliases count like a note's
+- Managing properties: the sidebar's **Properties** tab lists every property with how many files
+  use it and its common values; rename or delete one everywhere, give your own properties a type
+  (text, list, number, date, checkbox: kept in `.noted/settings.json`), or click a value to find
+  the files. Search finds files by property with `[status]` or `[status:draft]`, alone or with
+  words. Canvases have properties too (the sliders button in the canvas toolbar)
 - Help with properties, as in a code editor: in the properties block, names are suggested as you
   type (with what each one does), then values: your tags, `true`/`false` for `hub`, today's date
   for `created`/`reviewed`, and values you've used before for your own properties. Hovering over a

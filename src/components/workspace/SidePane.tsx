@@ -42,9 +42,9 @@ export function SidePane({
     [vault.links, path, vault.indexVersion],
   );
   const propertyInfo = useMemo(
-    () => collectPropertyInfo(vault.links),
+    () => collectPropertyInfo(vault.links, vault.settings.propertyTypes),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-    [vault.links, vault.indexVersion],
+    [vault.links, vault.indexVersion, vault.settings.propertyTypes],
   );
   const [drawingUrl, setDrawingUrl] = useState<string | null>(null);
   useEffect(() => {
