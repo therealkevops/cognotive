@@ -195,6 +195,11 @@ Views: backlinks pane, outgoing links, tag pane, a global graph, and a local gra
 
 ## 5. Querying with the LLM
 
+> **Superseded by [AI_PLAN.md](AI_PLAN.md):** models are called from the browser through
+> OpenRouter, a local server (Ollama, LM Studio) or any OpenAI-compatible endpoint, with the
+> user's own key on the device, instead of a server-side Claude proxy. The tools below carry
+> over, and write tools become reviewed proposals. Kept for history.
+
 A chat side panel. Claude answers questions by calling tools that run **in the browser**
 against the local index:
 
@@ -265,7 +270,7 @@ returned by section rather than whole.
 | **2. GitHub store** ✅ (text files) | GitHub App, login, Settings → Vaults (multiple vaults, switcher), `GitHubStore`, sync engine with batching, pull, conflicts, offline; attachments | Edits made in the app show up as commits; edits pushed from Obsidian show up in the app |
 | **3. Linking** ✅ | Wikilinks, autocomplete, backlinks, unlinked mentions, tags, frontmatter, rename refactor, graph views | The graph matches what Obsidian shows for the same vault |
 | **4. Excalidraw** ✅ (with attachments) | Drawing files, embeds, SVG previews, links from drawings | Drawings round-trip through the repo and appear in the graph |
-| **5. LLM** | `/api/chat` proxy, browser-side tool loop, chat panel, citations, allowlist | You can ask "what have I written about X and how does it connect to Y?" |
+| **5. LLM** | See [AI_PLAN.md](AI_PLAN.md): phases A–E (providers and chat, read agent, write proposals, agent actions, bridge and MCP) | You can ask "what have I written about X and how does it connect to Y?", and the agent can propose changes |
 | **6. Polish** ✅ | Command palette, themes, mobile layout, templates, daily notes, tabs, side pane, version history, zip import/export, installable offline app | — |
 
 Each phase ends deployed to Vercel and usable.
