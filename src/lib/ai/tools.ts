@@ -1,4 +1,4 @@
-import { yamlValue } from "../editor/properties";
+import { yamlValue } from "../markdown/yaml-value";
 import { setFrontmatterProperty, splitFrontmatter } from "../markdown/frontmatter";
 import { formatLink, type LinkFormat } from "../links/format";
 import { addToHub } from "../links/hubs";

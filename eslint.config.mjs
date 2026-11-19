@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The companion bundle (npm run build:bridge).
+    "bridge/dist/**",
   ]),
 ]);
 

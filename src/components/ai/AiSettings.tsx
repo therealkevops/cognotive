@@ -11,7 +11,7 @@ import {
   type KeyStatus,
   type ModelInfo,
 } from "@/lib/ai/catalog";
-import { diagnoseLocal, localAdvice, type LocalStatus } from "@/lib/ai/diagnostics";
+import { bridgeAdvice, diagnoseBridge, diagnoseLocal, localAdvice, type BridgeStatus, type LocalStatus } from "@/lib/ai/diagnostics";
 import { forgetKey, keyHint, loadKey, saveKey } from "@/lib/ai/keys";
 import { AiError } from "@/lib/ai/openai-compatible";
 import { LOCAL_SERVERS, PROVIDERS, remoteAllowed, type AiSettings, type ProviderId } from "@/lib/ai/providers";
@@ -39,7 +39,7 @@ export function AiSection() {
         description="Chat about your notes with a model of your choice. Requests go straight from this browser to the provider; keys stay on this device."
       />
       <Group title="Provider">
-        <div role="radiogroup" aria-label="Provider" className="grid gap-2 py-4 sm:grid-cols-3">
+        <div role="radiogroup" aria-label="Provider" className="grid gap-2 py-4 sm:grid-cols-2">
           {(Object.keys(PROVIDERS) as ProviderId[]).map((id) => {
             const p = PROVIDERS[id];
             const on = s.provider === id;
@@ -82,6 +82,8 @@ export function AiSection() {
                     </span>
                   ))}
                 </>
+              ) : s.provider === "bridge" ? (
+                "Where the bridge listens. Change it only if you started the bridge with --port."
               ) : (
                 "For example https://api.example.com/v1"
               )
@@ -93,6 +95,7 @@ export function AiSection() {
         {preset.allowsKey && <KeyRow key={s.provider} settings={s} onSettings={set} />}
         {s.provider === "local" && <LocalCheck key={slot.baseUrl} baseUrl={slot.baseUrl} model={slot.model} onModel={(model) => patch({ model })} />}
         {s.provider === "openrouter" && <OpenRouterModels model={slot.model} onModel={(model) => patch({ model })} />}
+        {s.provider === "bridge" && <BridgeCheck key={slot.baseUrl} baseUrl={slot.baseUrl} model={slot.model} onModel={(model) => patch({ model })} />}
         {s.provider === "custom" && <CustomModel key={slot.baseUrl} settings={s} onModel={(model) => patch({ model })} />}
       </Group>
 
@@ -106,6 +109,8 @@ export function AiSection() {
 /** The provider's API key: saved on this device (or for this session), checked, forgotten. */
 function KeyRow({ settings: s, onSettings }: { settings: AiSettings; onSettings(s: AiSettings): void }) {
   const provider = s.provider;
+  const noun = PROVIDERS[provider].keyLabel;
+  const short = noun === "API key" ? "key" : "code";
   const id = useId();
   const [stored, setStored] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -150,7 +155,7 @@ function KeyRow({ settings: s, onSettings }: { settings: AiSettings; onSettings(
   return (
     <>
       <Row
-        label="API key"
+        label={noun[0].toUpperCase() + noun.slice(1)}
         id={id}
         stack
         description={
@@ -162,6 +167,8 @@ function KeyRow({ settings: s, onSettings }: { settings: AiSettings; onSettings(
               </a>
               . A spending limit on the key is a good idea.
             </>
+          ) : provider === "bridge" ? (
+            "The code the bridge printed when it started (opening its pairing link fills this in)."
           ) : (
             "Leave empty if the endpoint doesn't need one."
           )
@@ -186,7 +193,7 @@ function KeyRow({ settings: s, onSettings }: { settings: AiSettings; onSettings(
                 setStatus(null);
               }}
             >
-              Remove key
+              Remove {short}
             </button>
           </div>
         ) : (
@@ -202,12 +209,12 @@ function KeyRow({ settings: s, onSettings }: { settings: AiSettings; onSettings(
               type="password"
               autoComplete="off"
               className="input flex-1"
-              placeholder={provider === "openrouter" ? "sk-or-v1-…" : "Optional"}
+              placeholder={provider === "openrouter" ? "sk-or-v1-…" : provider === "bridge" ? "Pairing code" : "Optional"}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
             />
             <button type="submit" className="button-primary" disabled={!draft.trim()}>
-              Save key
+              Save {short}
             </button>
           </form>
         )}
@@ -369,6 +376,85 @@ function LocalCheck({ baseUrl, model, onModel }: { baseUrl: string; model: strin
             {busy ? "Checking…" : "Check again"}
           </button>
         </div>
+      </Row>
+      {status?.state === "ready" && (
+        <Row label="Model" id={selectId}>
+          <select id={selectId} className="input" value={model} onChange={(e) => onModel(e.target.value)}>
+            {status.models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </Row>
+      )}
+    </>
+  );
+}
+
+/** The bridge: whether it's running and paired, how to start it, and Claude Code's models. */
+function BridgeCheck({ baseUrl, model, onModel }: { baseUrl: string; model: string; onModel(m: string): void }) {
+  const [status, setStatus] = useState<BridgeStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const selectId = useId();
+  const origin = typeof location === "undefined" ? "" : location.origin;
+  const local = /^http:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(origin);
+  const command = `npm run bridge${local ? "" : ` -- --origin ${origin}`}`;
+  const check = async () => {
+    const st = await diagnoseBridge(baseUrl, await loadKey("bridge"));
+    setStatus(st);
+    // Sonnet by default: quick and capable on any plan.
+    if (st.state === "ready" && st.models.length && !st.models.some((m) => m.id === model)) {
+      onModel((st.models.find((m) => m.id === "claude/sonnet") ?? st.models[0]).id);
+    }
+  };
+  const run = async () => {
+    setBusy(true);
+    try {
+      await check();
+    } finally {
+      setBusy(false);
+    }
+  };
+  useEffect(() => {
+    const go = () => void check();
+    go();
+    // Check again when a pairing code is saved or removed.
+    window.addEventListener("noted-ai-keys", go);
+    return () => window.removeEventListener("noted-ai-keys", go);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per address (the component is keyed by it), and on key changes
+  }, []);
+  const advice = status && bridgeAdvice(status, command);
+  return (
+    <>
+      <Row label="Connection" stack>
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1 text-sm" role="status" aria-label="Bridge connection">
+            {!advice ? (
+              <span className="text-muted">Checking…</span>
+            ) : (
+              <>
+                <p className={status?.state === "ready" ? "" : status?.state === "unpaired" ? "text-muted" : "text-[#c2412d]"}>{advice.title}</p>
+                {advice.steps.length > 0 && (
+                  <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-xs text-muted">
+                    {advice.steps.map((st) => (
+                      <li key={st}>
+                        <code className="break-all">{st}</code>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </>
+            )}
+          </div>
+          <button type="button" className="button-secondary shrink-0 py-1 text-sm" disabled={busy} onClick={() => void run()}>
+            {busy ? "Checking…" : "Check again"}
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-muted">
+          Requests go from this page to the bridge on your computer, then through Claude Code to Anthropic, using your plan&apos;s
+          limits. The agent&apos;s tools still run here in the browser.
+        </p>
       </Row>
       {status?.state === "ready" && (
         <Row label="Model" id={selectId}>

@@ -34,6 +34,17 @@ describe("settings", () => {
   });
 });
 
+describe("pairing links", () => {
+  it("find the bridge's code in the address", async () => {
+    const { pairingCode } = await import("../../components/ai/usePairFromLink");
+    const code = "ab".repeat(24);
+    expect(pairingCode(`#bridge=${code}`)).toBe(code);
+    expect(pairingCode(`#x=1&bridge=${code}`)).toBe(code);
+    expect(pairingCode("#bridge=short")).toBeNull();
+    expect(pairingCode("")).toBeNull();
+  });
+});
+
 describe("keyHint", () => {
   it("spots keys from the wrong provider", () => {
     expect(keyHint("openrouter", "sk-ant-abc")).toContain("Anthropic");

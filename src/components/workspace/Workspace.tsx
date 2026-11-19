@@ -46,6 +46,7 @@ import type { LinkContext } from "@/lib/markdown/remark-links";
 import { ChatPanel } from "../ai/ChatPanel";
 import { AskDialog, type AskSource } from "../ai/AskDialog";
 import { AiActionsContext, useRunAction } from "../ai/useAsk";
+import { usePairFromLink } from "../ai/usePairFromLink";
 import { serializeCanvas } from "@/lib/canvas/format";
 import { neighbourhoodCanvas, type Neighbour } from "@/lib/canvas/map";
 import { convertLinks, formatLink, markdownLink } from "@/lib/links/format";
@@ -992,6 +993,7 @@ export function Workspace() {
     setRightCollapsed(false);
   }, [setRightCollapsed]);
   const runAction = useRunAction(showChat);
+  usePairFromLink(() => setSettingsOpen("ai"));
   const currentHealth = () => {
     const mtimes = new Map(vault.entries.map((e) => [e.path, e.mtime]));
     return vaultHealth(vault.links, { mtime: (p) => mtimes.get(p), ignore: healthIgnored(vault.settings) });

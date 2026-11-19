@@ -27,6 +27,9 @@ export class FakeLLM {
   localModels = ["llama3.2:latest", "qwen3:8b"];
   /** The local server refuses tools, as Ollama does for models without tool support. */
   localNoTools = false;
+  /** The noted-ai bridge on 127.0.0.1:41414: whether it's running, and its pairing code. */
+  bridgeRunning = false;
+  bridgeCode = "c0de".repeat(12);
   /** Replies used in order before falling back to `reply`. */
   script: Reply[] = [];
   /** Replies: a function of the request, or the default (echoes the question and the note it saw). */
@@ -52,9 +55,10 @@ export class FakeLLM {
   async install(page: Page) {
     await page.route("https://openrouter.ai/api/v1/**", (r) => this.handle(r, "openrouter"));
     await page.route("http://localhost:11434/**", (r) => this.handle(r, "local"));
+    await page.route("http://127.0.0.1:41414/**", (r) => (this.bridgeRunning ? this.handle(r, "bridge") : r.abort("connectionrefused")));
   }
 
-  private async handle(route: Route, host: "openrouter" | "local") {
+  private async handle(route: Route, host: "openrouter" | "local" | "bridge") {
     const req = route.request();
     const path = new URL(req.url()).pathname.replace(/^\/api\/v1|^\/v1/, "");
     const cors: Record<string, string> =
@@ -66,10 +70,19 @@ export class FakeLLM {
     // request (sent without an Origin header) still gets through.
     if (host === "local" && this.localBlocksOrigin && req.headers()["origin"]) return route.abort("failed");
     const auth = req.headers()["authorization"];
-    const keyOk = host === "local" || (auth && this.keys.has(auth.replace(/^Bearer /, "")));
+    if (host === "bridge" && path === "/bridge/ping") return json({ ok: true, name: "noted-ai-bridge", version: "0.1.0" });
+    const keyOk =
+      host === "local" || (host === "bridge" ? auth === `Bearer ${this.bridgeCode}` : auth && this.keys.has(auth.replace(/^Bearer /, "")));
+    if (host === "bridge" && !keyOk) return json({ error: { message: "Wrong pairing code.", code: "unauthorized" } }, 401);
 
     if (path === "/models" && req.method() === "GET") {
       if (host === "local") return json({ object: "list", data: this.localModels.map((id) => ({ id, object: "model" })) });
+      if (host === "bridge") {
+        return json({
+          object: "list",
+          data: ["sonnet", "opus", "haiku"].map((m) => ({ id: `claude/${m}`, name: `Claude ${m[0].toUpperCase()}${m.slice(1)} (your plan)`, supported_parameters: ["tools"] })),
+        });
+      }
       return json({
         data: [
           {

@@ -22,7 +22,7 @@ test("set up OpenRouter, then chat about the open note", async ({ page }) => {
 
   // Before setup, the chat says what's missing.
   let chat = await openChat(page);
-  await expect(chat).toContainText("Add your OpenRouter key");
+  await expect(chat).toContainText("Add your OpenRouter API key");
   await chat.getByRole("button", { name: "Open AI settings" }).click();
 
   const ai = page.getByRole("region", { name: "AI" });

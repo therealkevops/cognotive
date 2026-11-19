@@ -49,3 +49,6 @@ next-env.d.ts
 
 # copied from node_modules by scripts/copy-excalidraw-assets.mjs
 /public/excalidraw/
+
+# the companion bundle (npm run build:bridge)
+/bridge/dist/

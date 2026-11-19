@@ -5,8 +5,12 @@ How to bring agentic AI into noted-ai, borrowing the provider design of
 OpenAI-compatible endpoint, called straight from the browser) and building the agent on the
 repository's own structure: links, hubs, properties, tags and health checks.
 
-**Status:** phases A to D are done: providers and chat, the read agent, write proposals (with
-save chat as note and Ask), and the agent actions. Phase E (bridge and MCP) is optional. The
+**Status:** all phases are done: providers and chat (A), the read agent (B), write proposals with
+save chat as note and Ask (C), the agent actions (D), and the companion (E): a Claude plan
+bridge through Claude Code, and an MCP server for a folder of notes. The bridge supports Claude
+Code only (not Codex yet), and gives Claude the agent's tools through a text protocol, since
+Claude Code runs with its own tools off. It runs from a clone (`npm run bridge`) rather than as
+a published `npx` package. The
 weekly review lives in the empty chat and the palette rather than next to Today, and actions run
 in the chat panel so their proposals are reviewed in one place. Ask uses Ctrl/Cmd+Shift+Enter, because
 Chrome keeps Ctrl+Shift+A for tab search. `get_open_note` became part of the prompt instead of a tool: the open note's text goes with

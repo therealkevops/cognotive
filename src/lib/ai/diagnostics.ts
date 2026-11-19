@@ -107,3 +107,65 @@ export function localAdvice(status: LocalStatus, origin: string): { title: strin
       };
   }
 }
+
+/** Whether the bridge is running, paired, and has Claude Code ready. */
+export type BridgeStatus =
+  | { state: "ready"; models: ModelInfo[] }
+  | { state: "not-running" }
+  | { state: "permission" }
+  | { state: "unpaired" }
+  | { state: "wrong-code" }
+  /** Running and paired, but Claude Code isn't installed or signed in (the bridge says which). */
+  | { state: "agent"; message: string };
+
+export async function diagnoseBridge(baseUrl: string, code: string): Promise<BridgeStatus> {
+  const base = normalizeBaseUrl(baseUrl);
+  const root = base.replace(/\/v1$/, "");
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 2500);
+  try {
+    const ping = await fetch(`${root}/bridge/ping`, { signal: ctrl.signal, ...addressSpaceHint(root) } as RequestInit);
+    if (!ping.ok) return { state: "not-running" };
+  } catch {
+    return (await localNetworkPermission()) === "denied" ? { state: "permission" } : { state: "not-running" };
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!code) return { state: "unpaired" };
+  const res = await fetch(`${base}/models`, { headers: { Authorization: `Bearer ${code}` }, ...addressSpaceHint(base) } as RequestInit).catch(() => null);
+  if (!res) return { state: "not-running" };
+  if (res.status === 401) return { state: "wrong-code" };
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    return { state: "agent", message: j.error?.message ?? `The bridge answered HTTP ${res.status}.` };
+  }
+  return { state: "ready", models: parseModels(await res.json()) };
+}
+
+/** What to tell the person for each bridge state. `command` starts the bridge for this site. */
+export function bridgeAdvice(status: BridgeStatus, command: string): { title: string; steps: string[] } {
+  switch (status.state) {
+    case "ready":
+      return { title: "Connected to Claude Code.", steps: [] };
+    case "not-running":
+      return {
+        title: "The bridge isn't running.",
+        steps: [
+          "Install Claude Code and sign in: npm install -g @anthropic-ai/claude-code, then claude /login",
+          `In a clone of noted-ai, start the bridge: ${command}`,
+          "Open the pairing link it prints, or paste its pairing code below.",
+        ],
+      };
+    case "permission":
+      return {
+        title: "The browser is blocking access to your computer.",
+        steps: ["Click the icon at the left of the address bar.", "Allow access to devices on your local network, then check again."],
+      };
+    case "unpaired":
+      return { title: "The bridge is running. Paste the pairing code it printed.", steps: [] };
+    case "wrong-code":
+      return { title: "The bridge didn't accept that pairing code.", steps: ["Copy the code the bridge printed (or open its pairing link), then check again."] };
+    case "agent":
+      return { title: status.message, steps: [] };
+  }
+}

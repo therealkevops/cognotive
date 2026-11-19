@@ -161,6 +161,8 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
     can be saved as a note that the selection then links to, inserted below, or copied
 
   Set it up in **Settings → AI**:
+  - **Claude plan**: your Claude subscription, through Claude Code on your computer and the
+    noted-ai bridge (see [The companion](#the-companion-claude-plan-and-mcp)). No API key
   - **OpenRouter** (one key, hundreds of models): the key is checked and shows its spend limit, and
     the model list is searchable, with prices and which models can use tools
   - **Local**: Ollama (`http://localhost:11434/v1`) or LM Studio (`http://localhost:1234/v1`), with a
@@ -195,6 +197,48 @@ The first time you run the e2e tests locally, install the browser with
 `npx playwright install chromium`.
 
 CI (`.github/workflows/ci.yml`) runs all of the above on every push to `main` and on pull requests.
+
+## The companion (Claude plan and MCP)
+
+An optional program that runs on your computer (Node 22), from a clone of this repository. It
+has no dependencies to install beyond the repository's own, and builds itself into
+`bridge/dist/noted-ai.mjs` when started.
+
+**Use your Claude plan in the app.** Install [Claude Code](https://docs.anthropic.com/claude-code) and
+sign in (`claude /login`), then:
+
+```bash
+npm run bridge -- --origin https://your-noted-ai.example
+```
+
+It prints a pairing link: open it (or paste the pairing code into **Settings → AI → Claude plan**).
+Leave out `--origin` when you use noted-ai at `http://localhost`.
+
+- It listens on `127.0.0.1:41414` only, and answers only pages from the given origin (and
+  localhost), with a matching Host header, that send the pairing code. The code is kept in
+  `~/.noted-ai/bridge-token`, readable only by you; `--new-code` replaces it.
+- Each answer runs `claude -p` in an empty temporary folder with Claude Code's own tools, MCP
+  servers, skills and settings switched off. The app's agent tools still run in the browser:
+  the bridge describes them to Claude in the prompt and turns its replies back into tool calls.
+- Notes the agent reads go to Anthropic through Claude Code, under your plan's limits.
+  Encrypted repositories are local-only unless you allow remote providers.
+
+**Work on your notes from Claude Code (MCP).** With a local clone of your notes repository:
+
+```bash
+npm run build:bridge
+```
+
+```bash
+claude mcp add noted-ai -- node "$PWD/bridge/dist/noted-ai.mjs" mcp ~/notes
+```
+
+Claude Code then has the agent's tools for that folder: search, read (whole notes or sections),
+links and backlinks, hubs, tags, properties, folders and repository health; and creating notes,
+adding to them, editing, setting properties and linking. Claude Code asks before each change,
+and the changes are ordinary file edits, so `git diff` shows them before you commit and the app
+syncs them. Add `--read-only` to leave out the tools that change notes, and `--markdown-links` if
+the repository uses markdown links.
 
 ## Deploy to Vercel (Hobby)
 
@@ -292,6 +336,7 @@ src/lib/            framework-free logic with unit tests alongside:
   drawing/          Excalidraw file parsing (text, links), link rewriting, SVG rendering
   ai/               AI providers, keys, model catalog, local diagnostics, streaming
                     OpenAI-compatible client, chat state
+bridge/             the companion: bridge (Claude plan via Claude Code) and MCP server, with tests
 tests/e2e/          Playwright tests
 docs/PLAN.md        design and roadmap
 docs/AI_PLAN.md     AI and agent plan (phases A–E)

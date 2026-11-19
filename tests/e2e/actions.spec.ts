@@ -98,7 +98,7 @@ test("an action without AI set up says what's missing", async ({ page }) => {
   const llm = new FakeLLM();
   await setUp(page, llm, { key: false });
   await palette(page, "AI: What did I work on this week?");
-  await expect(chat(page).getByRole("alert")).toContainText("Add your OpenRouter key");
+  await expect(chat(page).getByRole("alert")).toContainText("Add your OpenRouter API key");
   expect(llm.calls).toHaveLength(0);
 });
 

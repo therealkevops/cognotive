@@ -13,7 +13,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "check": "npm run lint && npm run typecheck && npm test"
+    "check": "npm run lint && npm run typecheck && npm test",
+    "build:bridge": "node scripts/build-bridge.mjs",
+    "bridge": "node scripts/build-bridge.mjs && node bridge/dist/noted-ai.mjs bridge",
+    "mcp": "node scripts/build-bridge.mjs && node bridge/dist/noted-ai.mjs mcp"
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.20.4",
@@ -69,6 +72,7 @@
     "eslint-config-next": "16.4.6",
     "fake-indexeddb": "6.2.8",
     "jsdom": "31.0.1",
+    "rolldown": "1.2.19",
     "tailwindcss": "4.3.3",
     "typescript": "^5",
     "vitest": "5.1.0"

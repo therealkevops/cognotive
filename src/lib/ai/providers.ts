@@ -5,7 +5,7 @@ import { readPref, writePref } from "../prefs";
  * Completions API, called straight from the browser (no server in between).
  * The design follows Rabbithole's provider registry.
  */
-export type ProviderId = "openrouter" | "local" | "custom";
+export type ProviderId = "openrouter" | "local" | "bridge" | "custom";
 
 export interface ProviderPreset {
   id: ProviderId;
@@ -16,6 +16,8 @@ export interface ProviderPreset {
   allowsKey: boolean;
   /** Notes stay on this machine (or network). */
   local: boolean;
+  /** What the provider's secret is called. */
+  keyLabel: string;
 }
 
 export const PROVIDERS: Record<ProviderId, ProviderPreset> = {
@@ -27,6 +29,7 @@ export const PROVIDERS: Record<ProviderId, ProviderPreset> = {
     requiresKey: true,
     allowsKey: true,
     local: false,
+    keyLabel: "API key",
   },
   local: {
     id: "local",
@@ -36,6 +39,17 @@ export const PROVIDERS: Record<ProviderId, ProviderPreset> = {
     requiresKey: false,
     allowsKey: false,
     local: true,
+    keyLabel: "API key",
+  },
+  bridge: {
+    id: "bridge",
+    label: "Claude plan",
+    description: "Your Claude subscription, through Claude Code on this computer and the noted-ai bridge. No API key.",
+    baseUrl: "http://127.0.0.1:41414/v1",
+    requiresKey: true,
+    allowsKey: true,
+    local: false,
+    keyLabel: "pairing code",
   },
   custom: {
     id: "custom",
@@ -45,6 +59,7 @@ export const PROVIDERS: Record<ProviderId, ProviderPreset> = {
     requiresKey: false,
     allowsKey: true,
     local: false,
+    keyLabel: "API key",
   },
 };
 
@@ -83,6 +98,7 @@ export function defaultAiSettings(): AiSettings {
     providers: {
       openrouter: { baseUrl: PROVIDERS.openrouter.baseUrl, model: "" },
       local: { baseUrl: PROVIDERS.local.baseUrl, model: "" },
+      bridge: { baseUrl: PROVIDERS.bridge.baseUrl, model: "" },
       custom: { baseUrl: "", model: "" },
     },
     sessionOnlyKeys: false,
@@ -105,7 +121,7 @@ export function normalizeAiSettings(raw: unknown): AiSettings {
   for (const id of Object.keys(PROVIDERS) as ProviderId[]) {
     const slot = r.providers?.[id];
     if (!slot || typeof slot !== "object") continue;
-    if (typeof slot.baseUrl === "string" && (id !== "openrouter" || slot.baseUrl)) out.providers[id].baseUrl = slot.baseUrl;
+    if (typeof slot.baseUrl === "string" && ((id !== "openrouter" && id !== "bridge") || slot.baseUrl)) out.providers[id].baseUrl = slot.baseUrl;
     if (typeof slot.model === "string") out.providers[id].model = slot.model;
   }
   return out;

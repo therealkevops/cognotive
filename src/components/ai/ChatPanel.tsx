@@ -67,7 +67,7 @@ export function ChatPanel({
   const setup: string | null = blocked
     ? "This repository only allows local models. Choose the Local provider in Settings → AI."
     : preset.requiresKey && hasKey === false
-      ? `Add your ${preset.label} key in Settings → AI to start.`
+      ? `Add your ${preset.label} ${preset.keyLabel} in Settings → AI to start.`
       : !baseUrl
         ? "Set the provider's address in Settings → AI."
         : !model
