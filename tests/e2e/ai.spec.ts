@@ -43,7 +43,7 @@ test("set up OpenRouter, then chat about the open note", async ({ page }) => {
   const models = ai.getByRole("listbox", { name: "Models" });
   await expect(models.getByRole("option", { name: /Claude Sonnet 4.5/ })).toHaveAttribute("aria-selected", "true");
   await expect(models.getByRole("option", { name: /Llama 3.3 8B/ })).toContainText("no tools");
-  await ai.getByPlaceholder(/Search 3 models/).fill("gpt");
+  await ai.getByPlaceholder(/Search 74 models/).fill("gpt");
   await expect(models.getByRole("option")).toHaveCount(1);
   await models.getByRole("option", { name: /GPT-5/ }).click();
   await expect(ai).toContainText("Using OpenAI: GPT-5");
@@ -86,6 +86,28 @@ test("set up OpenRouter, then chat about the open note", async ({ page }) => {
   await expect(chat.locator('[data-role="user"]')).toHaveCount(3);
   await chat.getByRole("button", { name: "New chat" }).click();
   await expect(chat.locator('[data-role="user"]')).toHaveCount(0);
+});
+
+test("the model list leads with suggested and free models, and says when it's cut short", async ({ page }) => {
+  const llm = new FakeLLM();
+  await llm.install(page);
+  await page.goto("/");
+  await expect(page.locator(".cm-content")).toBeVisible();
+  const ai = await openAiSettings(page);
+  const models = ai.getByRole("listbox", { name: "Models" });
+  await expect(models.getByRole("group", { name: "Suggested" }).getByRole("option")).toHaveText([/Claude Sonnet 4.5/, /GPT-5/]);
+  // Free models come next, even one whose name sorts last.
+  await expect(models.getByRole("group", { name: "Free" }).getByRole("option")).toHaveText([/Llama 3.3 8B/, /Zeta: Zed/]);
+  await expect(ai).toContainText("Showing 60 of 74.");
+  await ai.getByRole("button", { name: "show all 74" }).click();
+  await expect(models.getByRole("option")).toHaveCount(74);
+
+  await ai.getByRole("button", { name: "Free 2" }).click();
+  await expect(models.getByRole("option")).toHaveCount(2);
+  await models.getByRole("option", { name: /Zeta: Zed/ }).click();
+  await expect(ai.getByRole("note")).toContainText("Free models allow only a small number of requests a day");
+  await ai.getByRole("button", { name: "With tools 73" }).click();
+  await expect(models.getByRole("option", { name: /Llama 3.3 8B/ })).toHaveCount(0);
 });
 
 test("stop an answer, and recover from errors", async ({ page }) => {

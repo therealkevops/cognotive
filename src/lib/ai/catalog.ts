@@ -62,6 +62,55 @@ export function defaultModel(models: ModelInfo[]): string {
   return PREFERRED_MODELS.find((id) => ids.has(id)) ?? models.find((m) => m.tools)?.id ?? models[0]?.id ?? "";
 }
 
+export type ModelFilter = "all" | "free" | "tools";
+
+export interface ModelGroup {
+  id: "suggested" | "free" | "other";
+  label: string;
+  models: ModelInfo[];
+}
+
+/** How many suggested models lead the list. */
+export const SUGGESTED_COUNT = 4;
+
+/**
+ * The catalog as it's listed: suggested models first, then free ones, then
+ * the rest by name; narrowed by a search and a filter.
+ */
+export function groupModels(models: ModelInfo[], opts: { query?: string; filter?: ModelFilter } = {}): { groups: ModelGroup[]; total: number } {
+  const filter = opts.filter ?? "all";
+  const matching = searchModels(models, opts.query ?? "", { toolsOnly: filter === "tools" }).filter((m) => filter !== "free" || m.free);
+  const byId = new Map(matching.map((m) => [m.id, m]));
+  const suggested =
+    filter === "free"
+      ? []
+      : PREFERRED_MODELS.filter((id) => byId.has(id))
+          .slice(0, SUGGESTED_COUNT)
+          .map((id) => byId.get(id)!);
+  const taken = new Set(suggested.map((m) => m.id));
+  const byName = (a: ModelInfo, b: ModelInfo) => a.name.localeCompare(b.name);
+  const free = matching.filter((m) => m.free && !taken.has(m.id)).sort(byName);
+  const other = matching.filter((m) => !m.free && !taken.has(m.id)).sort(byName);
+  const groups: ModelGroup[] = [
+    { id: "suggested" as const, label: "Suggested", models: suggested },
+    { id: "free" as const, label: "Free", models: free },
+    { id: "other" as const, label: filter === "all" && !opts.query ? "All models" : "Other models", models: other },
+  ].filter((g) => g.models.length);
+  return { groups, total: matching.length };
+}
+
+/** Cuts groups down to `limit` models in all, keeping their order. */
+export function limitGroups(groups: ModelGroup[], limit: number): ModelGroup[] {
+  let left = limit;
+  const out: ModelGroup[] = [];
+  for (const g of groups) {
+    if (left <= 0) break;
+    out.push({ ...g, models: g.models.slice(0, left) });
+    left -= g.models.length;
+  }
+  return out;
+}
+
 export function priceLabel(m: ModelInfo): string {
   if (m.free) return "Free";
   if (m.promptPrice === undefined || m.completionPrice === undefined) return "";

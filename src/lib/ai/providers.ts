@@ -69,9 +69,15 @@ export const LOCAL_SERVERS = [
   { label: "LM Studio", baseUrl: "http://localhost:1234/v1" },
 ];
 
-/** Models tried in order when none is chosen yet (the first the catalog has wins). */
+/**
+ * Good models for the agent, best first: the first the catalog has is the
+ * default, and the first few present are listed as "Suggested".
+ */
 export const PREFERRED_MODELS = [
   "anthropic/claude-sonnet-5.5",
+  "anthropic/claude-haiku-5.5",
+  "openai/gpt-5.5",
+  "google/gemini-3.8-flash",
   "anthropic/claude-sonnet-5",
   "anthropic/claude-sonnet-4.5",
   "openai/gpt-5",

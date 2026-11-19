@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { _clearModelCache, checkOpenRouterKey, defaultModel, fetchModels, parseModels, priceLabel, searchModels } from "./catalog";
+import { _clearModelCache, checkOpenRouterKey, defaultModel, fetchModels, groupModels, limitGroups, parseModels, priceLabel, searchModels } from "./catalog";
 
 const openRouter = {
   data: [
@@ -44,6 +44,45 @@ describe("searchModels and defaults", () => {
   it("labels prices", () => {
     expect(priceLabel(m[0])).toBe("$3.0 in · $15 out per M");
     expect(priceLabel(m[1])).toBe("Free");
+  });
+});
+
+describe("groupModels", () => {
+  const free = (id: string, name: string) => ({ id, name, context_length: 1, supported_parameters: ["tools"], pricing: { prompt: "0", completion: "0" } });
+  const paid = (id: string, name: string, tools = true) => ({ id, name, supported_parameters: tools ? ["tools"] : [], pricing: { prompt: "0.000001", completion: "0.000002" } });
+  const models = parseModels({
+    data: [
+      paid("aaa/first", "AAA First"),
+      paid("openai/gpt-5.5", "OpenAI: GPT-5.5"),
+      paid("anthropic/claude-sonnet-5.5", "Anthropic: Claude Sonnet 5.5"),
+      free("zzz/model:free", "ZZZ Model (free)"),
+      free("mmm/model:free", "MMM Model (free)"),
+      paid("bbb/chat", "BBB Chat", false),
+    ],
+  });
+  const ids = (g: ReturnType<typeof groupModels>["groups"]) => g.map((x) => [x.label, x.models.map((m) => m.id)]);
+
+  it("lists suggested models first, then free ones, then the rest by name", () => {
+    const { groups, total } = groupModels(models);
+    expect(total).toBe(6);
+    expect(ids(groups)).toEqual([
+      ["Suggested", ["anthropic/claude-sonnet-5.5", "openai/gpt-5.5"]],
+      ["Free", ["mmm/model:free", "zzz/model:free"]],
+      ["All models", ["aaa/first", "bbb/chat"]],
+    ]);
+  });
+
+  it("filters to free models, or to ones that can use tools, and searches within", () => {
+    expect(ids(groupModels(models, { filter: "free" }).groups)).toEqual([["Free", ["mmm/model:free", "zzz/model:free"]]]);
+    expect(groupModels(models, { filter: "tools" }).total).toBe(5);
+    expect(ids(groupModels(models, { query: "zzz" }).groups)).toEqual([["Free", ["zzz/model:free"]]]);
+  });
+
+  it("cuts a long list, keeping its order", () => {
+    expect(ids(limitGroups(groupModels(models).groups, 3))).toEqual([
+      ["Suggested", ["anthropic/claude-sonnet-5.5", "openai/gpt-5.5"]],
+      ["Free", ["mmm/model:free"]],
+    ]);
   });
 });
 

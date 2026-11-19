@@ -244,7 +244,8 @@ select.input {
   color: var(--foreground);
 }
 .segmented > button[aria-selected="true"],
-.segmented > button[aria-checked="true"] {
+.segmented > button[aria-checked="true"],
+.segmented > button[aria-pressed="true"] {
   background: var(--raised);
   color: var(--foreground);
   font-weight: 500;

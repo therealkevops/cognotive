@@ -94,6 +94,14 @@ export class FakeLLM {
           },
           { id: "openai/gpt-5", name: "OpenAI: GPT-5", supported_parameters: ["tools"], pricing: { prompt: "0.00000125", completion: "0.00001" } },
           { id: "meta-llama/llama-3.3-8b:free", name: "Meta: Llama 3.3 8B (free)", supported_parameters: [], pricing: { prompt: "0", completion: "0" } },
+          // Enough others that the list is cut short, with a free one sorting last by name.
+          ...Array.from({ length: 70 }, (_, i) => ({
+            id: `acme/model-${String(i).padStart(2, "0")}`,
+            name: `Acme: Model ${String(i).padStart(2, "0")}`,
+            supported_parameters: ["tools"],
+            pricing: { prompt: "0.000001", completion: "0.000002" },
+          })),
+          { id: "zeta/zed:free", name: "Zeta: Zed (free)", supported_parameters: ["tools"], pricing: { prompt: "0", completion: "0" } },
         ],
       });
     }

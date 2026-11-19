@@ -6,8 +6,10 @@ import {
   checkOpenRouterKey,
   defaultModel,
   fetchModels,
+  groupModels,
+  limitGroups,
   priceLabel,
-  searchModels,
+  type ModelFilter,
   type KeyStatus,
   type ModelInfo,
 } from "@/lib/ai/catalog";
@@ -248,7 +250,10 @@ function KeyRow({ settings: s, onSettings }: { settings: AiSettings; onSettings(
   );
 }
 
-/** OpenRouter's catalog: searchable, with prices and whether each model can use tools. */
+/** How many models the list shows before "show all". */
+const MODEL_LIMIT = 60;
+
+/** OpenRouter's catalog: suggested, free and the rest; searchable and filtered, with prices and tool support. */
 function OpenRouterModels({ model, onModel }: { model: string; onModel(m: string): void }) {
   const [models, setModels] = useState<ModelInfo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -269,14 +274,63 @@ function OpenRouterModels({ model, onModel }: { model: string; onModel(m: string
     if (models?.length && !model) onModel(defaultModel(models));
   }, [models, model, onModel]);
 
-  const shown = useMemo(() => searchModels(models ?? [], query).slice(0, 60), [models, query]);
+  const [filter, setFilter] = useState<ModelFilter>("all");
+  const [showAll, setShowAll] = useState(false);
+  const { groups, total } = useMemo(() => groupModels(models ?? [], { query, filter }), [models, query, filter]);
+  const shown = showAll ? groups : limitGroups(groups, MODEL_LIMIT);
+  const shownCount = shown.reduce((n, g) => n + g.models.length, 0);
+  const counts = useMemo(
+    () => ({ all: models?.length ?? 0, free: models?.filter((m) => m.free).length ?? 0, tools: models?.filter((m) => m.tools).length ?? 0 }),
+    [models],
+  );
   const current = models?.find((m) => m.id === model);
+  const option = (m: ModelInfo) => (
+    <li
+      key={m.id}
+      role="option"
+      aria-selected={m.id === model}
+      tabIndex={0}
+      className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-foreground/5 ${m.id === model ? "bg-accent/10" : ""}`}
+      onClick={() => onModel(m.id)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onModel(m.id);
+        }
+      }}
+    >
+      <span className="min-w-0 flex-1 truncate" title={m.id}>
+        {m.name}
+      </span>
+      {m.tools === false && (
+        <span className="text-[11px] text-muted" title="Can't use tools: fine for chat, not for the agent or its actions">
+          no tools
+        </span>
+      )}
+      {m.tools && <Wrench size={12} aria-label="Can use tools" className="text-muted" />}
+      <span className="shrink-0 text-[11px] text-muted tabular-nums">{priceLabel(m)}</span>
+    </li>
+  );
   return (
     <Row
       label="Model"
       id={searchId}
       stack
-      description={current ? <>Using <strong className="font-medium text-foreground">{current.name}</strong>. {priceLabel(current)}</> : model || undefined}
+      description={
+        current ? (
+          <>
+            Using <strong className="font-medium text-foreground">{current.name}</strong>. {priceLabel(current)}
+            {current.free && (
+              <span className="mt-1 block" role="note">
+                Free models allow only a small number of requests a day (OpenRouter raises the limit once your account has bought
+                credits), and the agent makes several per question, so you may see “Too many requests”.
+              </span>
+            )}
+          </>
+        ) : (
+          model || undefined
+        )
+      }
     >
       {error ? (
         <p className="text-sm text-[#c2412d]">{error}</p>
@@ -284,39 +338,60 @@ function OpenRouterModels({ model, onModel }: { model: string; onModel(m: string
         <p className="text-sm text-muted">Loading models…</p>
       ) : (
         <>
-          <input
-            id={searchId}
-            className="input"
-            type="search"
-            placeholder={`Search ${models.length} models…`}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <ul role="listbox" aria-label="Models" className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-border">
-            {shown.map((m) => (
-              <li
-                key={m.id}
-                role="option"
-                aria-selected={m.id === model}
-                tabIndex={0}
-                className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-foreground/5 ${m.id === model ? "bg-accent/10" : ""}`}
-                onClick={() => onModel(m.id)}
-                onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onModel(m.id))}
-              >
-                <span className="min-w-0 flex-1 truncate" title={m.id}>
-                  {m.name}
-                </span>
-                {m.tools === false && (
-                  <span className="text-[11px] text-muted" title="Can't use tools: fine for chat, not for agent actions">
-                    no tools
-                  </span>
-                )}
-                {m.tools && <Wrench size={12} aria-label="Can use tools" className="text-muted" />}
-                <span className="shrink-0 text-[11px] text-muted tabular-nums">{priceLabel(m)}</span>
-              </li>
+          <div className="flex flex-col gap-2">
+            <input
+              id={searchId}
+              className="input"
+              type="search"
+              placeholder={`Search ${models.length} models…`}
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setShowAll(false);
+              }}
+            />
+            <div role="group" aria-label="Show" className="segmented w-fit text-sm whitespace-nowrap">
+              {(
+                [
+                  ["all", "All"],
+                  ["free", "Free"],
+                  ["tools", "With tools"],
+                ] as const
+              ).map(([f, label]) => (
+                <button
+                  key={f}
+                  type="button"
+                  aria-pressed={filter === f}
+                  onClick={() => {
+                    setFilter(f);
+                    setShowAll(false);
+                  }}
+                >
+                  {label} <span className="text-muted tabular-nums">{counts[f]}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div role="listbox" aria-label="Models" className="mt-2 max-h-72 overflow-y-auto rounded-lg border border-border">
+            {shown.map((g) => (
+              <ul key={g.id} role="group" aria-label={g.label}>
+                <li role="presentation" className="sticky top-0 bg-background/95 px-3 pt-2 pb-1 text-[11px] font-medium text-muted backdrop-blur">
+                  {g.label}
+                </li>
+                {g.models.map(option)}
+              </ul>
             ))}
-            {shown.length === 0 && <li className="px-3 py-2 text-sm text-muted">No models match.</li>}
-          </ul>
+            {total === 0 && <p className="px-3 py-2 text-sm text-muted">No models match.</p>}
+          </div>
+          {shownCount < total && (
+            <p className="mt-1.5 text-xs text-muted">
+              Showing {shownCount} of {total}. Search to narrow the list, or{" "}
+              <button type="button" className="text-accent hover:underline" onClick={() => setShowAll(true)}>
+                show all {total}
+              </button>
+              .
+            </p>
+          )}
         </>
       )}
     </Row>
