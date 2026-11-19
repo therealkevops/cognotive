@@ -136,7 +136,8 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   icon rails
 - Sync with GitHub: paste a GitHub token, pick a repository, branch and optional subfolder.
   Notes sync both ways; see [How sync works](#how-sync-works)
-- AI chat about your notes, in the **Chat** tab of the right panel. The model searches and reads
+- AI chat about your notes, in the **Chat** tab of the right panel (see
+  [How the AI agent works](#how-the-ai-agent-works)). The model searches and reads
   notes by itself (search, read a note or a section, follow links and backlinks, hubs, tags,
   properties, folders, repository health), cites them as `[[links]]`, and each answer lists every
   note it read and every step it took. Models that can't use tools (many small local ones) are given
@@ -197,6 +198,113 @@ The first time you run the e2e tests locally, install the browser with
 `npx playwright install chromium`.
 
 CI (`.github/workflows/ci.yml`) runs all of the above on every push to `main` and on pull requests.
+
+## How the AI agent works
+
+The AI in noted-ai doesn't just answer from the note in front of it. It looks things up across your
+notes by itself, shows exactly what it read, and **proposes** changes rather than making them.
+
+### How a question is answered
+
+When you ask something in the **Chat** tab, a loop runs in your browser:
+
+1. **Ask:** your question goes to the model, along with the open note (while its chip is on) and
+   a list of tools it may use.
+2. **Look things up:** the model asks for a tool, such as "search notes for *garden*". The app
+   runs it against your notes in the browser and sends back the result. Nothing is uploaded unless
+   the model asks for it.
+3. **Repeat:** it might read a note, follow its backlinks, or check a hub, until it has enough.
+   A step limit (12 by default, set in **Settings → AI**) stops it looking forever.
+4. **Answer:** it replies citing notes as `[[links]]`, which open the note.
+
+While it works you see each step (*Searched “garden”…*, *Read Compost*). Afterwards, **Read N
+notes** lists every step and every note whose text was sent to the model.
+
+### What it can look at
+
+- **Search:** keyword search, including `tag:x` and `[status:draft]` filters.
+- **Read:** a whole note, or one heading's section, with its properties.
+- **Connections:** links, backlinks, unlinked mentions and related notes, plus labelled canvas
+  arrows.
+- **Nearby notes:** everything within a few links of a note.
+- **Structure:** hubs (and which hub a note belongs in), tags, properties and folders.
+- **Health:** the repository health report (orphans, broken links, stale hubs).
+
+These use the same indexes the app already keeps for search, the link panels and Repository health.
+
+### Changes are proposals
+
+When asked, the model can suggest:
+
+- new notes
+- additions at the end of a note or under a heading
+- edits
+- property changes
+- links: turning a mention into a link, or adding a note to a hub
+
+Each suggestion appears under the answer as a **before/after diff**. You can **Apply**, **Edit**
+first, **Reject**, or **Apply all**. **Nothing is written until you apply it.** If you've edited the
+note since the suggestion was made, applying it merges the change onto your current text; if you
+both changed the same lines, it refuses and says why.
+
+### Ready-made actions
+
+These are ready-made jobs, placed where they're useful. Each runs in the chat and comes back as
+proposals for you to review.
+
+| Action | Where |
+|---|---|
+| Summarise this note (and propose a `summary:` property) | Command palette, empty chat |
+| Suggest links | Connections panel |
+| Suggest tags and properties, reusing names you already use | Properties panel |
+| Write a hub that many notes link to but doesn't exist yet | Repository health, Hubs → To write |
+| Find homes for orphan notes | Repository health |
+| Review stale hubs, then mark them reviewed | Repository health |
+| Fill a property for files that don't have it | Property table |
+| What did I work on this week? | Empty chat, command palette |
+
+### Ask and Save as note
+
+- **Ask:** select text and press **Ctrl/Cmd+Shift+Enter**. You can save the answer as a new note
+  that your selection then links to, insert it below the selection, or copy it.
+- **Save as note:** stores the whole conversation, with its sources, in an `AI/` folder (you can
+  change the folder in **Settings → AI**).
+
+### Which model answers
+
+Set this in **Settings → AI**:
+
+- **OpenRouter:** one key, hundreds of models, including free ones. It's the recommended option.
+- **Local:** Ollama or LM Studio. Your notes never leave your machine.
+- **Claude plan:** your Claude subscription, through Claude Code on your computer, using
+  [the companion](#the-companion-claude-plan-and-mcp) bridge.
+- **Custom:** any endpoint that works like OpenAI's API.
+
+Requests go straight from your browser to the provider, and keys stay on your device. Some models
+can't use tools, and many small local ones can't. For those, the app picks the notes that best match
+your question and sends them instead, and labels the answer *answered from search results*.
+
+### Your controls
+
+- **Repository privacy:** you can keep a repository to local models only. Encrypted repositories are
+  local-only by default.
+- **Agent on or off:** turn the agent off and the model only sees the open note.
+- **Proposals on or off:** turn proposals off and the agent only reads.
+- **Visibility:** each answer shows the notes it read and the tokens it used.
+
+### Claude Code integration (optional)
+
+[The companion](#the-companion-claude-plan-and-mcp)'s **MCP server** gives Claude Code the same tools
+for a local clone of your notes repository, so you can ask it to reorganise or link notes directly.
+It asks before each change, and the edits are ordinary file changes that `git diff` shows before you
+commit.
+
+### Limits to know
+
+- **Model quality:** answers are only as good as the model; small models search less well.
+- **Free models:** they have low daily limits, and the agent makes several requests per question.
+- **Remote providers see what's read:** a remote provider receives the text of every note the agent
+  reads. The *Read N notes* list shows exactly which ones.
 
 ## The companion (Claude plan and MCP)
 
