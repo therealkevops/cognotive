@@ -120,6 +120,13 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
     tags, are copied into the note
   - Starter templates (Meeting, Project, Person, Weekly review, Map of content, Daily) can be added when a
     repository is created, or later from the Templates tab
+- **Tasks** (the checklist tab in the left sidebar, or *Show tasks*): every `- [ ]` in every note,
+  grouped by due date (Overdue, Today, Tomorrow, Next 7 days, Later, No date) or by note, with
+  Open / Done / All and a filter for words, `#tags` or note names. Tick a task to tick it in its note;
+  click it to open the note at that line. Dates and priorities are read the way Obsidian's Tasks and
+  Dataview plugins write them (`📅 2026-12-01`, `[due:: 2026-12-01]`, `⏳` scheduled, `⏫ 🔼 🔽`),
+  and ticking a task that uses them adds `✅` with the date. The AI agent can list tasks too
+  ("what's due this week?"), and the weekly review mentions overdue ones
 - Tabs for open files (the button at the end of the tab bar, or the command *Close all tabs*, closes them all), and a side pane to read one note while writing another (the columns
   button in the file tree, or Shift+Enter in the quick switcher)
 - Version history for repositories synced with GitHub: see how a note changed and restore an older version
@@ -228,6 +235,7 @@ notes** lists every step and every note whose text was sent to the model.
   arrows.
 - **Nearby notes:** everything within a few links of a note.
 - **Structure:** hubs (and which hub a note belongs in), tags, properties and folders.
+- **Tasks:** open or done tasks across notes, by due date, words or tags.
 - **Health:** the repository health report (orphans, broken links, stale hubs).
 
 These use the same indexes the app already keeps for search, the link panels and Repository health.

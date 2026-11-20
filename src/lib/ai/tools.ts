@@ -6,6 +6,7 @@ import { sectionUnder } from "../markdown/remark-links";
 import { vaultHealth } from "../links/health";
 import { hubsFor, pinnedHubs } from "../links/hubs";
 import { appendText, notePathFrom, replaceOnce, type Proposal } from "./proposals";
+import { compareTasks, filterTasks, parseTasks } from "../tasks/tasks";
 import type { LinkIndex } from "../links/link-index";
 import { filesWithProperties, parsePropertyQuery, valueText } from "../links/property-query";
 import type { NoteIndex } from "../search/note-index";
@@ -113,6 +114,16 @@ export const READ_TOOLS: ToolSpec[] = [
     { key: { type: "string" }, value: { type: "string" } },
   ),
   fn("list_folder", "Files and folders in a folder (\"\" for the top).", { path: { type: "string" } }),
+  fn(
+    "list_tasks",
+    "Tasks (- [ ] items) across the notes, earliest due first, with their note, due date, priority and heading.",
+    {
+      status: { type: "string", enum: ["open", "done", "all"], description: "Default open" },
+      due_before: { type: "string", description: "Only tasks due on or before this date, YYYY-MM-DD" },
+      text: { type: "string", description: "Words, #tags or a note name to match" },
+      limit: { type: "integer", description: "At most 100; default 40" },
+    },
+  ),
   fn("repository_health", "How well connected the notes are: score, orphans, dead ends, broken links, stale hubs, hubs to write.", {}),
 ];
 
@@ -419,6 +430,27 @@ const HANDLERS: Record<string, Handler> = {
     }
     if (!files.length && !folders.size) return { content: `No folder "${folder}".`, read: [], label: `Listed ${folder || "the top folder"}` };
     return { content: json({ folder, folders: [...folders].sort(), files: files.sort().slice(0, 200) }), read: [], label: `Listed ${folder || "the top folder"}` };
+  },
+
+  list_tasks(env, a) {
+    const status = a.status === "done" || a.status === "all" ? a.status : "open";
+    const dueBefore = /^\d{4}-\d{2}-\d{2}$/.test(str(a.due_before)) ? str(a.due_before) : undefined;
+    const all = env.links
+      .paths()
+      .filter(isNote)
+      .flatMap((p) => parseTasks(p, env.links.content(p) ?? ""));
+    const found = filterTasks(all, { status, text: str(a.text), dueBefore }).sort(compareTasks);
+    const tasks = found.slice(0, num(a.limit, 40, 100)).map((t) => ({
+      task: t.text,
+      note: t.path,
+      ...(t.done ? { done: true } : {}),
+      ...(t.due ? { due: t.due } : {}),
+      ...(t.scheduled ? { scheduled: t.scheduled } : {}),
+      ...(t.priority !== "none" ? { priority: t.priority } : {}),
+      ...(t.heading ? { under: t.heading } : {}),
+    }));
+    const label = dueBefore ? `Listed tasks due by ${dueBefore}` : `Listed ${status === "all" ? "" : status + " "}tasks`;
+    return { content: tasks.length ? json({ total: found.length, tasks }) : "No tasks match.", read: [], label };
   },
 
   repository_health(env) {

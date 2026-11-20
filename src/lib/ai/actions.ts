@@ -133,6 +133,7 @@ export function actionPrompt(a: AgentAction, ctx: ActionContext): ActionPrompt {
               `Notes changed in the last ${days} days, newest first:`,
               recent.slice(0, 40).map((n) => `- ${n.path} (${new Date(n.mtime).toISOString().slice(0, 10)})`).join("\n"),
               "Read the ones that matter, then summarise what I worked on: the main themes, decisions, open questions and loose ends, and what to do next.",
+              "Check open tasks too (list_tasks), and mention any that are overdue or due this week.",
               "Link every note you mention.",
             ].join("\n")
           : `No notes changed in the last ${days} days. Say so, and suggest a note worth coming back to (repository_health, list_hubs).`,

@@ -10,6 +10,7 @@ import {
   Files,
   History,
   FilePlus,
+  ListChecks,
   ListTree,
   Link2,
   Activity,
@@ -52,7 +53,7 @@ import { neighbourhoodCanvas, type Neighbour } from "@/lib/canvas/map";
 import { convertLinks, formatLink, markdownLink } from "@/lib/links/format";
 import { splitLinkText } from "@/lib/links/parse";
 import { setFrontmatterProperty, splitFrontmatter } from "@/lib/markdown/frontmatter";
-import { healthIgnored, hubProperty, vaultHealth } from "@/lib/links/health";
+import { healthIgnored, hubProperty, todayStamp, vaultHealth } from "@/lib/links/health";
 import { extractHeadings } from "@/lib/markdown/outline";
 import { blockIdChange, listBlocks } from "@/lib/markdown/blocks";
 import { previewMarkdown } from "@/lib/markdown/preview";
@@ -100,6 +101,8 @@ import { TabBar } from "./TabBar";
 import { Outline } from "./Outline";
 import { QuickSwitcher } from "./QuickSwitcher";
 import { SearchPanel } from "./SearchPanel";
+import { TasksPanel } from "./TasksPanel";
+import { toggleTask, type Task } from "@/lib/tasks/tasks";
 import { TagsPanel } from "./TagsPanel";
 import { addStarterTemplates, needsDialog, TemplatesPanel, UseTemplateDialog, useTemplatePaths } from "./Templates";
 import { Toolbar } from "./Toolbar";
@@ -121,7 +124,7 @@ const ReadingView = dynamic(() => reloadOnChunkError(() => import("./ReadingView
 });
 
 type Mode = "live" | "source" | "reading";
-type SidebarTab = "files" | "search" | "tags" | "templates" | "properties";
+type SidebarTab = "files" | "search" | "tasks" | "tags" | "templates" | "properties";
 type PanelTab = "outline" | "links" | "chat";
 
 const MODES: Array<{ id: Mode; label: string; icon: typeof Pencil }> = [
@@ -781,6 +784,34 @@ export function Workspace() {
     view.focus();
   });
 
+  /** Opens a note with the cursor at `offset` (a task, say). */
+  const openAt = (path: string, offset: number) => {
+    if (path === vault.active?.path && view) {
+      view.dispatch({ selection: { anchor: Math.min(offset, view.state.doc.length) }, scrollIntoView: true });
+      view.focus();
+      return;
+    }
+    const content = vault.links.content(path) ?? "";
+    pendingCursor.current = { path, fromEnd: Math.max(0, content.length - offset) };
+    void vault.open(path);
+  };
+
+  /** Ticks or clears a task in its note: in the editor when the note is open, so the cursor stays put. */
+  const toggleTaskIn = async (task: Task, done: boolean): Promise<boolean> => {
+    const next = toggleTask(latestText(task.path), task, done, todayStamp());
+    if (next === null) return false;
+    const line = next.split("\n")[task.line];
+    if (task.path === vault.active?.path && view) {
+      if (task.line >= view.state.doc.lines) return false;
+      const l = view.state.doc.line(task.line + 1);
+      if (l.text !== task.raw) return false;
+      view.dispatch({ changes: { from: l.from, to: l.to, insert: line }, userEvent: "input.toggle" });
+    } else {
+      await vault.writeNote(task.path, next);
+    }
+    return true;
+  };
+
   /** The latest text of a file: the open file's (with unsaved edits), or the saved one. */
   const latestText = (path: string) => (path === vault.active?.path ? vault.activeText : (vault.links.content(path) ?? ""));
   const isAttachment = (path: string) => !isNote(path) && !isDrawing(path) && !isCanvas(path);
@@ -854,6 +885,7 @@ export function Workspace() {
           [
             ["files", "Files", Files],
             ["search", "Search", Search],
+            ["tasks", "Tasks", ListChecks],
             ["tags", "Tags", Tags],
             ["templates", "Templates", LayoutTemplate],
             ["properties", "Properties", SlidersHorizontal],
@@ -865,12 +897,11 @@ export function Workspace() {
             type="button"
             aria-selected={tab === id}
             title={label}
-            className={tab === id ? "" : "!flex-none"}
             onClick={() => setTab(id)}
           >
-            <Icon size={14} aria-hidden />
-            {/* Four tabs don't fit with labels: only the open one shows its name. */}
-            <span className={tab === id ? "" : "sr-only"}>{label}</span>
+            <Icon size={15} aria-hidden />
+            {/* Six tabs don't fit with names: icons, named in their tooltips and for screen readers. */}
+            <span className="sr-only">{label}</span>
           </button>
         ))}
       </div>
@@ -893,6 +924,8 @@ export function Workspace() {
           </div>
         ) : tab === "search" ? (
           <SearchPanel query={searchQuery} onQuery={setSearchQuery} autoFocus onEditProperties={setPropertyTable} />
+        ) : tab === "tasks" ? (
+          <TasksPanel onOpen={openAt} onToggle={toggleTaskIn} />
         ) : tab === "tags" ? (
           <TagsPanel onTag={showTag} />
         ) : tab === "properties" ? (
@@ -961,6 +994,9 @@ export function Workspace() {
       </RailButton>
       <RailButton label="Search" onClick={() => openSidebarTab("search")}>
         <Search size={18} aria-hidden />
+      </RailButton>
+      <RailButton label="Tasks" onClick={() => openSidebarTab("tasks")}>
+        <ListChecks size={18} aria-hidden />
       </RailButton>
       <RailButton label="Tags" onClick={() => openSidebarTab("tags")}>
         <Tags size={18} aria-hidden />
@@ -1124,6 +1160,7 @@ export function Workspace() {
       hint: "Ctrl/Cmd+Shift+F",
     },
     { id: "health", label: "Open repository health" },
+    { id: "tasks", label: "Show tasks" },
     { id: "map-canvas", label: "Map this note as a canvas", when: kind === "note" },
     {
       id: "hub-toggle",
@@ -1190,6 +1227,7 @@ export function Workspace() {
       setSidebarOpen(true);
     },
     health: () => setHealthOpen(true),
+    tasks: () => openSidebarTab("tasks"),
     "ai-summarise": () => activePathNow && runAction({ kind: "summarise", path: activePathNow }),
     "ai-links": () => activePathNow && runAction({ kind: "suggest-links", path: activePathNow }),
     "ai-properties": () => activePathNow && runAction({ kind: "suggest-properties", path: activePathNow }),

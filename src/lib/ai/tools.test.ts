@@ -78,6 +78,19 @@ describe("read tools", () => {
     expect(JSON.parse(run("list_folder", { path: "Recipes" }).content).files).toEqual(["Recipes/Bread.md", "Recipes/Soup.md"]);
   });
 
+  it("list tasks across notes, earliest due first", () => {
+    const e = testEnv({
+      "A.md": "# A\n\n- [ ] Later thing 📅 2026-12-10\n- [x] Done thing\n",
+      "B.md": "## Today\n\n- [ ] Urgent ⏫ [due:: 2026-11-20] #work\n- [ ] Someday\n",
+    });
+    const all = JSON.parse(runTool(e, "list_tasks", "{}").content);
+    expect(all.total).toBe(3);
+    expect(all.tasks[0]).toEqual({ task: "Urgent #work", note: "B.md", due: "2026-11-20", priority: "high", under: "Today" });
+    expect(JSON.parse(runTool(e, "list_tasks", JSON.stringify({ due_before: "2026-11-30" })).content).tasks.map((t: { task: string }) => t.task)).toEqual(["Urgent #work"]);
+    expect(JSON.parse(runTool(e, "list_tasks", JSON.stringify({ status: "done" })).content).tasks[0].task).toBe("Done thing");
+    expect(runTool(e, "list_tasks", JSON.stringify({ text: "zebra" })).content).toBe("No tasks match.");
+  });
+
   it("report repository health", () => {
     const h = JSON.parse(run("repository_health", {}).content);
     expect(h.brokenLinks[0].missing).toBe("Compost");
