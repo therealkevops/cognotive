@@ -12,7 +12,7 @@ type Status = "open" | "done" | "all";
 type GroupBy = "due" | "note";
 
 const GROUP_ORDER: DueGroup[] = ["overdue", "today", "tomorrow", "week", "later", "none"];
-const PRIORITY_MARK: Partial<Record<Task["priority"], string>> = { highest: "🔺", high: "⏫", medium: "🔼", low: "🔽", lowest: "⏬" };
+const PRIORITY_LABEL: Partial<Record<Task["priority"], string>> = { highest: "Highest", high: "High", medium: "Medium", low: "Low", lowest: "Lowest" };
 
 /** Every task in the repository's notes, by due date or by note, ticked off in place. */
 export function TasksPanel({
@@ -107,11 +107,11 @@ export function TasksPanel({
         {groups.length === 0 && (
           <p className="px-2 py-4 text-muted">
             {all.length === 0
-              ? "No tasks yet. Write “- [ ] something” in any note (Ctrl/Cmd+Shift+9 makes a task list); add 📅 2026-12-01 for a due date."
+              ? "No tasks yet. Write “- [ ] something” in any note (Ctrl/Cmd+Shift+9 makes a task list); add [due:: 2026-12-01] for a due date."
               : query
                 ? "No tasks match."
                 : status === "open"
-                  ? "Nothing open. 🎉"
+                  ? "Nothing open."
                   : "No tasks here."}
           </p>
         )}
@@ -186,13 +186,17 @@ function TaskRow({
       />
       <button type="button" className="min-w-0 flex-1 text-left" title={`Open in ${displayName(t.path)}`} onClick={() => onOpen(t.path, t.offset)}>
         <span className={`block break-words ${t.done ? "text-muted line-through" : ""}`}>
-          {PRIORITY_MARK[t.priority] && <span aria-label={`${t.priority} priority`}>{PRIORITY_MARK[t.priority]} </span>}
           {label}
         </span>
         <span className="flex flex-wrap gap-x-2 text-[11px] text-muted">
           {date && (
             <span className={overdue ? "text-[#c2412d]" : ""}>
               {t.due ? "Due" : "Scheduled"} {date}
+            </span>
+          )}
+          {PRIORITY_LABEL[t.priority] && (
+            <span className={t.priority === "highest" || t.priority === "high" ? "font-medium text-foreground/80" : ""}>
+              {PRIORITY_LABEL[t.priority]} priority
             </span>
           )}
           {showNote && <span className="truncate">{displayName(t.path)}</span>}

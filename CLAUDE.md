@@ -12,6 +12,9 @@
   computer, never on Vercel; it reuses `src/lib` and is bundled with `npm run build:bridge`.
 - Before committing, run `npm run check` and `npm run build`; for UI changes also
   `npm run test:e2e`.
+- No emoji anywhere in the app: not in UI text, messages, AI prompts or anything written into notes
+  (use words or lucide icons). `src/lib/no-emoji.test.ts` enforces it; the task parser may still
+  read Obsidian's emoji markers in existing notes.
 - Unit tests sit next to the code as `*.test.ts(x)`; e2e tests live in `tests/e2e/`.
 - Sync logic lives in `src/lib/sync/` and is tested against `FakeRemote`; e2e tests fake the
   GitHub API in the browser with `tests/e2e/fake-github.ts`. Never call real GitHub in tests.

@@ -237,7 +237,7 @@ export function HealthDialog({
                 </p>
                 {fixedToday > 0 && (
                   <p className="health-fixed" role="status">
-                    {fixedToday} {fixedToday === 1 ? "issue" : "issues"} fixed today ✨
+                    {fixedToday} {fixedToday === 1 ? "issue" : "issues"} fixed today
                   </p>
                 )}
                 <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-2">
@@ -317,7 +317,7 @@ export function HealthDialog({
             )}
           </div>
           <ul role="tabpanel" aria-label={current.label} className="divide-y divide-border px-4 py-1">
-          {current.count === 0 && <li className="px-2 py-6 text-center text-sm text-muted">Nothing here. 🎉</li>}
+          {current.count === 0 && <li className="px-2 py-6 text-center text-sm text-muted">Nothing here.</li>}
           {tab === "broken" &&
             health.broken.map((b) =>
               row(

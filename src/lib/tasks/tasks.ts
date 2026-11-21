@@ -124,16 +124,16 @@ export function parseTasks(path: string, content: string): Task[] {
 }
 
 /** The note with one task's box ticked or cleared; null if the line has changed since. */
-export function toggleTask(content: string, task: Pick<Task, "line" | "raw">, done: boolean, today?: string): string | null {
+export function toggleTask(content: string, task: Pick<Task, "line" | "raw">, done: boolean): string | null {
   const lines = content.split("\n");
   if (lines[task.line] !== task.raw) return null;
   const m = TASK.exec(task.raw);
   if (!m) return null;
   const box = task.raw.indexOf(`[${m[2]}]`, m[1].length);
   let line = task.raw.slice(0, box) + (done ? "[x]" : "[ ]") + task.raw.slice(box + 3);
-  // Tasks written in the Tasks plugin's style (with 📅 ⏳ 🛫 dates) also record when they were done.
-  if (today && done && /📅|⏳|🛫/u.test(line) && !/✅\s*\d{4}-\d{2}-\d{2}/u.test(line)) line = `${line.replace(/\s+$/, "")} ✅ ${today}`;
-  if (!done) line = line.replace(/\s*✅\s*\d{4}-\d{2}-\d{2}/u, "");
+  // The app never writes emoji, so no done date is added; clearing a task drops a done date
+  // it already had (written by Obsidian's Tasks or Dataview plugins), which would no longer be true.
+  if (!done) line = line.replace(/\s*(?:✅\s*\d{4}-\d{2}-\d{2}|\[completion::\s*\d{4}-\d{2}-\d{2}\])/u, "");
   lines[task.line] = line;
   return lines.join("\n");
 }

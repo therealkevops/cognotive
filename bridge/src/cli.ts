@@ -54,8 +54,8 @@ async function bridge(flags: Record<string, string[]>) {
   const log = (s = "") => process.stdout.write(s + "\n");
   log(`noted-ai bridge is running at ${b.url} (this computer only).`);
   log();
-  if (!status.installed) log("⚠ Claude Code isn't installed: npm install -g @anthropic-ai/claude-code\n");
-  else if (!status.signedIn) log("⚠ Claude Code is signed out: run `claude /login`\n");
+  if (!status.installed) log("Warning: Claude Code isn't installed: npm install -g @anthropic-ai/claude-code\n");
+  else if (!status.signedIn) log("Warning: Claude Code is signed out: run `claude /login`\n");
   else log(`Claude Code is signed in${status.plan ? ` (${status.plan} plan)` : ""}.\n`);
   log(`Pairing code: ${token}`);
   for (const o of origins) log(`Or open ${o}/#bridge=${token} to pair in one step.`);

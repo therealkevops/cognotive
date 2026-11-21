@@ -42,14 +42,13 @@ describe("parseTasks", () => {
 
 describe("toggleTask", () => {
   const [buy, measure, call] = parseTasks("Plan.md", note);
-  it("ticks and clears the box, recording the done date in Tasks-plugin style", () => {
-    const done = toggleTask(note, buy, true, "2026-11-20")!;
-    expect(done.split("\n")[6]).toBe("- [x] Buy seeds 📅 2026-11-22 ⏫ #garden ✅ 2026-11-20");
-    const again = toggleTask(done, parseTasks("Plan.md", done)[0], false)!;
-    expect(again).toBe(note);
+  it("ticks and clears the box, writing no emoji", () => {
+    const done = toggleTask(note, buy, true)!;
+    expect(done.split("\n")[6]).toBe("- [x] Buy seeds 📅 2026-11-22 ⏫ #garden");
+    expect(toggleTask(done, parseTasks("Plan.md", done)[0], false)).toBe(note);
+    // Clearing a done task drops the done date it no longer has.
     expect(toggleTask(note, measure, false)!.split("\n")[7]).toBe("  - [ ] Measure beds");
-    // Plain tasks just get the tick.
-    expect(toggleTask(note, call, true, "2026-11-20")!.split("\n")[8]).toBe("* [x] Call [[Ann]] [due:: 2026-11-19]");
+    expect(toggleTask(note, call, true)!.split("\n")[8]).toBe("* [x] Call [[Ann]] [due:: 2026-11-19]");
   });
   it("refuses when the line changed since", () => {
     expect(toggleTask(note.replace("Buy seeds", "Buy bulbs"), buy, true)).toBeNull();

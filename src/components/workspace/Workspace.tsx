@@ -53,7 +53,7 @@ import { neighbourhoodCanvas, type Neighbour } from "@/lib/canvas/map";
 import { convertLinks, formatLink, markdownLink } from "@/lib/links/format";
 import { splitLinkText } from "@/lib/links/parse";
 import { setFrontmatterProperty, splitFrontmatter } from "@/lib/markdown/frontmatter";
-import { healthIgnored, hubProperty, todayStamp, vaultHealth } from "@/lib/links/health";
+import { healthIgnored, hubProperty, vaultHealth } from "@/lib/links/health";
 import { extractHeadings } from "@/lib/markdown/outline";
 import { blockIdChange, listBlocks } from "@/lib/markdown/blocks";
 import { previewMarkdown } from "@/lib/markdown/preview";
@@ -798,7 +798,7 @@ export function Workspace() {
 
   /** Ticks or clears a task in its note: in the editor when the note is open, so the cursor stays put. */
   const toggleTaskIn = async (task: Task, done: boolean): Promise<boolean> => {
-    const next = toggleTask(latestText(task.path), task, done, todayStamp());
+    const next = toggleTask(latestText(task.path), task, done);
     if (next === null) return false;
     const line = next.split("\n")[task.line];
     if (task.path === vault.active?.path && view) {

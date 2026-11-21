@@ -125,7 +125,7 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   Open / Done / All and a filter for words, `#tags` or note names. Tick a task to tick it in its note;
   click it to open the note at that line. Dates and priorities are read the way Obsidian's Tasks and
   Dataview plugins write them (`📅 2026-12-01`, `[due:: 2026-12-01]`, `⏳` scheduled, `⏫ 🔼 🔽`),
-  and ticking a task that uses them adds `✅` with the date. The AI agent can list tasks too
+  (the app reads these markers but never writes emoji itself). The AI agent can list tasks too
   ("what's due this week?"), and the weekly review mentions overdue ones
 - Tabs for open files (the button at the end of the tab bar, or the command *Close all tabs*, closes them all), and a side pane to read one note while writing another (the columns
   button in the file tree, or Shift+Enter in the quick switcher)

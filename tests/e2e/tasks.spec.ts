@@ -18,15 +18,15 @@ test("the Tasks panel gathers tasks by date, and ticks them off in their notes",
   const panel = page.getByRole("region", { name: "Tasks" });
   await expect(panel.getByRole("group", { name: "Overdue" })).toContainText("Pay rent");
   await expect(panel.getByRole("group", { name: "Today" })).toContainText("Buy seeds #garden");
-  await expect(panel.getByRole("group", { name: "Today" }).getByLabel("high priority")).toBeVisible();
+  await expect(panel.getByRole("group", { name: "Today" })).toContainText("High priority");
   // Links show as their text; the welcome note's own open task is there too.
   await expect(panel.getByRole("group", { name: "No date" })).toContainText("Plan the trip");
   await expect(panel.getByRole("group", { name: "No date" })).toContainText("Try the reading view");
   await expect(panel.getByRole("radio", { name: "Open 4" })).toBeVisible();
 
-  // Ticking one off writes it into the note (with a done date, as the Tasks plugin does).
+  // Ticking one off ticks it in the note, and nothing else.
   await panel.getByRole("checkbox", { name: "Done: Buy seeds #garden" }).click();
-  await expect(editor(page)).toContainText(`- [x] Buy seeds 📅 ${today} ⏫ #garden ✅ ${today}`);
+  await expect(editor(page).locator(".cm-line", { hasText: "Buy seeds" })).toHaveText(`- [x] Buy seeds 📅 ${today} ⏫ #garden`);
   await expect(panel.getByRole("radio", { name: "Open 3" })).toBeVisible();
   await panel.getByRole("radio", { name: /^Done/ }).click();
   await expect(panel).toContainText("Buy seeds");
