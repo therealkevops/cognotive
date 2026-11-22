@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 /** Width of a collapsed sidebar: a rail of icons. */
 const RAIL = "3.25rem";
@@ -51,7 +52,7 @@ export function AppShell({
           leftCollapsed ? "md:hidden" : "md:flex"
         }`}
       >
-        {sidebar}
+        <ErrorBoundary name="The sidebar">{sidebar}</ErrorBoundary>
       </aside>
       {leftCollapsed && (
         <nav
@@ -61,7 +62,9 @@ export function AppShell({
           {leftRail}
         </nav>
       )}
-      <main className="flex min-h-0 min-w-0 flex-col">{children}</main>
+      <main className="flex min-h-0 min-w-0 flex-col">
+        <ErrorBoundary name="The workspace">{children}</ErrorBoundary>
+      </main>
       {rightCollapsed ? (
         <nav
           aria-label="Context rail"
@@ -74,7 +77,7 @@ export function AppShell({
           aria-label="Context"
           className="hidden min-h-0 min-w-0 overflow-y-auto border-l border-border bg-background px-4 py-3 lg:block"
         >
-          {panel}
+          <ErrorBoundary name="The side panel">{panel}</ErrorBoundary>
         </aside>
       )}
     </div>

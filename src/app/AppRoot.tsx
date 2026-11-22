@@ -9,6 +9,7 @@ import { SemanticProvider } from "@/components/semantic/useSemantic";
 import { asksUser, requestPersistence } from "@/lib/storage-safety";
 import { VaultsProvider, useVaults } from "@/components/vault/useVaults";
 import { LocalStore } from "@/lib/vault/local-store";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // The workspace depends on browser-only APIs (IndexedDB, localStorage), so it
 // renders on the client only.
@@ -57,8 +58,10 @@ export function AppRoot() {
     if (!asksUser()) void requestPersistence();
   }, []);
   return (
-    <VaultsProvider>
-      <ClientOnlyVaults />
-    </VaultsProvider>
+    <ErrorBoundary name="noted-ai" page>
+      <VaultsProvider>
+        <ClientOnlyVaults />
+      </VaultsProvider>
+    </ErrorBoundary>
   );
 }

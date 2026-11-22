@@ -63,6 +63,7 @@ import { Toolbar } from "./Toolbar";
 import { EmptyState, SaveIndicator, TitleInput, Toasts } from "./WorkspaceParts";
 import { captureTarget, dailyNote, deletePropertyEverywhere, exportZip, importZip, mapAsCanvas, renamePropertyEverywhere, saveCapture } from "./vault-actions";
 import { useEditorHosts } from "./useEditorHosts";
+import { ErrorBoundary } from "../ErrorBoundary";
 
 const MarkdownEditor = dynamic(() => reloadOnChunkError(() => import("./MarkdownEditor"))(), { ssr: false });
 // Excalidraw is about 1 MB: loaded only when a drawing is opened.
@@ -1108,6 +1109,7 @@ export function Workspace() {
                 }
               }}
             >
+              <ErrorBoundary name={kind === "canvas" ? "The canvas" : kind === "drawing" ? "The drawing" : kind === "file" ? "This file's view" : mode === "reading" ? "Reading view" : "The editor"} resetKey={`${vault.active?.path}:${mode}:${canvasAsText}`}>
               {!vault.ready ? (
                 <p className="p-8 text-muted">Loading repository…</p>
               ) : !vault.active ? (
@@ -1199,8 +1201,10 @@ export function Workspace() {
                   autoFocus={!window.matchMedia("(pointer: coarse)").matches}
                 />
               )}
+              </ErrorBoundary>
             </div>
             {sidePath && vault.entries.some((e) => e.path === sidePath) && (
+              <ErrorBoundary name="The side pane" resetKey={sidePath} onClose={() => setSidePath(null)}>
               <SidePane
                 path={sidePath}
                 onNavigate={setSidePath}
@@ -1210,11 +1214,16 @@ export function Workspace() {
                   void vault.open(p);
                 }}
               />
+              </ErrorBoundary>
             )}
           </div>
         </AppShell>
       </SidePaneContext.Provider>
-      {switcherOpen && <QuickSwitcher onClose={() => setSwitcherOpen(false)} onOpenSide={setSidePath} />}
+      {switcherOpen && (
+        <ErrorBoundary name="Quick switcher" onClose={() => setSwitcherOpen(false)}>
+          <QuickSwitcher onClose={() => setSwitcherOpen(false)} onOpenSide={setSidePath} />
+        </ErrorBoundary>
+      )}
       {paletteOpen && (
         <Picker
           title="Command palette"
@@ -1224,7 +1233,11 @@ export function Workspace() {
           onClose={() => setPaletteOpen(false)}
         />
       )}
-      {historyOpen && activePathNow && <HistoryDialog path={activePathNow} onClose={() => setHistoryOpen(false)} />}
+      {historyOpen && activePathNow && (
+        <ErrorBoundary name="Version history" onClose={() => setHistoryOpen(false)}>
+          <HistoryDialog path={activePathNow} onClose={() => setHistoryOpen(false)} />
+        </ErrorBoundary>
+      )}
       <input
         ref={zipInput}
         type="file"
@@ -1330,14 +1343,34 @@ export function Workspace() {
           }}
         />
       )}
-      {creating && <CreateNoteDialog {...creating} onClose={() => setCreating(null)} />}
-      {deleting && <DeleteDialog path={deleting} isFolder={false} onClose={() => setDeleting(null)} />}
-      {settingsOpen && <SettingsDialog initial={settingsOpen} onClose={() => setSettingsOpen(false)} />}
+      {creating && (
+        <ErrorBoundary name="Creating a note" onClose={() => setCreating(null)}>
+          <CreateNoteDialog {...creating} onClose={() => setCreating(null)} />
+        </ErrorBoundary>
+      )}
+      {deleting && (
+        <ErrorBoundary name="Deleting" onClose={() => setDeleting(null)}>
+          <DeleteDialog path={deleting} isFolder={false} onClose={() => setDeleting(null)} />
+        </ErrorBoundary>
+      )}
+      {settingsOpen && (
+        <ErrorBoundary name="Settings" onClose={() => setSettingsOpen(false)}>
+          <SettingsDialog initial={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        </ErrorBoundary>
+      )}
       {propertyTable && (
         <PropertyTable paths={propertyTable} onClose={() => setPropertyTable(null)} onOpen={(p) => void vault.open(p)} />
       )}
-      {reviewing && <ConflictDialog record={reviewing} onClose={() => setReviewing(null)} />}
-      {healthOpen && <HealthDialog onClose={() => setHealthOpen(false)} onCreate={offerCreate} />}
+      {reviewing && (
+        <ErrorBoundary name="Conflict review" onClose={() => setReviewing(null)}>
+          <ConflictDialog record={reviewing} onClose={() => setReviewing(null)} />
+        </ErrorBoundary>
+      )}
+      {healthOpen && (
+        <ErrorBoundary name="Repository health" onClose={() => setHealthOpen(false)}>
+          <HealthDialog onClose={() => setHealthOpen(false)} onCreate={offerCreate} />
+        </ErrorBoundary>
+      )}
       <Toasts />
     </AiActionsContext.Provider>
   );
