@@ -9,13 +9,24 @@ interface BinaryRecord {
   mtime: number;
 }
 
+interface EntryRecord {
+  path: string;
+  mtime: number;
+}
+
 interface VaultDB extends DBSchema {
   files: { key: string; value: VaultFile };
   folders: { key: string; value: { path: string; mtime: number } };
   blobs: { key: string; value: BinaryRecord };
+  /**
+   * Every file's path and modification time (notes and attachments), kept next to the
+   * contents in the same transactions, so listing the vault doesn't read any contents.
+   */
+  entries: { key: string; value: EntryRecord };
 }
 
-const STORES = ["files", "folders", "blobs"] as const;
+const STORES = ["files", "folders", "blobs", "entries"] as const;
+const DB_VERSION = 3;
 
 function sameBytes(a: Uint8Array | undefined, b: Uint8Array | undefined): boolean {
   if (!a || !b) return a === b;
@@ -35,13 +46,22 @@ export class LocalStore implements VaultStore {
 
   /** Opened on first use, so constructing a store is safe during server rendering. */
   private get db(): Promise<IDBPDatabase<VaultDB>> {
-    this.db_ ??= openDB<VaultDB>(`noted-ai:vault:${this.vaultId}`, 2, {
-      upgrade(db, oldVersion) {
+    this.db_ ??= openDB<VaultDB>(`noted-ai:vault:${this.vaultId}`, DB_VERSION, {
+      async upgrade(db, oldVersion, _newVersion, tx) {
         if (oldVersion < 1) {
           db.createObjectStore("files", { keyPath: "path" });
           db.createObjectStore("folders", { keyPath: "path" });
         }
         if (oldVersion < 2) db.createObjectStore("blobs", { keyPath: "path" });
+        if (oldVersion < 3) {
+          // Fill the entries store from what's already here (read once, this time only).
+          const entries = db.createObjectStore("entries", { keyPath: "path" });
+          for (const name of ["files", "blobs"] as const) {
+            for (let c = await tx.objectStore(name).openCursor(); c; c = await c.continue()) {
+              await entries.put({ path: c.value.path, mtime: c.value.mtime });
+            }
+          }
+        }
       },
     });
     return this.db_;
@@ -49,19 +69,11 @@ export class LocalStore implements VaultStore {
 
   async list(): Promise<VaultEntry[]> {
     const db = await this.db;
-    const [files, folders, blobs] = await Promise.all([
-      db.getAll("files"),
-      db.getAll("folders"),
-      // Keys and mtimes only: don't load every attachment's bytes to list them.
-      db.getAllKeys("blobs"),
-    ]);
-    const blobEntries = await Promise.all(
-      blobs.map(async (path) => ({ path, kind: "file" as const, mtime: (await db.get("blobs", path))?.mtime ?? 0 })),
-    );
+    // Paths and times only: no note text or attachment bytes are read to list them.
+    const [entries, folders] = await Promise.all([db.getAll("entries"), db.getAll("folders")]);
     return [
       ...folders.map((f) => ({ path: f.path, kind: "folder" as const, mtime: f.mtime })),
-      ...files.map((f) => ({ path: f.path, kind: "file" as const, mtime: f.mtime })),
-      ...blobEntries,
+      ...entries.map((f) => ({ path: f.path, kind: "file" as const, mtime: f.mtime })),
     ];
   }
 
@@ -72,7 +84,8 @@ export class LocalStore implements VaultStore {
   async write(path: string, content: string): Promise<VaultFile> {
     const file = { path: normalizePath(path), content, mtime: this.now() };
     if (!file.path) throw new Error("A file needs a name.");
-    await (await this.db).put("files", file);
+    const tx = (await this.db).transaction(["files", "entries"], "readwrite");
+    await Promise.all([tx.objectStore("files").put(file), tx.objectStore("entries").put({ path: file.path, mtime: file.mtime }), tx.done]);
     return file;
   }
 
@@ -85,7 +98,8 @@ export class LocalStore implements VaultStore {
     const p = normalizePath(path);
     if (!p) throw new Error("A file needs a name.");
     const mtime = this.now();
-    await (await this.db).put("blobs", { path: p, bytes: bytes.slice().buffer, mtime });
+    const tx = (await this.db).transaction(["blobs", "entries"], "readwrite");
+    await Promise.all([tx.objectStore("blobs").put({ path: p, bytes: bytes.slice().buffer, mtime }), tx.objectStore("entries").put({ path: p, mtime }), tx.done]);
     return { path: p, kind: "file", mtime };
   }
 
@@ -93,14 +107,19 @@ export class LocalStore implements VaultStore {
   async writeBinaryIf(path: string, expected: Uint8Array | undefined, bytes: Uint8Array | null): Promise<boolean> {
     const p = normalizePath(path);
     const db = await this.db;
-    const tx = db.transaction("blobs", "readwrite");
-    const current = await tx.store.get(p);
+    const tx = db.transaction(["blobs", "entries"], "readwrite");
+    const blobs = tx.objectStore("blobs");
+    const current = await blobs.get(p);
     if (!sameBytes(current ? new Uint8Array(current.bytes) : undefined, expected)) {
       await tx.done;
       return false;
     }
-    if (bytes === null) await tx.store.delete(p);
-    else await tx.store.put({ path: p, bytes: bytes.slice().buffer, mtime: this.now() });
+    const entries = tx.objectStore("entries");
+    if (bytes === null) await Promise.all([blobs.delete(p), entries.delete(p)]);
+    else {
+      const mtime = this.now();
+      await Promise.all([blobs.put({ path: p, bytes: bytes.slice().buffer, mtime }), entries.put({ path: p, mtime })]);
+    }
     await tx.done;
     return true;
   }
@@ -113,14 +132,19 @@ export class LocalStore implements VaultStore {
   async writeIf(path: string, expected: string | undefined, content: string | null): Promise<boolean> {
     const p = normalizePath(path);
     const db = await this.db;
-    const tx = db.transaction("files", "readwrite");
-    const current = await tx.store.get(p);
+    const tx = db.transaction(["files", "entries"], "readwrite");
+    const files = tx.objectStore("files");
+    const current = await files.get(p);
     if (current?.content !== expected) {
       await tx.done;
       return false;
     }
-    if (content === null) await tx.store.delete(p);
-    else await tx.store.put({ path: p, content, mtime: this.now() });
+    const entries = tx.objectStore("entries");
+    if (content === null) await Promise.all([files.delete(p), entries.delete(p)]);
+    else {
+      const mtime = this.now();
+      await Promise.all([files.put({ path: p, content, mtime }), entries.put({ path: p, mtime })]);
+    }
     await tx.done;
     return true;
   }
@@ -155,6 +179,7 @@ export class LocalStore implements VaultStore {
     const files = tx.objectStore("files");
     const folders = tx.objectStore("folders");
     const blobs = tx.objectStore("blobs");
+    const entries = tx.objectStore("entries");
     if ((await files.get(dst)) || (await folders.get(dst)) || (await blobs.getKey(dst))) {
       tx.done.catch(() => {});
       tx.abort();
@@ -172,6 +197,11 @@ export class LocalStore implements VaultStore {
       const rec = (await blobs.get(key))!;
       await blobs.delete(key);
       await blobs.put({ ...rec, path: moved(key), mtime: now });
+    }
+    for (const key of await entries.getAllKeys()) {
+      if (!isWithin(key, src)) continue;
+      await entries.delete(key);
+      await entries.put({ path: moved(key), mtime: now });
     }
     for (const folder of await folders.getAll()) {
       if (!isWithin(folder.path, src)) continue;

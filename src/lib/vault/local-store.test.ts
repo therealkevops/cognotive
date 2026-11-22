@@ -1,5 +1,6 @@
 import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it } from "vitest";
+import { openDB } from "idb";
 import { LocalStore } from "./local-store";
 
 let n = 0;
@@ -128,5 +129,52 @@ describe("LocalStore", () => {
     expect(await s.readBinary("a.png")).toEqual(new Uint8Array([3]));
     expect(await s.writeBinaryIf("a.png", new Uint8Array([3]), null)).toBe(true);
     expect(await s.readBinary("a.png")).toBeUndefined();
+  });
+
+  it("lists every file with its time after writes, compare-and-set writes, renames and deletes", async () => {
+    const s = makeStore();
+    await s.write("a.md", "a"); // 1000
+    await s.writeBinary("Pics/x.png", new Uint8Array([1])); // 1001
+    await s.writeIf("b.md", undefined, "b"); // 1002
+    await s.writeBinaryIf("Pics/y.png", undefined, new Uint8Array([2])); // 1003
+    expect((await s.list()).sort((x, y) => x.path.localeCompare(y.path))).toEqual([
+      { path: "a.md", kind: "file", mtime: 1000 },
+      { path: "b.md", kind: "file", mtime: 1002 },
+      { path: "Pics/x.png", kind: "file", mtime: 1001 },
+      { path: "Pics/y.png", kind: "file", mtime: 1003 },
+    ]);
+    await s.rename("Pics", "Images");
+    await s.writeIf("b.md", "b", null);
+    await s.writeBinaryIf("Images/y.png", new Uint8Array([2]), null);
+    expect(await paths(s)).toEqual(["Images/x.png", "a.md"]);
+    expect((await s.read("a.md"))?.mtime).toBe((await s.list()).find((e) => e.path === "a.md")?.mtime);
+    await s.delete("Images");
+    expect(await paths(s)).toEqual(["a.md"]);
+  });
+
+  it("lists what a repository saved before file entries were kept", async () => {
+    const id = `test-${n++}`;
+    // The database as the previous version left it: contents only.
+    const old = await openDB(`noted-ai:vault:${id}`, 2, {
+      upgrade(db) {
+        db.createObjectStore("files", { keyPath: "path" });
+        db.createObjectStore("folders", { keyPath: "path" });
+        db.createObjectStore("blobs", { keyPath: "path" });
+      },
+    });
+    await old.put("files", { path: "Notes/a.md", content: "hello", mtime: 5 });
+    await old.put("blobs", { path: "Notes/p.png", bytes: new Uint8Array([7]).buffer, mtime: 6 });
+    await old.put("folders", { path: "Empty", mtime: 4 });
+    old.close();
+
+    const s = new LocalStore(id);
+    stores.push(s);
+    expect((await s.list()).sort((x, y) => x.path.localeCompare(y.path))).toEqual([
+      { path: "Empty", kind: "folder", mtime: 4 },
+      { path: "Notes/a.md", kind: "file", mtime: 5 },
+      { path: "Notes/p.png", kind: "file", mtime: 6 },
+    ]);
+    expect(await s.read("Notes/a.md")).toMatchObject({ content: "hello" });
+    expect(await s.readBinary("Notes/p.png")).toEqual(new Uint8Array([7]));
   });
 });
