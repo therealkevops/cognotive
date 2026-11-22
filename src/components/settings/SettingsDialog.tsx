@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AiSection } from "../ai/AiSettings";
 import { SearchSection } from "../semantic/SemanticSettings";
 import { AppearanceSection, EditorSection } from "./AppearanceSettings";
@@ -29,6 +29,12 @@ const SECTIONS: Array<{ id: SettingsSection; label: string }> = [
  */
 export function SettingsDialog({ onClose, initial = "appearance" }: { onClose(): void; initial?: SettingsSection }) {
   const [section, setSection] = useState<SettingsSection>(initial);
+  const navRef = useRef<HTMLElement>(null);
+
+  // On phones the tabs scroll sideways: keep the chosen one in view (Storage starts off-screen).
+  useEffect(() => {
+    navRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [section]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -45,9 +51,17 @@ export function SettingsDialog({ onClose, initial = "appearance" }: { onClose():
         className="dialog-panel relative flex h-[min(44rem,88vh)] max-w-4xl flex-col overflow-hidden md:flex-row"
         onMouseDown={(e) => e.stopPropagation()}
       >
+        {/* Phones: a title bar with the close button, so the section tabs below never run under it. */}
+        <div className="flex shrink-0 items-center justify-between bg-sidebar pt-2 pr-2 pl-5 md:hidden">
+          <h2 className="font-serif text-xl">Settings</h2>
+          <button type="button" className="icon-button" aria-label="Close settings" onClick={onClose}>
+            <X size={18} aria-hidden />
+          </button>
+        </div>
         <nav
+          ref={navRef}
           aria-label="Settings sections"
-          className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-sidebar p-3 pr-14 md:w-56 md:flex-col md:overflow-visible md:border-r md:border-b-0 md:p-4"
+          className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-sidebar p-3 md:w-56 md:flex-col md:overflow-visible md:border-r md:border-b-0 md:p-4"
         >
           <h2 className="mb-3 hidden px-2.5 font-serif text-2xl md:block">Settings</h2>
           {SECTIONS.map((s) => (
@@ -76,7 +90,7 @@ export function SettingsDialog({ onClose, initial = "appearance" }: { onClose():
         </div>
         <button
           type="button"
-          className="icon-button absolute top-3 right-3"
+          className="icon-button absolute top-3 right-3 hidden md:inline-flex"
           aria-label="Close settings"
           onClick={onClose}
         >
