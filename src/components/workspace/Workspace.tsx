@@ -27,6 +27,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   X,
+  Zap,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { reloadOnChunkError } from "@/lib/chunk";
@@ -101,6 +102,9 @@ import { TabBar } from "./TabBar";
 import { Outline } from "./Outline";
 import { QuickSwitcher } from "./QuickSwitcher";
 import { SearchPanel } from "./SearchPanel";
+import { CaptureDialog } from "./CaptureDialog";
+import { appendCapture, captureEntry, captureTime, fromShare, type Captured } from "@/lib/capture/capture";
+import { takeShared } from "@/lib/capture/shared";
 import { TasksPanel } from "./TasksPanel";
 import { toggleTask, type Task } from "@/lib/tasks/tasks";
 import { TagsPanel } from "./TagsPanel";
@@ -331,7 +335,8 @@ export function Workspace() {
   };
 
   /** Opens (or creates) the daily note for a date, from the vault's daily-note settings. */
-  const openDaily = async (date = new Date()) => {
+  /** A day's daily note: where it is, and (if it doesn't exist yet) what it starts as, from the template. */
+  const dailyNote = (date = new Date()) => {
     const s = vault.settings;
     const name = formatDate(date, s.dailyFormat || "YYYY-MM-DD");
     const path = joinPath(s.dailyFolder, `${name}.md`);
@@ -347,9 +352,43 @@ export function Workspace() {
         cursor = note.cursor;
       }
     }
+    return { path, name, content, cursor };
+  };
+  const openDaily = async (date = new Date()) => {
+    const { path, content, cursor } = dailyNote(date);
     if (cursor !== null) pendingCursor.current = { path, fromEnd: content.length - cursor };
     await vault.createNoteWith(path, content);
   };
+
+  // Quick capture: a dialog (or something shared to the app) adds an item to today's note or the inbox.
+  const [capturing, setCapturing] = useState<{ initial?: { captured: Captured; files: File[] } } | null>(null);
+  const [captured, setCaptured] = useState<string | null>(null);
+  const captureTarget = () => {
+    const s = vault.settings;
+    if (s.captureTo === "inbox") {
+      const path = /\.md$/i.test(s.captureInbox) ? s.captureInbox : `${s.captureInbox}.md`;
+      return { path, start: `# ${noteTitle(path)}\n`, label: noteTitle(path) };
+    }
+    const d = dailyNote();
+    return { path: d.path, start: d.content, label: `today's note (${d.name})` };
+  };
+  const saveCapture = async (c: Captured, files: File[]) => {
+    const target = captureTarget();
+    const paths = files.length ? await vault.addAttachments(files) : [];
+    const embeds = paths.map((p) => {
+      const t = vault.links.linkText(p);
+      return formatLink(vault.settings.linkFormat, target.path, { path: p, target: t, embed: true }, t);
+    });
+    const entry = captureEntry({ ...c, embeds }, captureTime());
+    if (vault.exists(target.path)) await vault.writeNote(target.path, appendCapture(latestText(target.path), entry));
+    else await vault.writeFile(target.path, appendCapture(target.start, entry));
+    setCaptured(target.path);
+  };
+  useEffect(() => {
+    if (!captured) return;
+    const t = setTimeout(() => setCaptured(null), 6000);
+    return () => clearTimeout(t);
+  }, [captured]);
   useEffect(() => {
     openDailyRef.current = openDaily;
   });
@@ -477,6 +516,14 @@ export function Workspace() {
       if (action === "new-note") void vault.createNote();
       else if (action === "new-canvas") void vault.createCanvas();
       else if (action === "daily") void openDaily();
+      else if (action === "capture") setCapturing({});
+      else if (action === "shared") {
+        // Shared to the installed app: the service worker kept it for us.
+        void takeShared().then((sh) => {
+          if (!sh) return;
+          setCapturing({ initial: { captured: fromShare(sh), files: sh.files } });
+        });
+      }
       else if (action === "search") {
         setTab("search");
         setLeftCollapsed(false);
@@ -496,7 +543,9 @@ export function Workspace() {
     const queue = (window as Window & { launchQueue?: { setConsumer(f: (p: { targetURL?: string }) => void): void } })
       .launchQueue;
     queue?.setConsumer((params) => {
-      const a = params.targetURL ? new URL(params.targetURL).searchParams.get("action") : null;
+      const target = params.targetURL ? new URL(params.targetURL) : null;
+      // A share delivered to an open window: the service worker has kept it.
+      const a = target ? (target.searchParams.get("action") ?? (target.pathname === "/share-target" ? "shared" : null)) : null;
       if (a) runActionRef.current(a);
     });
   }, [vault.ready]);
@@ -962,6 +1011,15 @@ export function Workspace() {
         <button
           type="button"
           className="nav-item text-foreground/80"
+          onClick={() => setCapturing({})}
+          title="Add a quick note to today's note or your inbox"
+        >
+          <Zap size={15} aria-hidden />
+          Quick capture
+        </button>
+        <button
+          type="button"
+          className="nav-item text-foreground/80"
           onClick={() => setHealthOpen(true)}
           title="Broken links, orphans, dead ends and hubs"
         >
@@ -1168,6 +1226,7 @@ export function Workspace() {
     },
     { id: "health", label: "Open repository health" },
     { id: "tasks", label: "Show tasks" },
+    { id: "capture", label: "Quick capture…" },
     { id: "map-canvas", label: "Map this note as a canvas", when: kind === "note" },
     {
       id: "hub-toggle",
@@ -1235,6 +1294,7 @@ export function Workspace() {
     },
     health: () => setHealthOpen(true),
     tasks: () => openSidebarTab("tasks"),
+    capture: () => setCapturing({}),
     "ai-summarise": () => activePathNow && runAction({ kind: "summarise", path: activePathNow }),
     "ai-links": () => activePathNow && runAction({ kind: "suggest-links", path: activePathNow }),
     "ai-properties": () => activePathNow && runAction({ kind: "suggest-properties", path: activePathNow }),
@@ -1589,6 +1649,29 @@ export function Workspace() {
             view?.focus();
           }}
         />
+      )}
+      {capturing && (
+        <CaptureDialog
+          initial={capturing.initial}
+          destination={captureTarget().label}
+          onSave={saveCapture}
+          onClose={() => setCapturing(null)}
+        />
+      )}
+      {captured && (
+        <div role="status" className="menu-panel fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 px-4 py-2.5 text-sm">
+          <span>Captured to {noteTitle(captured)}.</span>
+          <button
+            type="button"
+            className="text-accent hover:underline"
+            onClick={() => {
+              void vault.open(captured);
+              setCaptured(null);
+            }}
+          >
+            Open
+          </button>
+        </div>
       )}
       {asking && (
         <AskDialog

@@ -6,11 +6,14 @@ test("the manifest offers app shortcuts and the icons are served", async ({ requ
   const manifest = await (await request.get("/manifest.webmanifest")).json();
   expect(manifest).toMatchObject({ id: "/", display: "standalone", theme_color: "#faf9f5" });
   expect(manifest.shortcuts.map((s: { name: string }) => s.name)).toEqual([
+    "Quick note",
     "New note",
     "Today's note",
     "Search notes",
     "New canvas",
   ]);
+  // Other apps can share to it.
+  expect(manifest.share_target).toMatchObject({ action: "/share-target", method: "POST", enctype: "multipart/form-data" });
   for (const icon of manifest.icons) {
     const res = await request.get(icon.src);
     expect(res.status(), icon.src).toBe(200);

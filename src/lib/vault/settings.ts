@@ -31,6 +31,9 @@ export interface VaultSettings {
   aiRemote: "auto" | "allow" | "never";
   /** Where chats saved as notes, and answers from "Ask", go. */
   aiFolder: string;
+  /** Where quick captures go: today's daily note, or one inbox note. */
+  captureTo: "daily" | "inbox";
+  captureInbox: string;
 }
 
 export const SETTINGS_PATH = ".noted/settings.json";
@@ -50,6 +53,8 @@ export const DEFAULT_SETTINGS: VaultSettings = {
   propertyTypes: {},
   aiRemote: "auto",
   aiFolder: "AI",
+  captureTo: "daily",
+  captureInbox: "Inbox.md",
 };
 
 export function parseSettings(text: string | undefined): VaultSettings {
@@ -63,6 +68,8 @@ export function parseSettings(text: string | undefined): VaultSettings {
     }
     if (!["current", "root", "folder"].includes(out.newNoteLocation)) out.newNoteLocation = "current";
     if (!["auto", "allow", "never"].includes(out.aiRemote)) out.aiRemote = "auto";
+    if (out.captureTo !== "daily" && out.captureTo !== "inbox") out.captureTo = "daily";
+    if (!out.captureInbox.trim()) out.captureInbox = "Inbox.md";
     if (out.linkFormat !== "wikilink" && out.linkFormat !== "markdown") out.linkFormat = "wikilink";
     out.healthIgnore = Array.isArray(raw.healthIgnore) ? raw.healthIgnore.filter((p): p is string => typeof p === "string") : [];
     const types: VaultSettings["propertyTypes"] = {};

@@ -120,6 +120,14 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
     tags, are copied into the note
   - Starter templates (Meeting, Project, Person, Weekly review, Map of content, Daily) can be added when a
     repository is created, or later from the Templates tab
+- **Quick capture**: jot something down without opening a note. *Quick capture* in the sidebar, the
+  command palette, or the installed app's icon (long-press, *Quick note*) opens a box for text and
+  photos or files; it's added to **today's daily note** (or an **inbox** note, in Settings → This
+  repository) under a *Captured* heading, as a list item with the time. **Share to noted-ai** from
+  other apps puts links, text and pictures in the same box to review first: links become
+  `[title](url)`, pictures are saved as attachments and embedded. Sharing into the app works where
+  the browser supports it (Android, and Chrome or Edge on desktop), but not on iPhone or iPad, where
+  the icon shortcut still does. It works offline; captures sync with the rest
 - **Search by meaning** (Settings → Search, per device, off until turned on): finds notes that mean
   what you searched for even when the words differ ("how often should I water" finds "irrigate the
   beds every Tuesday"), merged with the usual word matches and marked *by meaning*. Connections lists

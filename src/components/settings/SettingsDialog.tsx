@@ -417,6 +417,8 @@ function ThisVaultSection() {
     linkFormat: useId(),
     newNotes: useId(),
     newNoteFolder: useId(),
+    captureTo: useId(),
+    captureInbox: useId(),
   };
   return (
     <section aria-label="This repository">
@@ -472,6 +474,28 @@ function ThisVaultSection() {
       </Group>
       <Group title="Properties for new notes">
         <NewNoteProperties value={settings.newNoteProperties} onChange={(v) => save({ newNoteProperties: v })} />
+      </Group>
+      <Group title="Quick capture">
+        <Row
+          label="Captures go to"
+          description="Quick notes, and things shared to the installed app, are added under a Captured heading with the time."
+          id={ids.captureTo}
+        >
+          <select
+            id={ids.captureTo}
+            className="input"
+            value={settings.captureTo}
+            onChange={(e) => save({ captureTo: e.target.value as VaultSettings["captureTo"] })}
+          >
+            <option value="daily">Today&apos;s daily note</option>
+            <option value="inbox">An inbox note</option>
+          </select>
+        </Row>
+        {settings.captureTo === "inbox" && (
+          <Row label="Inbox note" description="Created when the first capture arrives." id={ids.captureInbox}>
+            <TextSetting id={ids.captureInbox} value={settings.captureInbox} placeholder="Inbox.md" onSave={(v) => save({ captureInbox: v })} />
+          </Row>
+        )}
       </Group>
       <Group title="Daily notes">
         <Row label="Daily notes folder" id={ids.dailyFolder}>
