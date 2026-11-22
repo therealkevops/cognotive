@@ -39,6 +39,7 @@ function sameBytes(a: Uint8Array | undefined, b: Uint8Array | undefined): boolea
 export class LocalStore implements VaultStore {
   private db_: Promise<IDBPDatabase<VaultDB>> | null = null;
   private listeners = new Set<(paths: string[]) => void>();
+  private upgradeListeners = new Set<(waiting: "blocked" | "outdated" | null) => void>();
 
   constructor(
     readonly vaultId: string,
@@ -54,13 +55,39 @@ export class LocalStore implements VaultStore {
     return () => this.listeners.delete(listener);
   }
 
+  /**
+   * Hears about database upgrades between tabs: "blocked" while this tab waits for older tabs
+   * to close the database, "outdated" when a newer tab needs this one to stop (it closes the
+   * database), and null once a wait is over.
+   */
+  onUpgrade(listener: (waiting: "blocked" | "outdated" | null) => void): () => void {
+    this.upgradeListeners.add(listener);
+    return () => this.upgradeListeners.delete(listener);
+  }
+
+  private upgrading(waiting: "blocked" | "outdated" | null) {
+    for (const l of this.upgradeListeners) l(waiting);
+  }
+
   private changed(paths: string[]) {
     if (paths.length) for (const l of this.listeners) l(paths);
   }
 
   /** Opened on first use, so constructing a store is safe during server rendering. */
   private get db(): Promise<IDBPDatabase<VaultDB>> {
-    this.db_ ??= openDB<VaultDB>(`noted-ai:vault:${this.vaultId}`, DB_VERSION, {
+    if (this.db_) return this.db_;
+    let wasBlocked = false;
+    const opening = openDB<VaultDB>(`noted-ai:vault:${this.vaultId}`, DB_VERSION, {
+      blocked: () => {
+        wasBlocked = true;
+        this.upgrading("blocked");
+      },
+      blocking: () => {
+        // A newer version of the app wants to upgrade the database: step aside.
+        void opening.then((db) => db.close());
+        this.db_ = null;
+        this.upgrading("outdated");
+      },
       async upgrade(db, oldVersion, _newVersion, tx) {
         if (oldVersion < 1) {
           db.createObjectStore("files", { keyPath: "path" });
@@ -77,6 +104,10 @@ export class LocalStore implements VaultStore {
           }
         }
       },
+    });
+    this.db_ = opening.then((db) => {
+      if (wasBlocked) this.upgrading(null);
+      return db;
     });
     return this.db_;
   }

@@ -894,6 +894,21 @@ export function VaultProvider({
     };
   }, [store, vaultId]);
 
+  // Another tab runs a different version of the app and holds the database.
+  useEffect(
+    () =>
+      store.onUpgrade?.((waiting) =>
+        setError(
+          waiting === "blocked"
+            ? "noted-ai was updated. Close its other tabs and windows to finish, and this one will carry on."
+            : waiting === "outdated"
+              ? "noted-ai was updated in another tab. Reload this one to keep working."
+              : null,
+        ),
+      ),
+    [store],
+  );
+
   const api = useMemo<VaultApi>(
     () => ({
       ready,

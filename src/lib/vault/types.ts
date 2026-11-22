@@ -32,4 +32,6 @@ export interface VaultStore {
   rename(from: string, to: string): Promise<void>;
   /** Calls `listener` with the changed paths after each saved change; returns a stop function. */
   onChange?(listener: (paths: string[]) => void): () => void;
+  /** Database upgrades between tabs (see LocalStore.onUpgrade). */
+  onUpgrade?(listener: (waiting: "blocked" | "outdated" | null) => void): () => void;
 }

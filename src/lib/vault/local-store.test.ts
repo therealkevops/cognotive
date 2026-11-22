@@ -200,4 +200,32 @@ describe("LocalStore", () => {
       ["B/p.png"],
     ]);
   });
+
+  it("waits for an older tab to let go of the database, and steps aside for a newer one", async () => {
+    const id = `test-${n++}`;
+    const name = `noted-ai:vault:${id}`;
+    // An older version of the app, open in another tab, that doesn't know to close.
+    const old = await openDB(name, 2, {
+      upgrade(db) {
+        db.createObjectStore("files", { keyPath: "path" });
+        db.createObjectStore("folders", { keyPath: "path" });
+        db.createObjectStore("blobs", { keyPath: "path" });
+      },
+    });
+    const s = new LocalStore(id);
+    stores.push(s);
+    const heard: Array<string | null> = [];
+    s.onUpgrade((w) => heard.push(w));
+    const listing = s.list();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(heard).toEqual(["blocked"]);
+    old.close();
+    expect(await listing).toEqual([]);
+    expect(heard).toEqual(["blocked", null]);
+
+    // A newer version opens: this one closes its connection so the upgrade can go ahead.
+    const newer = await openDB(name, 4);
+    expect(heard).toEqual(["blocked", null, "outdated"]);
+    newer.close();
+  });
 });
