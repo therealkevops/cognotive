@@ -55,19 +55,19 @@ export function SearchPanel({
   const hits = useMemo<NoteHit[]>(() => {
     const tag = /^\s*(?:tag:\s*#?|#)([^\s#]+)\s*$/i.exec(deferred)?.[1];
     if (tag) {
-      return vault.links.withTag(tag).map((path) => ({
+      return vault.indexed.links.withTag(tag).map((path) => ({
         path,
         title: displayName(path),
-        snippet: `#${vault.links.get(path)?.tags.filter((t) => t === tag.toLowerCase() || t.startsWith(tag.toLowerCase() + "/")).join(" #")}`,
+        snippet: `#${vault.indexed.links.get(path)?.tags.filter((t) => t === tag.toLowerCase() || t.startsWith(tag.toLowerCase() + "/")).join(" #")}`,
         matches: [],
         score: 1,
       }));
     }
     const byProperty = parsePropertyQuery(deferred);
     if (byProperty) {
-      const found = filesWithProperties(vault.links, byProperty.terms);
+      const found = filesWithProperties(vault.indexed.links, byProperty.terms);
       const describe = (path: string) => {
-        const props = vault.links.get(path)?.properties ?? {};
+        const props = vault.indexed.links.get(path)?.properties ?? {};
         return byProperty.terms
           .map((t) => {
             const key = Object.keys(props).find((k) => k.toLowerCase() === t.key.toLowerCase()) ?? t.key;
@@ -79,11 +79,10 @@ export function SearchPanel({
         return found.map((path) => ({ path, title: displayName(path), snippet: describe(path), matches: [], score: 1 }));
       }
       const allowed = new Set(found);
-      return vault.index.search(byProperty.text).filter((h) => allowed.has(h.path));
+      return vault.indexed.search.search(byProperty.text).filter((h) => allowed.has(h.path));
     }
-    return vault.index.search(deferred);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-  }, [deferred, vault.index, vault.links, vault.indexVersion]);
+    return vault.indexed.search.search(deferred);
+  }, [deferred, vault.indexed]);
   const results: Array<NoteHit | HybridHit> = useMemo(
     () =>
       semantic.enabled && plain && byMeaning.query === deferred && byMeaning.hits.length

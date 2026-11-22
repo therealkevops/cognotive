@@ -24,7 +24,7 @@ export function useAsk() {
   // The files proposals are built on: the open note as typed, others as saved.
   const files = useMemo<FileView>(
     () => ({
-      text: (p) => (p === vault.active?.path ? vault.activeText : vault.links.content(p)),
+      text: (p) => vault.textOf(p),
       exists: (p) => vault.exists(p),
       linkFormat: vault.settings.linkFormat,
     }),
@@ -40,7 +40,7 @@ export function useAsk() {
         if (question !== null) chatStore.fail(question, target.error);
         return;
       }
-      const text = o.note ? (o.note === vault.active?.path ? vault.activeText : vault.links.content(o.note)) : undefined;
+      const text = o.note ? vault.textOf(o.note) : undefined;
       const note = o.note && text !== undefined ? { path: o.note, text } : null;
       // OpenRouter says which models can't use tools; others are tried, and fall back to search.
       await chatStore.send(target.ep, target.model, question, note, {

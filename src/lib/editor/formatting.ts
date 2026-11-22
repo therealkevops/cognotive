@@ -209,8 +209,6 @@ export const insertCodeBlock = insertBlock((sel) => ({
 export const insertTableOf = (rows: number, cols: number) =>
   insertBlock(() => ({ text: formatTable(emptyTable(rows, cols)), cursor: 2 }));
 
-export const insertTable = insertTableOf(2, 2);
-
 export const insertHorizontalRule = insertBlock(() => ({ text: "\n---\n", cursor: 5 }));
 
 export const toggleBold = toggleInline("**");

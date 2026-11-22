@@ -80,6 +80,12 @@ export interface ActiveNote {
   version: number;
 }
 
+export interface IndexedVault {
+  links: LinkIndex;
+  search: NoteIndex;
+  version: number;
+}
+
 export interface VaultApi {
   ready: boolean;
   vaultId: string;
@@ -89,9 +95,16 @@ export interface VaultApi {
   links: LinkIndex;
   /** Increments whenever the index changes, so search views can recompute. */
   indexVersion: number;
+  /**
+   * The indexes, as an object that is replaced whenever they change. Views that derive
+   * something from the index read it through this and list `vault.indexed` as a dependency.
+   */
+  indexed: IndexedVault;
   active: ActiveNote | null;
   /** Latest text of the active note, including unsaved edits. */
   activeText: string;
+  /** Latest text of a note: the editor's text if it is open, otherwise the indexed text. */
+  textOf(path: string): string | undefined;
   saveState: SaveState;
   error: string | null;
   clearError(): void;
@@ -219,6 +232,7 @@ export function VaultProvider({
   }, []);
 
   const bumpIndex = useCallback(() => setIndexVersion((v) => v + 1), []);
+  const indexed = useMemo<IndexedVault>(() => ({ links, search: index, version: indexVersion }), [links, index, indexVersion]);
 
   const refresh = useCallback(async () => {
     setEntries(await store.list());
@@ -342,6 +356,11 @@ export function VaultProvider({
       timer.current = setTimeout(() => void flush(), SAVE_DELAY_MS);
     },
     [flush],
+  );
+
+  const textOf = useCallback(
+    (path: string) => (path === active?.path ? activeText : links.content(path)),
+    [active?.path, activeText, links],
   );
 
   const exists = useCallback((p: string) => {
@@ -827,8 +846,10 @@ export function VaultProvider({
       index,
       links,
       indexVersion,
+      indexed,
       active,
       activeText,
+      textOf,
       saveState,
       error,
       clearError,
@@ -865,8 +886,10 @@ export function VaultProvider({
       index,
       links,
       indexVersion,
+      indexed,
       active,
       activeText,
+      textOf,
       saveState,
       error,
       clearError,

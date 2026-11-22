@@ -21,19 +21,17 @@ export function PinnedHubs({ onCreate }: { onCreate(target: string, from: string
   const [open, setOpen] = useState(() => readPref<boolean>(prefKey, true));
 
   const hubs = useMemo(() => {
-    const inbound = vault.links.inboundCounts();
-    return vault.links
+    const inbound = vault.indexed.links.inboundCounts();
+    return vault.indexed.links
       .paths()
-      .filter((p) => isNote(p) && hubProperty(vault.links.get(p)?.properties) === true)
+      .filter((p) => isNote(p) && hubProperty(vault.indexed.links.get(p)?.properties) === true)
       .map((path) => ({ path, title: noteTitle(path), links: inbound.get(path) ?? 0 }))
       .sort((a, b) => a.title.localeCompare(b.title));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-  }, [vault.links, vault.indexVersion]);
+  }, [vault.indexed]);
 
   const candidates = useMemo(
-    () => hubCandidates(vault.links),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-    [vault.links, vault.indexVersion],
+    () => hubCandidates(vault.indexed.links),
+    [vault.indexed],
   );
 
   if (hubs.length === 0 && candidates.length === 0) return null;
@@ -43,7 +41,7 @@ export function PinnedHubs({ onCreate }: { onCreate(target: string, from: string
     writePref(prefKey, !open);
   };
   const unpin = async (path: string) => {
-    const content = path === vault.active?.path ? vault.activeText : vault.links.content(path);
+    const content = vault.textOf(path);
     if (content !== undefined) await vault.writeNote(path, setFrontmatterProperty(content, "hub", undefined));
   };
 

@@ -2,7 +2,7 @@ import { EditorSelection, EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import {
   insertLink,
-  insertTable,
+  insertTableOf,
   setHeading,
   toggleBold,
   toggleItalic,
@@ -107,9 +107,9 @@ describe("insertLink", () => {
   });
 });
 
-describe("insertTable", () => {
+describe("insertTableOf", () => {
   it("starts the table on its own line", () => {
-    expect(run(insertTable, "text|")).toBe(
+    expect(run(insertTableOf(2, 2), "text|")).toBe(
       "text\n| |Column 1 | Column 2 |\n| -------- | -------- |\n|          |          |\n|          |          |",
     );
   });

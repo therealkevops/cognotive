@@ -77,39 +77,35 @@ export function LinksPanel({
         sameTags: [] as Array<{ path: string; tags: string[] }>,
       };
     const linked = new Set([
-      ...vault.links.backlinks(path).map((b) => b.source),
-      ...vault.links.outgoing(path).flatMap((o) => (o.resolved ? [o.resolved] : [])),
+      ...vault.indexed.links.backlinks(path).map((b) => b.source),
+      ...vault.indexed.links.outgoing(path).flatMap((o) => (o.resolved ? [o.resolved] : [])),
     ]);
     // Notes with tags in common (and not already linked), most shared tags first.
     const byTag = new Map<string, string[]>();
-    for (const tag of vault.links.get(path)?.tags ?? []) {
-      for (const p of vault.links.withTag(tag)) {
+    for (const tag of vault.indexed.links.get(path)?.tags ?? []) {
+      for (const p of vault.indexed.links.withTag(tag)) {
         if (p === path || linked.has(p)) continue;
         byTag.set(p, [...(byTag.get(p) ?? []), tag]);
       }
     }
     return {
-      backlinks: vault.links.backlinks(path),
-      mentions: vault.links.unlinkedMentions(path),
-      outgoing: vault.links.outgoing(path),
-      relations: vault.links.canvasRelations(path),
-      related: vault.links.related(path),
+      backlinks: vault.indexed.links.backlinks(path),
+      mentions: vault.indexed.links.unlinkedMentions(path),
+      outgoing: vault.indexed.links.outgoing(path),
+      relations: vault.indexed.links.canvasRelations(path),
+      related: vault.indexed.links.related(path),
       sameTags: [...byTag]
         .map(([p, tags]) => ({ path: p, tags }))
         .sort((a, b) => b.tags.length - a.tags.length || a.path.localeCompare(b.path))
         .slice(0, 8),
     };
-    // indexVersion signals index changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, vault.links, vault.indexVersion]);
+  }, [path, vault.indexed]);
 
   const hubs = useMemo(() => {
-    const all = pinnedHubs(vault.links);
+    const all = pinnedHubs(vault.indexed.links);
     if (!path || all.length === 0) return null;
-    return { ...hubsFor(vault.links, path, all), isHub: hubProperty(vault.links.get(path)?.properties) === true };
-    // indexVersion signals index changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, vault.links, vault.indexVersion]);
+    return { ...hubsFor(vault.indexed.links, path, all), isHub: hubProperty(vault.indexed.links.get(path)?.properties) === true };
+  }, [path, vault.indexed]);
 
   // Close in meaning but not linked either way: connections worth making.
   const similar = useMemo(() => {
@@ -124,7 +120,7 @@ export function LinksPanel({
 
   /** Lists this note in a hub (in its Notes section, or at the end). */
   const addTo = async (hub: string) => {
-    const content = hub === vault.active?.path ? vault.activeText : vault.links.content(hub);
+    const content = vault.textOf(hub);
     if (content === undefined) return;
     const target = vault.links.linkText(path);
     await vault.writeNote(hub, addToHub(content, formatLink(vault.settings.linkFormat, hub, { path, target }, target)));

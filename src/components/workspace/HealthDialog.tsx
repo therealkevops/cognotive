@@ -41,17 +41,15 @@ export function HealthDialog({
   const aiAction = useAiActions();
   const health = useMemo(() => {
     const mtimes = new Map(vault.entries.map((e) => [e.path, e.mtime]));
-    return vaultHealth(vault.links, { mtime: (p) => mtimes.get(p), ignore: ignored });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-  }, [vault.links, vault.indexVersion, vault.entries, ignored]);
+    return vaultHealth(vault.indexed.links, { mtime: (p) => mtimes.get(p), ignore: ignored });
+  }, [vault.indexed, vault.entries, ignored]);
 
   const graph = useMemo(() => {
-    const g = vault.links.graph({ includeUnresolved: true });
+    const g = vault.indexed.links.graph({ includeUnresolved: true });
     const nodes = g.nodes.filter((n) => n.unresolved || !ignored(n.id));
     const ids = new Set(nodes.map((n) => n.id));
     return { nodes, edges: g.edges.filter((e) => ids.has(e.source) && ids.has(e.target)) };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-  }, [vault.links, vault.indexVersion, ignored]);
+  }, [vault.indexed, ignored]);
   const hubSet = useMemo(() => new Set(health.hubs.map((h) => h.path)), [health]);
   const orphanSet = useMemo(() => new Set(health.orphans), [health]);
   const pinnedSet = useMemo(() => new Set(health.hubs.filter((h) => h.kind === "marked").map((h) => h.path)), [health]);
@@ -69,36 +67,34 @@ export function HealthDialog({
     const out = new Map<string, { source: string; target: string; from: number; text: string; context: string }>();
     if (tab === "orphans")
       for (const p of health.orphans.slice(0, 100)) {
-        const m = vault.links.unlinkedMentions(p)[0];
+        const m = vault.indexed.links.unlinkedMentions(p)[0];
         if (m) out.set(p, { ...m, target: p });
       }
     if (tab === "deadEnds")
       for (const p of health.deadEnds.slice(0, 100)) {
-        const m = vault.links.mentionsIn(p, 1)[0];
+        const m = vault.indexed.links.mentionsIn(p, 1)[0];
         if (m) out.set(p, m);
       }
     return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-  }, [tab, health, vault.links, vault.indexVersion]);
+  }, [tab, health, vault.indexed]);
 
   // Orphans with no mention to link: the pinned hub each most likely belongs in.
   const hubFor = useMemo(() => {
     const out = new Map<string, { hub: string; reasons: string[] }>();
     if (tab !== "orphans") return out;
-    const hubs = pinnedHubs(vault.links);
+    const hubs = pinnedHubs(vault.indexed.links);
     if (hubs.length === 0) return out;
     for (const p of health.orphans.slice(0, 100)) {
       if (suggestions.has(p)) continue;
-      const s = hubsFor(vault.links, p, hubs).suggestions[0];
+      const s = hubsFor(vault.indexed.links, p, hubs).suggestions[0];
       if (s) out.set(p, s);
     }
     return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-  }, [tab, health, suggestions, vault.links, vault.indexVersion]);
+  }, [tab, health, suggestions, vault.indexed]);
 
   /** Lists a note in a hub (in its Notes section, or at the end). */
   const addToHubNote = async (note: string, hub: string) => {
-    const content = hub === vault.active?.path ? vault.activeText : vault.links.content(hub);
+    const content = vault.textOf(hub);
     if (content === undefined) return;
     const target = vault.links.linkText(note);
     await vault.writeNote(hub, addToHub(content, formatLink(vault.settings.linkFormat, hub, { path: note, target }, target)));
@@ -122,7 +118,7 @@ export function HealthDialog({
 
   /** Records today as the note's `reviewed:` date. */
   const markReviewed = async (path: string) => {
-    const content = path === vault.active?.path ? vault.activeText : vault.links.content(path);
+    const content = vault.textOf(path);
     if (content === undefined) return;
     await vault.writeNote(path, setFrontmatterProperty(content, "reviewed", todayStamp()));
   };

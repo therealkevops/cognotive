@@ -23,12 +23,11 @@ export function useTemplatePaths(): string[] {
   const folder = templateFolderOf(vault.settings.templateFolder);
   return useMemo(
     () =>
-      vault.links
+      vault.indexed.links
         .paths()
         .filter((p) => isNote(p) && isWithin(p, folder))
         .sort((a, b) => noteTitle(a).localeCompare(noteTitle(b))),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-    [vault.links, vault.indexVersion, folder],
+    [vault.indexed, folder],
   );
 }
 

@@ -15,9 +15,8 @@ export function FileView({ path }: { path: string }) {
   const [url, setUrl] = useState<string | null | undefined>(undefined);
   const mtime = vault.entries.find((e) => e.path === path)?.mtime;
   const info = useMemo(
-    () => collectPropertyInfo(vault.links, vault.settings.propertyTypes),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-    [vault.links, vault.indexVersion, vault.settings.propertyTypes],
+    () => collectPropertyInfo(vault.indexed.links, vault.settings.propertyTypes),
+    [vault.indexed, vault.settings.propertyTypes],
   );
 
   useEffect(() => {

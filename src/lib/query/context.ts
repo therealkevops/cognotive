@@ -46,12 +46,19 @@ export function queryContext(o: {
   };
 }
 
-/** Remembers query results until it's replaced (the app makes a new one when any note changes). */
-export function queryCacheFor(): (key: string, compute: () => string) => string {
-  const cache = new Map<string, string>();
+const caches = new WeakMap<object, Map<string, string>>();
+
+/**
+ * Remembers query results for one version of the indexes: `owner` is an object the app
+ * replaces whenever any note changes, so a new one starts an empty cache.
+ */
+export function queryCacheFor(owner: object): (key: string, compute: () => string) => string {
+  let cache = caches.get(owner);
+  if (!cache) caches.set(owner, (cache = new Map()));
+  const c = cache;
   return (key, compute) => {
-    let v = cache.get(key);
-    if (v === undefined) cache.set(key, (v = compute()));
+    let v = c.get(key);
+    if (v === undefined) c.set(key, (v = compute()));
     return v;
   };
 }

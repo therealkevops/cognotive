@@ -39,14 +39,12 @@ export function SidePane({
   const vault = useVault();
   const content = vault.links.content(path) ?? "";
   const links = useMemo<LinkContext>(
-    () => ({ resolve: (t) => vault.links.resolve(t, path), read: (p) => vault.links.content(p) }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-    [vault.links, path, vault.indexVersion],
+    () => ({ resolve: (t) => vault.indexed.links.resolve(t, path), read: (p) => vault.indexed.links.content(p) }),
+    [vault.indexed, path],
   );
   const propertyInfo = useMemo(
-    () => collectPropertyInfo(vault.links, vault.settings.propertyTypes),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-    [vault.links, vault.indexVersion, vault.settings.propertyTypes],
+    () => collectPropertyInfo(vault.indexed.links, vault.settings.propertyTypes),
+    [vault.indexed, vault.settings.propertyTypes],
   );
   // Drawings and canvases: their own properties, above the picture or the link to open it.
   const sideProperties = (
@@ -57,15 +55,15 @@ export function SidePane({
     />
   );
   const [drawingUrl, setDrawingUrl] = useState<string | null>(null);
+  const { fileUrl } = vault;
   useEffect(() => {
     if (!isDrawing(path)) return;
     let live = true;
-    void vault.fileUrl(path, { dark: isDark() }).then((u) => live && setDrawingUrl(u));
+    void fileUrl(path, { dark: isDark() }).then((u) => live && setDrawingUrl(u));
     return () => {
       live = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, vault.indexVersion]);
+  }, [path, fileUrl, vault.indexed]);
 
   return (
     <section aria-label="Side pane" className="hidden min-h-0 min-w-0 flex-1 flex-col border-l border-border lg:flex">
@@ -90,7 +88,7 @@ export function SidePane({
               info: propertyInfo,
               onSet: (key, value) => {
                 // The open note's latest text (it may be in the main editor too), else the saved text.
-                const text = path === vault.active?.path ? vault.activeText : (vault.links.content(path) ?? "");
+                const text = vault.textOf(path) ?? "";
                 const next = setFrontmatterProperty(text, key, value === undefined ? undefined : yamlValue(value));
                 if (next !== text) void vault.writeNote(path, next);
               },

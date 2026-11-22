@@ -27,9 +27,8 @@ function tagTree(counts: Map<string, number>): TagNode[] {
 export function TagsPanel({ onTag }: { onTag(tag: string): void }) {
   const vault = useVault();
   const tree = useMemo(
-    () => tagTree(vault.links.tags()),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-    [vault.links, vault.indexVersion],
+    () => tagTree(vault.indexed.links.tags()),
+    [vault.indexed],
   );
   return (
     <section aria-label="Tags" className="flex h-full flex-col">

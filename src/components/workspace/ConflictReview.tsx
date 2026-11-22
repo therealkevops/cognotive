@@ -43,7 +43,7 @@ export function ConflictDialog({ record, onClose }: { record: ConflictRecord; on
   const vault = useVault();
   const { resolveConflict } = useSync();
   const exists = vault.exists(record.path);
-  const current = record.path === vault.active?.path ? vault.activeText : (vault.links.content(record.path) ?? "");
+  const current = vault.textOf(record.path) ?? "";
   const blocks = useMemo(
     () => (record.kind === "text" ? reviewBlocks(record, current) : []),
     // Reviewed against the note as it was when the dialog opened.

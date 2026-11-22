@@ -41,7 +41,7 @@ export function HistoryDialog({ path, onClose }: { path: string; onClose(): void
   const [selected, setSelected] = useState<FileCommit | null>(null);
   const [version, setVersion] = useState<{ sha: string; bytes: Uint8Array | null } | null>(null);
   const binary = isBinary(path);
-  const current = vault.active?.path === path ? vault.activeText : (vault.links.content(path) ?? "");
+  const current = vault.textOf(path) ?? "";
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();

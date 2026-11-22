@@ -41,9 +41,8 @@ export function PropertiesPanel({
   );
   const types = vault.settings.propertyTypes;
   const info = useMemo(
-    () => collectPropertyInfo(vault.links, types),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-    [vault.links, vault.indexVersion, types],
+    () => collectPropertyInfo(vault.indexed.links, types),
+    [vault.indexed, types],
   );
   const [open, setOpen] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);

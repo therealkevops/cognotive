@@ -31,7 +31,7 @@ export function QuickSwitcher({ onClose, onOpenSide }: { onClose(): void; onOpen
         .slice(0, 20)
         .map((e) => ({ key: e.path, title: isMarkdown(e.path) || isCanvas(e.path) || isDrawing(e.path) ? displayName(e.path) : basename(e.path), folder: dirname(e.path) }));
     } else {
-      found = vault.index
+      found = vault.indexed.search
         .searchTitles(q)
         .map((h) => ({ key: h.path, title: h.title, folder: dirname(h.path) }));
     }
@@ -40,9 +40,7 @@ export function QuickSwitcher({ onClose, onOpenSide }: { onClose(): void; onOpen
       found.push({ key: `create:${q}`, title: q, folder: "", create: true });
     }
     return found;
-    // indexVersion: recompute when notes change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, vault.entries, vault.index, vault.indexVersion]);
+  }, [query, vault.entries, vault.indexed]);
 
   useEffect(() => {
     listRef.current?.querySelector(`[data-index="${selected}"]`)?.scrollIntoView({ block: "nearest" });

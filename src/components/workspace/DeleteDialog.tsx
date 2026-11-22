@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { basename, isWithin, noteTitle } from "@/lib/vault/paths";
 import { useVault } from "../vault/useVault";
 import { Modal } from "./Modal";
@@ -13,15 +13,14 @@ export function DeleteDialog({ path, isFolder, onClose }: { path: string; isFold
   const vault = useVault();
   const [unlink, setUnlink] = useState(false);
   const [busy, setBusy] = useState(false);
-  const isGone = (p: string) => p === path || (isFolder && isWithin(p, path));
+  const isGone = useCallback((p: string) => p === path || (isFolder && isWithin(p, path)), [path, isFolder]);
 
   const linking = useMemo(() => {
     const gone = vault.entries.filter((e) => e.kind === "file" && isGone(e.path)).map((e) => e.path);
     const sources = new Set<string>();
-    for (const p of gone) for (const b of vault.links.backlinks(p)) if (!isGone(b.source)) sources.add(b.source);
+    for (const p of gone) for (const b of vault.indexed.links.backlinks(p)) if (!isGone(b.source)) sources.add(b.source);
     return [...sources].sort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputed with the index
-  }, [vault.entries, vault.links, vault.indexVersion, path, isFolder]);
+  }, [vault.entries, vault.indexed, isGone]);
 
   const name = basename(path);
   const remove = async () => {

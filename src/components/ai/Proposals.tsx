@@ -25,7 +25,7 @@ export function useApplyProposal() {
           if (!vault.exists(p.path)) return fail("The file no longer exists.");
           await vault.setProperty(p.path, p.property!.key, p.property!.value);
         } else {
-          const current = !vault.exists(p.path) ? undefined : p.path === vault.active?.path ? vault.activeText : vault.links.content(p.path);
+          const current = !vault.exists(p.path) ? undefined : vault.textOf(p.path);
           const text = rebase(p, current);
           if (text === null) {
             return fail(p.before === null ? "A file with that name exists now." : "The note changed in the same place since. Ask again to redo this change.");

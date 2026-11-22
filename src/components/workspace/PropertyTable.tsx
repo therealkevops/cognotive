@@ -18,20 +18,18 @@ export function PropertyTable({ paths, onClose, onOpen }: { paths: string[]; onC
   const aiAction = useAiActions();
   const types = vault.settings.propertyTypes;
   const info = useMemo(
-    () => collectPropertyInfo(vault.links, types),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-    [vault.links, vault.indexVersion, types],
+    () => collectPropertyInfo(vault.indexed.links, types),
+    [vault.indexed, types],
   );
   const props = (p: string) => vault.links.get(p)?.properties ?? {};
   const [added, setAdded] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const columns = useMemo(() => {
     const count = new Map<string, number>();
-    for (const p of paths) for (const k of Object.keys(vault.links.get(p)?.properties ?? {})) count.set(k, (count.get(k) ?? 0) + 1);
+    for (const p of paths) for (const k of Object.keys(vault.indexed.links.get(p)?.properties ?? {})) count.set(k, (count.get(k) ?? 0) + 1);
     const cols = [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k]) => k);
     return [...cols, ...added.filter((k) => !count.has(k))];
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-  }, [paths, vault.links, vault.indexVersion, added]);
+  }, [paths, vault.indexed, added]);
   const [newColumn, setNewColumn] = useState("");
   const listId = useId();
 

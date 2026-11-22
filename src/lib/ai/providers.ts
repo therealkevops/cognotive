@@ -142,12 +142,6 @@ export function saveAiSettings(s: AiSettings): void {
   if (typeof window !== "undefined") window.dispatchEvent(new Event("noted-ai-settings"));
 }
 
-/** The active provider's preset, address and model. */
-export function activeProvider(s: AiSettings) {
-  const preset = PROVIDERS[s.provider];
-  return { preset, ...s.providers[s.provider] };
-}
-
 /** A base URL without trailing slashes; "" if it isn't an http(s) URL. */
 export function normalizeBaseUrl(url: string): string {
   const v = url.trim().replace(/\/+$/, "");

@@ -562,22 +562,19 @@ export function Workspace() {
 
   // How many notes link to each file, for ranking link suggestions.
   const inbound = useMemo(
-    () => vault.links.inboundCounts(),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-    [vault.links, vault.indexVersion],
+    () => vault.indexed.links.inboundCounts(),
+    [vault.indexed],
   );
 
   // Property names, values and tags across the repository, worked out when first asked for.
   const propertyInfo = useMemo(() => {
     let info: PropertyInfo | null = null;
-    return () => (info ??= collectPropertyInfo(vault.links, vault.settings.propertyTypes));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-  }, [vault.links, vault.indexVersion, vault.settings.propertyTypes]);
+    return () => (info ??= collectPropertyInfo(vault.indexed.links, vault.settings.propertyTypes));
+  }, [vault.indexed, vault.settings.propertyTypes]);
 
   // What the editor needs for [[links]].
   // Live query blocks: results from the indexes, cached until a note changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- a fresh cache for each version of the index
-  const cachedQuery = useMemo(() => queryCacheFor(), [vault.indexVersion]);
+  const cachedQuery = useMemo(() => queryCacheFor(vault.indexed), [vault.indexed]);
   const runQueryBlock = useCallback(
     (source: string, lang: "query" | "dataview"): string => {
       const self = vault.active?.path;
@@ -587,11 +584,11 @@ export function Workspace() {
           source,
           lang,
           queryContext({
-            links: vault.links,
-            search: vault.index,
+            links: vault.indexed.links,
+            search: vault.indexed.search,
             mtime: (p) => mtimes.get(p),
             linkFor: (p) => {
-              const t = vault.links.linkText(p);
+              const t = vault.indexed.links.linkText(p);
               return formatLink(vault.settings.linkFormat, self ?? "", { path: p, target: t }, t);
             },
             today: todayStamp(),
@@ -600,7 +597,7 @@ export function Workspace() {
         );
       });
     },
-    [cachedQuery, vault.active?.path, vault.entries, vault.links, vault.index, vault.settings.linkFormat],
+    [cachedQuery, vault.active?.path, vault.entries, vault.indexed, vault.settings.linkFormat],
   );
 
   const linkHost = useMemo<LinkHost>(
@@ -774,14 +771,13 @@ export function Workspace() {
 
   const linkContext = useMemo<LinkContext>(
     () => ({
-      resolve: (t) => vault.links.resolve(t, vault.active?.path),
-      read: (p) => vault.links.content(p),
+      resolve: (t) => vault.indexed.links.resolve(t, vault.active?.path),
+      read: (p) => vault.indexed.links.content(p),
       query: (src, lang) => runQueryBlock(src, lang),
     }),
-    // indexVersion: re-render links and embeds when other notes change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [vault.links, vault.active?.path, vault.indexVersion, runQueryBlock],
+    [vault.indexed, vault.active?.path, runQueryBlock],
   );
+  const { fileUrl: fileUrlOf, writeNote: writeNoteAt } = vault;
   // What a canvas needs: files to place as cards, note previews, pictures and link resolution.
   const canvasVault = useMemo<CanvasVault>(
     () => ({
@@ -795,7 +791,7 @@ export function Workspace() {
           }))
           .sort((a, b) => a.title.localeCompare(b.title)),
       notePreview: (p, subpath) => {
-        const content = vault.links.content(p);
+        const content = vault.indexed.links.content(p);
         if (content === undefined) return null;
         const sub = subpath?.replace(/^#/, "") || undefined;
         return {
@@ -803,22 +799,20 @@ export function Workspace() {
           markdown: previewMarkdown(splitFrontmatter(content).body, sub),
         };
       },
-      fileUrl: (p) => vault.fileUrl(p, { dark: prefersDark() }),
+      fileUrl: (p) => fileUrlOf(p, { dark: prefersDark() }),
       exists: (p) => vault.entries.some((e) => e.path === p),
       links: linkContext,
       noteProperties: (p) => ({
-        properties: vault.links.get(p)?.properties ?? {},
+        properties: vault.indexed.links.get(p)?.properties ?? {},
         info: propertyInfo(),
         set: (key, value) => {
-          const text = vault.links.content(p) ?? "";
+          const text = vault.indexed.links.content(p) ?? "";
           const next = setFrontmatterProperty(text, key, value === undefined ? undefined : yamlValue(value));
-          if (next !== text) void vault.writeNote(p, next);
+          if (next !== text) void writeNoteAt(p, next);
         },
       }),
     }),
-    // indexVersion: cards showing notes re-render when those notes change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [vault.entries, vault.links, vault.indexVersion, vault.active?.path, linkContext, propertyInfo],
+    [vault.entries, vault.indexed, vault.active?.path, linkContext, propertyInfo, fileUrlOf, writeNoteAt],
   );
 
 
@@ -896,7 +890,7 @@ export function Workspace() {
   };
 
   /** The latest text of a file: the open file's (with unsaved edits), or the saved one. */
-  const latestText = (path: string) => (path === vault.active?.path ? vault.activeText : (vault.links.content(path) ?? ""));
+  const latestText = (path: string) => vault.textOf(path) ?? "";
   const isAttachment = (path: string) => !isNote(path) && !isDrawing(path) && !isCanvas(path);
 
   /** Renames a property in every file that has it (not where the new name is already taken). */

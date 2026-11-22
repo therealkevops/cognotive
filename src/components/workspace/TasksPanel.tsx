@@ -39,9 +39,8 @@ export function TasksPanel({
 
   // Other notes as saved (recomputed when the index changes), the open one as typed.
   const others = useMemo(
-    () => vault.links.paths().filter((p) => isNote(p) && p !== active).flatMap((p) => parseTasks(p, vault.links.content(p) ?? "")),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- indexVersion signals index changes
-    [vault.links, vault.indexVersion, active],
+    () => vault.indexed.links.paths().filter((p) => isNote(p) && p !== active).flatMap((p) => parseTasks(p, vault.indexed.links.content(p) ?? "")),
+    [vault.indexed, active],
   );
   const open = useMemo(() => (active && isNote(active) ? parseTasks(active, vault.activeText) : []), [active, vault.activeText]);
   const all = useMemo(() => [...others, ...open].sort(compareTasks), [others, open]);
