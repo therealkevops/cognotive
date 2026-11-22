@@ -15,6 +15,10 @@
 - No emoji anywhere in the app: not in UI text, messages, AI prompts or anything written into notes
   (use words or lucide icons). `src/lib/no-emoji.test.ts` enforces it; the task parser may still
   read Obsidian's emoji markers in existing notes.
+- Search by meaning (`src/lib/semantic/`) runs a model in a Web Worker; the model and ONNX runtime
+  are served from `public/` (fetched by `scripts/fetch-semantic-assets.mjs`), never a CDN. Tests use
+  the word-hashing engine (`localStorage["noted-ai:semanticEngine"] = "hash"`); one e2e test runs
+  the real model from `public/models`.
 - Unit tests sit next to the code as `*.test.ts(x)`; e2e tests live in `tests/e2e/`.
 - Sync logic lives in `src/lib/sync/` and is tested against `FakeRemote`; e2e tests fake the
   GitHub API in the browser with `tests/e2e/fake-github.ts`. Never call real GitHub in tests.

@@ -7,6 +7,8 @@ import { vaultHealth } from "../links/health";
 import { hubsFor, pinnedHubs } from "../links/hubs";
 import { appendText, notePathFrom, replaceOnce, type Proposal } from "./proposals";
 import { compareTasks, filterTasks, parseTasks } from "../tasks/tasks";
+import { fuseResults } from "../semantic/hybrid";
+import type { SemanticHit } from "../semantic/semantic-index";
 import type { LinkIndex } from "../links/link-index";
 import { filesWithProperties, parsePropertyQuery, valueText } from "../links/property-query";
 import type { NoteIndex } from "../search/note-index";
@@ -27,6 +29,11 @@ export interface ToolEnv {
   ignored?(path: string): boolean;
   /** Present when the agent may propose changes. */
   proposals?: ProposalSink;
+  /** Present when search by meaning is on. */
+  semantic?: {
+    search(query: string, limit?: number): Promise<SemanticHit[]>;
+    similar(path: string, limit?: number): SemanticHit[];
+  };
 }
 
 /** Where proposed changes go, and the repository as it would be with the pending ones. */
@@ -81,7 +88,7 @@ const fn = (name: string, description: string, properties: Record<string, unknow
 export const READ_TOOLS: ToolSpec[] = [
   fn(
     "search_notes",
-    "Keyword search over the notes. Returns paths, titles and snippets. Also understands tag:name and [property:value] filters.",
+    "Search the notes by keywords (and by meaning, when that's on, so different wording still matches). Returns paths, titles and snippets. Also understands tag:name and [property:value] filters.",
     { query: { type: "string" }, limit: { type: "integer", description: "At most 20; default 8" } },
     ["query"],
   ),
@@ -93,7 +100,7 @@ export const READ_TOOLS: ToolSpec[] = [
   ),
   fn(
     "get_links",
-    "A note's connections: links out, backlinks (with the linking line), unlinked mentions, related notes and canvas arrows.",
+    "A note's connections: links out, backlinks (with the linking line), unlinked mentions, related notes, notes similar in meaning (when that's on) and canvas arrows.",
     { path: { type: "string" } },
     ["path"],
   ),
@@ -255,10 +262,10 @@ const WRITE_HANDLERS: Record<string, (env: ToolEnv, sink: ProposalSink, args: Re
   },
 };
 
-type Handler = (env: ToolEnv, args: Record<string, unknown>) => ToolResult;
+type Handler = (env: ToolEnv, args: Record<string, unknown>) => ToolResult | Promise<ToolResult>;
 
 const HANDLERS: Record<string, Handler> = {
-  search_notes(env, a) {
+  async search_notes(env, a) {
     const query = str(a.query).trim();
     const limit = num(a.limit, 8, 20);
     const label = `Searched “${query}”`;
@@ -280,13 +287,18 @@ const HANDLERS: Record<string, Handler> = {
     let found = text ? env.search.search(text, 200).filter(inPool) : [];
     // Every word didn't match: any word will do.
     if (text && !found.length) found = env.search.searchAny(text, 200).filter(inPool);
-    const hits = text
-      ? found
+    // By meaning too: notes that say the same thing in other words.
+    const meaning = text && env.semantic ? (await env.semantic.search(text, 20)).filter(inPool) : [];
+    const hits: Array<{ path: string; title: string; snippet: string; via?: string }> = text
+      ? meaning.length
+        ? fuseResults(found, meaning, displayName)
+        : found
       : (pool ?? []).map((path) => ({ path, title: displayName(path), snippet: plainStart(env, path) }));
     const results = hits.slice(0, limit).map((h) => ({
       path: h.path,
       title: h.title,
       snippet: h.snippet,
+      ...(h.via === "meaning" ? { matched: "by meaning" } : {}),
       ...(env.links.get(h.path)?.tags.length ? { tags: env.links.get(h.path)!.tags } : {}),
     }));
     return {
@@ -326,8 +338,17 @@ const HANDLERS: Record<string, Handler> = {
     const mentions = env.links.unlinkedMentions(path).slice(0, 15).map((m) => ({ in: m.source, line: m.context.trim().slice(0, 200) }));
     const related = env.links.related(path, 8).map((r) => ({ path: r.path, via: r.via }));
     const canvas = env.links.canvasRelations(path).map((r) => ({ canvas: r.canvas, other: r.other, label: r.label, direction: r.direction }));
+    const similar = env.semantic?.similar(path, 6).map((h) => ({ path: h.path, passage: h.preview.slice(0, 120) })) ?? [];
     return {
-      content: json({ path, linksOut: [...new Set(out)], backlinks, unlinkedMentions: mentions, related, ...(canvas.length ? { canvas } : {}) }),
+      content: json({
+        path,
+        linksOut: [...new Set(out)],
+        backlinks,
+        unlinkedMentions: mentions,
+        related,
+        ...(similar.length ? { similarInMeaning: similar } : {}),
+        ...(canvas.length ? { canvas } : {}),
+      }),
       read: [],
       label: `Followed links of ${displayName(path)}`,
     };
@@ -482,7 +503,7 @@ function plainStart(env: ToolEnv, path: string): string {
 }
 
 /** Runs a tool call. Unknown tools and bad arguments come back as text the model can correct. */
-export function runTool(env: ToolEnv, name: string, rawArgs: string): ToolResult {
+export async function runTool(env: ToolEnv, name: string, rawArgs: string): Promise<ToolResult> {
   const sink = env.proposals;
   const write = Object.hasOwn(WRITE_HANDLERS, name) ? WRITE_HANDLERS[name] : undefined;
   const handler: Handler | undefined = Object.hasOwn(HANDLERS, name) ? HANDLERS[name] : write && sink ? (e, a) => write(e, sink, a) : undefined;
@@ -497,7 +518,7 @@ export function runTool(env: ToolEnv, name: string, rawArgs: string): ToolResult
     }
   }
   try {
-    return handler(env, args);
+    return await handler(env, args);
   } catch (e) {
     return { content: `${name} failed: ${(e as Error).message}`, read: [], label: `Tried ${name}` };
   }

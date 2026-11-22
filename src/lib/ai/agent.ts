@@ -2,6 +2,7 @@ import { splitFrontmatter } from "../markdown/frontmatter";
 import { displayName } from "../vault/paths";
 import { AiError, streamChat, type ChatMessage, type Endpoint } from "./openai-compatible";
 import { READ_TOOLS, runTool, WRITE_TOOLS, type ToolEnv } from "./tools";
+import { fuseResults } from "../semantic/hybrid";
 import type { Proposal } from "./proposals";
 
 /**
@@ -90,8 +91,10 @@ export function keywords(question: string): string {
 }
 
 /** For models without tools: the notes that best match the question, as context. */
-export function searchContext(env: ToolEnv, question: string, limit = 5): { message: ChatMessage; read: string[] } {
-  const hits = env.search.searchAny(keywords(question) || question, limit);
+export async function searchContext(env: ToolEnv, question: string, limit = 5): Promise<{ message: ChatMessage; read: string[] }> {
+  const byWords = env.search.searchAny(keywords(question) || question, limit);
+  const byMeaning = env.semantic ? await env.semantic.search(question, limit) : [];
+  const hits = (byMeaning.length ? fuseResults(byWords, byMeaning, displayName) : byWords).slice(0, limit);
   const blocks = hits.map((h) => {
     const body = splitFrontmatter(env.links.content(h.path) ?? "").body;
     return `<note path="${h.path}" name="${displayName(h.path)}">\n${excerpt(body, question)}\n</note>`;
@@ -134,7 +137,7 @@ export async function runAgent(o: AgentOptions): Promise<AgentResult> {
   const bySearch = async (): Promise<AgentResult> => {
     emit({ type: "mode", mode: "search" });
     const question = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
-    const ctx = searchContext(o.env, question);
+    const ctx = await searchContext(o.env, question);
     addRead(ctx.read);
     const label = `Searched for the question: ${ctx.read.length} ${ctx.read.length === 1 ? "note" : "notes"}`;
     steps.push(label);
@@ -159,7 +162,7 @@ export async function runAgent(o: AgentOptions): Promise<AgentResult> {
     messages.push({ role: "assistant", content: r.text, tool_calls: r.toolCalls });
     for (const call of r.toolCalls) {
       if (o.signal?.aborted) throw new AiError("Stopped.", "aborted");
-      const res = runTool(o.env, call.function.name, call.function.arguments);
+      const res = await runTool(o.env, call.function.name, call.function.arguments);
       addRead(res.read);
       steps.push(res.label);
       emit({ type: "step", label: res.label, read: res.read });

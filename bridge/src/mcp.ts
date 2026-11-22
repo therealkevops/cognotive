@@ -49,7 +49,7 @@ export function mcpServer(folder: NoteFolder, opts: { readOnly?: boolean; versio
   };
 
   /** Answers one JSON-RPC message; null for notifications. */
-  function handle(msg: Json): Json | null {
+  async function handle(msg: Json): Promise<Json | null> {
     const id = msg.id as string | number | undefined;
     const method = String(msg.method ?? "");
     const params = (msg.params ?? {}) as Json;
@@ -79,7 +79,7 @@ export function mcpServer(folder: NoteFolder, opts: { readOnly?: boolean; versio
         const name = String(params.name ?? "");
         if (!tools.some((t) => t.function.name === name)) return err(-32602, `Unknown tool: ${name}`);
         try {
-          const r = runTool(env(), name, JSON.stringify(params.arguments ?? {}));
+          const r = await runTool(env(), name, JSON.stringify(params.arguments ?? {}));
           const text = r.proposal ? `Done: ${r.proposal.summary} (${r.proposal.path}).` : r.content;
           // A tool that threw (e.g. a path outside the folder) is an error; other answers explain themselves.
           return ok({ content: [{ type: "text", text }], ...(r.content.startsWith(`${name} failed:`) ? { isError: true } : {}) });
@@ -97,19 +97,23 @@ export function mcpServer(folder: NoteFolder, opts: { readOnly?: boolean; versio
     /** Serves over stdin and stdout, one JSON message per line. */
     listen(input: NodeJS.ReadableStream = process.stdin, output: NodeJS.WritableStream = process.stdout) {
       const rl = readline.createInterface({ input });
+      // One message at a time, so replies keep the order of the requests.
+      let queue = Promise.resolve();
       rl.on("line", (line) => {
         if (!line.trim()) return;
-        let msg: Json;
-        try {
-          msg = JSON.parse(line);
-        } catch {
-          output.write(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }) + "\n");
-          return;
-        }
-        const reply = handle(msg);
-        if (reply) output.write(JSON.stringify(reply) + "\n");
+        queue = queue.then(async () => {
+          let msg: Json;
+          try {
+            msg = JSON.parse(line);
+          } catch {
+            output.write(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }) + "\n");
+            return;
+          }
+          const reply = await handle(msg);
+          if (reply) output.write(JSON.stringify(reply) + "\n");
+        });
       });
-      return new Promise<void>((resolve) => rl.once("close", resolve));
+      return new Promise<void>((resolve) => rl.once("close", () => void queue.then(resolve)));
     },
   };
 }

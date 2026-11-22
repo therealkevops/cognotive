@@ -5,7 +5,7 @@ import { testEnv } from "./tools.test";
 import type { Proposal } from "./proposals";
 
 describe("lineDiff", () => {
-  it("marks added and removed lines, folding unchanged runs", () => {
+  it("marks added and removed lines, folding unchanged runs", async () => {
     const before = ["a", "b", "c", "d", "e", "f", "g", "h"].join("\n");
     const after = ["a", "b", "c", "d", "E", "f", "g", "h"].join("\n");
     expect(lineDiff(before, after, 1)).toEqual([
@@ -25,13 +25,13 @@ describe("lineDiff", () => {
 
 describe("rebase", () => {
   const p = { before: "# Title\n\nOne\n\nTwo\n", after: "# Title\n\nOne\n\nTwo\n\nThree\n" };
-  it("applies as proposed when nothing changed", () => {
+  it("applies as proposed when nothing changed", async () => {
     expect(rebase(p, p.before)).toBe(p.after);
   });
-  it("keeps edits made since, elsewhere in the note", () => {
+  it("keeps edits made since, elsewhere in the note", async () => {
     expect(rebase(p, "# New title\n\nOne\n\nTwo\n")).toBe("# New title\n\nOne\n\nTwo\n\nThree\n");
   });
-  it("refuses when the same lines changed, the note is gone, or a new note now exists", () => {
+  it("refuses when the same lines changed, the note is gone, or a new note now exists", async () => {
     expect(rebase({ before: "a\nb\nc", after: "a\nB!\nc" }, "a\nb changed\nc")).toBeNull();
     expect(rebase(p, undefined)).toBeNull();
     expect(rebase({ before: null, after: "x" }, "already here")).toBeNull();
@@ -40,19 +40,19 @@ describe("rebase", () => {
 });
 
 describe("text builders", () => {
-  it("append at the end or under a heading", () => {
+  it("append at the end or under a heading", async () => {
     expect(appendText("# A\n\ntext\n\n\n", "more")).toBe("# A\n\ntext\n\nmore\n");
     expect(appendText("", "first")).toBe("first\n");
     const doc = "# A\n\n## Ideas\n\n- one\n\n## Later\n\nstuff";
     expect(appendText(doc, "- two", "Ideas")).toBe("# A\n\n## Ideas\n\n- one\n\n- two\n\n## Later\n\nstuff");
     expect(appendText(doc, "x", "Missing")).toBeNull();
   });
-  it("replace text that appears once", () => {
+  it("replace text that appears once", async () => {
     expect(replaceOnce("a b c", "b", "B")).toEqual({ text: "a B c" });
     expect(replaceOnce("a b b", "b", "B")).toHaveProperty("error");
     expect(replaceOnce("a", "z", "B")).toHaveProperty("error");
   });
-  it("make note paths", () => {
+  it("make note paths", async () => {
     expect(notePathFrom("/Projects//Plan/")).toBe("Projects/Plan.md");
     expect(notePathFrom("Plan.md")).toBe("Plan.md");
   });
@@ -81,42 +81,42 @@ describe("write tools", () => {
     return { env: { ...env, proposals: sink }, made };
   };
 
-  it("aren't available without a sink", () => {
-    expect(runTool(testEnv(files), "create_note", JSON.stringify({ path: "X", content: "x" })).content).toContain("no tool");
+  it("aren't available without a sink", async () => {
+    expect((await runTool(testEnv(files), "create_note", JSON.stringify({ path: "X", content: "x" }))).content).toContain("no tool");
   });
 
-  it("propose new notes, with properties, but never over an existing one", () => {
+  it("propose new notes, with properties, but never over an existing one", async () => {
     const { env, made } = make();
-    const r = runTool(env, "create_note", JSON.stringify({ path: "Recipes/Stew", content: "# Stew", properties: { tags: ["food"] } }));
+    const r = await runTool(env, "create_note", JSON.stringify({ path: "Recipes/Stew", content: "# Stew", properties: { tags: ["food"] } }));
     expect(r.content).toContain("Proposed (p0)");
     expect(made[0]).toMatchObject({ kind: "create", path: "Recipes/Stew.md", before: null, after: "---\ntags: [food]\n---\n# Stew\n" });
-    expect(runTool(env, "create_note", JSON.stringify({ path: "Bread", content: "x" })).content).toContain("already exists");
-    expect(runTool(env, "create_note", JSON.stringify({ path: "Recipes/Stew", content: "x" })).content).toContain("already exists");
-    expect(runTool(env, "create_note", JSON.stringify({ path: "Bad#name", content: "x" })).content).toContain("Can't use");
+    expect((await runTool(env, "create_note", JSON.stringify({ path: "Bread", content: "x" }))).content).toContain("already exists");
+    expect((await runTool(env, "create_note", JSON.stringify({ path: "Recipes/Stew", content: "x" }))).content).toContain("already exists");
+    expect((await runTool(env, "create_note", JSON.stringify({ path: "Bad#name", content: "x" }))).content).toContain("Can't use");
   });
 
-  it("propose appends and edits on top of earlier proposals", () => {
+  it("propose appends and edits on top of earlier proposals", async () => {
     const { env, made } = make();
-    runTool(env, "append_to_note", JSON.stringify({ path: "Bread", text: "Bake at 230°C." }));
-    runTool(env, "edit_note", JSON.stringify({ path: "Bread", find: "Sourdough.", replace: "Sourdough bread." }));
+    await runTool(env, "append_to_note", JSON.stringify({ path: "Bread", text: "Bake at 230°C." }));
+    await runTool(env, "edit_note", JSON.stringify({ path: "Bread", find: "Sourdough.", replace: "Sourdough bread." }));
     expect(made[1].before).toBe(made[0].after);
     expect(made[1].after).toBe("# Bread\n\nSourdough bread. Goes well with Soup.\n\nBake at 230°C.\n");
-    expect(runTool(env, "edit_note", JSON.stringify({ path: "Bread", find: "Rye", replace: "x" })).content).toContain("isn't in the note");
+    expect((await runTool(env, "edit_note", JSON.stringify({ path: "Bread", find: "Rye", replace: "x" }))).content).toContain("isn't in the note");
   });
 
-  it("propose properties for any file", () => {
+  it("propose properties for any file", async () => {
     const { env, made } = make();
-    runTool(env, "set_property", JSON.stringify({ path: "Soup", key: "status", value: "draft" }));
+    await runTool(env, "set_property", JSON.stringify({ path: "Soup", key: "status", value: "draft" }));
     expect(made[0]).toMatchObject({ kind: "property", property: { key: "status", value: "draft", old: undefined }, before: "", after: "status: draft" });
-    runTool(env, "set_property", JSON.stringify({ path: "Cooking", key: "hub", value: null }));
+    await runTool(env, "set_property", JSON.stringify({ path: "Cooking", key: "hub", value: null }));
     expect(made[1].summary).toBe("Remove hub from Cooking");
   });
 
-  it("propose links: a mention becomes a link, otherwise a hub lists it", () => {
+  it("propose links: a mention becomes a link, otherwise a hub lists it", async () => {
     const { env, made } = make();
-    runTool(env, "add_link", JSON.stringify({ from: "Bread", to: "Soup" }));
+    await runTool(env, "add_link", JSON.stringify({ from: "Bread", to: "Soup" }));
     expect(made[0].after).toBe("# Bread\n\nSourdough. Goes well with [[Soup]].\n");
-    runTool(env, "add_link", JSON.stringify({ from: "Cooking", to: "Soup" }));
+    await runTool(env, "add_link", JSON.stringify({ from: "Cooking", to: "Soup" }));
     expect(made[1].after).toContain("- [[Bread]]\n- [[Soup]]");
   });
 });

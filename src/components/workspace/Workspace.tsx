@@ -923,7 +923,14 @@ export function Workspace() {
             </div>
           </div>
         ) : tab === "search" ? (
-          <SearchPanel query={searchQuery} onQuery={setSearchQuery} autoFocus onEditProperties={setPropertyTable} />
+          <SearchPanel
+            query={searchQuery}
+            onQuery={setSearchQuery}
+            autoFocus
+            onEditProperties={setPropertyTable}
+            onOpenAt={openAt}
+            onSearchSettings={() => setSettingsOpen("search")}
+          />
         ) : tab === "tasks" ? (
           <TasksPanel onOpen={openAt} onToggle={toggleTaskIn} />
         ) : tab === "tags" ? (

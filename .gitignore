@@ -52,3 +52,7 @@ next-env.d.ts
 
 # the companion bundle (npm run build:bridge)
 /bridge/dist/
+
+# search by meaning: runtime and model (scripts/fetch-semantic-assets.mjs)
+/public/ort/
+/public/models/

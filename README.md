@@ -120,6 +120,13 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
     tags, are copied into the note
   - Starter templates (Meeting, Project, Person, Weekly review, Map of content, Daily) can be added when a
     repository is created, or later from the Templates tab
+- **Search by meaning** (Settings → Search, per device, off until turned on): finds notes that mean
+  what you searched for even when the words differ ("how often should I water" finds "irrigate the
+  beds every Tuesday"), merged with the usual word matches and marked *by meaning*. Connections lists
+  unlinked notes that are **similar in meaning**, and the AI agent's search uses it too. A small model
+  (BGE small, about 48 MB with its runtime, downloaded once from this app, not a CDN) runs in a
+  background worker in the browser; notes never leave it. Each note is indexed in passages once, and
+  again only when it changes
 - **Tasks** (the checklist tab in the left sidebar, or *Show tasks*): every `- [ ]` in every note,
   grouped by due date (Overdue, Today, Tomorrow, Next 7 days, Later, No date) or by note, with
   Open / Done / All and a filter for words, `#tags` or note names. Tick a task to tick it in its note;
@@ -229,10 +236,11 @@ notes** lists every step and every note whose text was sent to the model.
 
 ### What it can look at
 
-- **Search:** keyword search, including `tag:x` and `[status:draft]` filters.
+- **Search:** keyword search, including `tag:x` and `[status:draft]` filters, and search by meaning
+  when it's on.
 - **Read:** a whole note, or one heading's section, with its properties.
-- **Connections:** links, backlinks, unlinked mentions and related notes, plus labelled canvas
-  arrows.
+- **Connections:** links, backlinks, unlinked mentions, related notes and notes similar in meaning,
+  plus labelled canvas arrows.
 - **Nearby notes:** everything within a few links of a note.
 - **Structure:** hubs (and which hub a note belongs in), tags, properties and folders.
 - **Tasks:** open or done tasks across notes, by due date, words or tags.

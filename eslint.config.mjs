@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // The companion bundle (npm run build:bridge).
     "bridge/dist/**",
+    // Search by meaning: the copied ONNX runtime (scripts/fetch-semantic-assets.mjs).
+    "public/ort/**",
+    "public/models/**",
   ]),
 ]);
 

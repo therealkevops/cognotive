@@ -25,15 +25,17 @@ import { MIN_PASSPHRASE, newPassphraseError, RecoveryKeyStep, UnlockFields, type
 import { TokenInstructions } from "../sync/TokenFields";
 import { Group, Row, SectionHeader, Switch, TextSetting } from "./parts";
 import { AiSection } from "../ai/AiSettings";
+import { SearchSection } from "../semantic/SemanticSettings";
 import { KNOWN_PROPERTIES, PROPERTY_NAME, withNewNoteProperties } from "@/lib/vault/new-note-properties";
 import { useVault } from "../vault/useVault";
 import { useVaults } from "../vault/useVaults";
 
-export type SettingsSection = "appearance" | "editor" | "ai" | "vault" | "vaults" | "app";
+export type SettingsSection = "appearance" | "editor" | "search" | "ai" | "vault" | "vaults" | "app";
 
 const SECTIONS: Array<{ id: SettingsSection; label: string }> = [
   { id: "appearance", label: "Appearance" },
   { id: "editor", label: "Editor" },
+  { id: "search", label: "Search" },
   { id: "ai", label: "AI" },
   { id: "vault", label: "This repository" },
   { id: "vaults", label: "Repositories & sync" },
@@ -83,6 +85,7 @@ export function SettingsDialog({ onClose, initial = "appearance" }: { onClose():
           <div className="mx-auto max-w-2xl">
             {section === "appearance" && <AppearanceSection />}
             {section === "editor" && <EditorSection />}
+            {section === "search" && <SearchSection />}
             {section === "ai" && <AiSection />}
             {section === "vault" && <ThisVaultSection />}
             {section === "vaults" && <VaultsSection />}

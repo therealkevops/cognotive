@@ -285,9 +285,17 @@ Each phase ends deployed to Vercel and usable.
 
 ---
 
-## Later: semantic search
+## Semantic search
 
-When it's time, two options that both stay within free tiers:
+**Done (option 1):** `src/lib/semantic/` chunks notes by heading and paragraph, embeds the passages
+with BGE small (8-bit) through transformers.js in a Web Worker, keeps the vectors in IndexedDB per
+repository (re-embedding only changed notes), and searches them by brute force. Results are merged
+with keyword search by reciprocal rank fusion. The model and the ONNX runtime are copied into
+`public/` at build time (`scripts/fetch-semantic-assets.mjs`) so nothing loads from a CDN. It's
+opt-in per device (Settings → Search). Vectors aren't committed to the repository yet: each device
+indexes its own copy.
+
+The options that were considered:
 
 1. **In the browser:** a small embedding model via `transformers.js`; vectors cached in
    IndexedDB and optionally committed to `.noted/embeddings/` so other devices don't

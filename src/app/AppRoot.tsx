@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo } from "react";
 import { SyncProvider } from "@/components/sync/useSync";
 import { VaultProvider } from "@/components/vault/useVault";
+import { SemanticProvider } from "@/components/semantic/useSemantic";
 import { VaultsProvider, useVaults } from "@/components/vault/useVaults";
 import { LocalStore } from "@/lib/vault/local-store";
 
@@ -24,13 +25,15 @@ function ActiveVault() {
   const store = useMemo(() => new LocalStore(active.id), [active.id]);
   return (
     <VaultProvider vaultId={active.id} store={store} seed={active.kind === "local"}>
-      {active.kind === "github" ? (
-        <SyncProvider config={active} store={store}>
+      <SemanticProvider>
+        {active.kind === "github" ? (
+          <SyncProvider config={active} store={store}>
+            <Workspace />
+          </SyncProvider>
+        ) : (
           <Workspace />
-        </SyncProvider>
-      ) : (
-        <Workspace />
-      )}
+        )}
+      </SemanticProvider>
     </VaultProvider>
   );
 }

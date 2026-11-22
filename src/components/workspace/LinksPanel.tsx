@@ -8,6 +8,7 @@ import { addToHub, hubsFor, pinnedHubs } from "@/lib/links/hubs";
 import type { Backlink, CanvasRelation, Mention } from "@/lib/links/link-index";
 import { canvasName, displayName, isNote, noteTitle } from "@/lib/vault/paths";
 import { useAiActions } from "../ai/useAsk";
+import { useSemantic } from "../semantic/useSemantic";
 import { useVault } from "../vault/useVault";
 
 function group<T extends { source: string }>(items: T[]): Array<[string, T[]]> {
@@ -62,6 +63,7 @@ export function LinksPanel({
 }) {
   const vault = useVault();
   const aiAction = useAiActions();
+  const semantic = useSemantic();
   const path = vault.active?.path;
 
   const { backlinks, mentions, outgoing, relations, related, sameTags } = useMemo(() => {
@@ -108,6 +110,15 @@ export function LinksPanel({
     // indexVersion signals index changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, vault.links, vault.indexVersion]);
+
+  // Close in meaning but not linked either way: connections worth making.
+  const similar = useMemo(() => {
+    if (!path || !semantic.enabled) return [];
+    const linked = new Set([path, ...backlinks.map((b) => b.source), ...outgoing.flatMap((o) => (o.resolved ? [o.resolved] : []))]);
+    return semantic.similar(path, 12).filter((h) => !linked.has(h.path)).slice(0, 6);
+    // semantic.version signals a finished indexing pass.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path, semantic.enabled, semantic.version, backlinks, outgoing]);
 
   if (!path) return null;
 
@@ -263,6 +274,30 @@ export function LinksPanel({
               </li>
             ))}
           </ul>
+        </Section>
+      )}
+
+      {semantic.enabled && (
+        <Section title="Similar in meaning" count={similar.length} defaultOpen={similar.length > 0}>
+          {similar.length === 0 ? (
+            <p className="text-sm text-muted">
+              {semantic.status.state === "ready" ? "No unlinked notes are close in meaning." : "Indexing notes for search by meaning…"}
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {similar.map((h) => (
+                <li key={h.path} className="text-sm">
+                  <button type="button" className="text-left font-medium hover:text-accent" onClick={() => void vault.open(h.path)}>
+                    {displayName(h.path)}
+                  </button>
+                  <p className="line-clamp-2 text-xs text-muted" title={h.preview}>
+                    {h.heading && h.heading !== displayName(h.path) ? `${h.heading}: ` : ""}
+                    {h.preview}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
         </Section>
       )}
 
