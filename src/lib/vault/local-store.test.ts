@@ -228,4 +228,37 @@ describe("LocalStore", () => {
     expect(heard).toEqual(["blocked", null, "outdated"]);
     newer.close();
   });
+
+  it("adds up what the repository stores, as text and as attachments", async () => {
+    const s = makeStore();
+    await s.write("a.md", "héllo"); // 6 bytes in UTF-8
+    await s.write("B/b.md", "1234");
+    await s.writeBinary("B/p.png", new Uint8Array(10));
+    await s.writeIf("c.md", undefined, "xyz");
+    await s.writeBinaryIf("q.pdf", undefined, new Uint8Array(5));
+    await s.rename("B", "C");
+    expect(await s.usage()).toEqual({ text: { count: 3, bytes: 13 }, attachments: { count: 2, bytes: 15 } });
+    await s.delete("C");
+    expect(await s.usage()).toEqual({ text: { count: 2, bytes: 9 }, attachments: { count: 1, bytes: 5 } });
+  });
+
+  it("works out sizes for files saved before sizes were kept", async () => {
+    const id = `test-${n++}`;
+    const name = `noted-ai:vault:${id}`;
+    const first = new LocalStore(id);
+    await first.write("a.md", "abc");
+    await first.close();
+    // Entries as the previous version wrote them: no size.
+    const raw = await openDB(name, 3);
+    await raw.put("entries", { path: "a.md", mtime: 1 });
+    await raw.put("blobs", { path: "p.png", bytes: new Uint8Array(7).buffer, mtime: 2 });
+    await raw.put("entries", { path: "p.png", mtime: 2 });
+    raw.close();
+    const s = new LocalStore(id);
+    stores.push(s);
+    expect(await s.usage()).toEqual({ text: { count: 1, bytes: 3 }, attachments: { count: 1, bytes: 7 } });
+    const check = await openDB(name, 3);
+    expect(await check.get("entries", "p.png")).toEqual({ path: "p.png", mtime: 2, size: 7 });
+    check.close();
+  });
 });

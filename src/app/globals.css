@@ -32,6 +32,12 @@
   --editor-font-size: 16px;
   --line-width: 46rem;
   --note-font: var(--font-serif-face), Georgia, serif;
+  /* Chart series, in a fixed order (validated for colour-blind separation in both modes). */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-rest: #c4c0b4;
   color-scheme: light;
 }
 
@@ -48,6 +54,11 @@
     --primary: #f0eee6;
     --primary-foreground: #1f1e1d;
     --accent: var(--accent-dark, #d97757);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-rest: #5a5852;
     color-scheme: dark;
   }
 }
@@ -64,6 +75,11 @@
   --primary: #f0eee6;
   --primary-foreground: #1f1e1d;
   --accent: var(--accent-dark, #d97757);
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-rest: #5a5852;
   color-scheme: dark;
 }
 

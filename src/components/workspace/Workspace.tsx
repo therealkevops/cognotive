@@ -896,6 +896,7 @@ export function Workspace() {
     { id: "export", label: "Export repository as zip" },
     { id: "import", label: "Import notes from a zip…" },
     { id: "settings", label: "Open settings" },
+    { id: "storage", label: "Show storage used on this device" },
     { id: "install", label: "Install noted-ai as an app" },
   ];
   const runCommand: Record<string, () => void> = {
@@ -965,6 +966,7 @@ export function Workspace() {
     export: () => void exportZip(vault, vaults.active.name),
     import: chooseZip,
     settings: () => setSettingsOpen("appearance"),
+    storage: () => setSettingsOpen("storage"),
     install: () => setSettingsOpen("app"),
   };
 

@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import { isWithin, joinPath, normalizePath } from "./paths";
+import { isBinary as isBinaryPath, isWithin, joinPath, normalizePath } from "./paths";
 import type { VaultEntry, VaultFile, VaultStore } from "./types";
 
 interface BinaryRecord {
@@ -12,6 +12,18 @@ interface BinaryRecord {
 interface EntryRecord {
   path: string;
   mtime: number;
+  /** Bytes stored: UTF-8 for text, the length for attachments. Missing in entries made before sizes were kept. */
+  size?: number;
+}
+
+const utf8 = new TextEncoder();
+const textSize = (content: string) => utf8.encode(content).length;
+
+/** How much a repository keeps in this browser. */
+export interface StoreUsage {
+  /** Notes, drawings, canvases and settings: everything kept as text. */
+  text: { count: number; bytes: number };
+  attachments: { count: number; bytes: number };
 }
 
 interface VaultDB extends DBSchema {
@@ -99,7 +111,9 @@ export class LocalStore implements VaultStore {
           const entries = db.createObjectStore("entries", { keyPath: "path" });
           for (const name of ["files", "blobs"] as const) {
             for (let c = await tx.objectStore(name).openCursor(); c; c = await c.continue()) {
-              await entries.put({ path: c.value.path, mtime: c.value.mtime });
+              const v = c.value as VaultFile | BinaryRecord;
+              const size = "content" in v ? textSize(v.content) : v.bytes.byteLength;
+              await entries.put({ path: v.path, mtime: v.mtime, size });
             }
           }
         }
@@ -122,6 +136,32 @@ export class LocalStore implements VaultStore {
     ];
   }
 
+  /**
+   * What the repository takes up here, from the file entries (sizes missing from older
+   * entries are worked out once, by reading those files, and remembered).
+   */
+  async usage(): Promise<StoreUsage> {
+    const db = await this.db;
+    const out: StoreUsage = { text: { count: 0, bytes: 0 }, attachments: { count: 0, bytes: 0 } };
+    for (const e of await db.getAll("entries")) {
+      let size = e.size;
+      if (size === undefined) {
+        const file = await db.get("files", e.path);
+        const blob = file ? undefined : await db.get("blobs", e.path);
+        size = file ? textSize(file.content) : (blob?.bytes.byteLength ?? 0);
+        // Only if unchanged meanwhile: a newer write has its own size.
+        const tx = db.transaction("entries", "readwrite");
+        const now = await tx.store.get(e.path);
+        if (now && now.mtime === e.mtime && now.size === undefined) await tx.store.put({ ...now, size });
+        await tx.done;
+      }
+      const part = isBinaryPath(e.path) ? out.attachments : out.text;
+      part.count++;
+      part.bytes += size;
+    }
+    return out;
+  }
+
   async read(path: string): Promise<VaultFile | undefined> {
     return (await this.db).get("files", normalizePath(path));
   }
@@ -130,7 +170,7 @@ export class LocalStore implements VaultStore {
     const file = { path: normalizePath(path), content, mtime: this.now() };
     if (!file.path) throw new Error("A file needs a name.");
     const tx = (await this.db).transaction(["files", "entries"], "readwrite");
-    await Promise.all([tx.objectStore("files").put(file), tx.objectStore("entries").put({ path: file.path, mtime: file.mtime }), tx.done]);
+    await Promise.all([tx.objectStore("files").put(file), tx.objectStore("entries").put({ path: file.path, mtime: file.mtime, size: textSize(content) }), tx.done]);
     this.changed([file.path]);
     return file;
   }
@@ -145,7 +185,7 @@ export class LocalStore implements VaultStore {
     if (!p) throw new Error("A file needs a name.");
     const mtime = this.now();
     const tx = (await this.db).transaction(["blobs", "entries"], "readwrite");
-    await Promise.all([tx.objectStore("blobs").put({ path: p, bytes: bytes.slice().buffer, mtime }), tx.objectStore("entries").put({ path: p, mtime }), tx.done]);
+    await Promise.all([tx.objectStore("blobs").put({ path: p, bytes: bytes.slice().buffer, mtime }), tx.objectStore("entries").put({ path: p, mtime, size: bytes.length }), tx.done]);
     this.changed([p]);
     return { path: p, kind: "file", mtime };
   }
@@ -165,7 +205,7 @@ export class LocalStore implements VaultStore {
     if (bytes === null) await Promise.all([blobs.delete(p), entries.delete(p)]);
     else {
       const mtime = this.now();
-      await Promise.all([blobs.put({ path: p, bytes: bytes.slice().buffer, mtime }), entries.put({ path: p, mtime })]);
+      await Promise.all([blobs.put({ path: p, bytes: bytes.slice().buffer, mtime }), entries.put({ path: p, mtime, size: bytes.length })]);
     }
     await tx.done;
     this.changed([p]);
@@ -191,7 +231,7 @@ export class LocalStore implements VaultStore {
     if (content === null) await Promise.all([files.delete(p), entries.delete(p)]);
     else {
       const mtime = this.now();
-      await Promise.all([files.put({ path: p, content, mtime }), entries.put({ path: p, mtime })]);
+      await Promise.all([files.put({ path: p, content, mtime }), entries.put({ path: p, mtime, size: textSize(content) })]);
     }
     await tx.done;
     this.changed([p]);
@@ -253,10 +293,11 @@ export class LocalStore implements VaultStore {
       await blobs.put({ ...rec, path: moved(key), mtime: now });
     }
     const touched: string[] = [];
-    for (const key of await entries.getAllKeys()) {
+    for (const entry of await entries.getAll()) {
+      const key = entry.path;
       if (!isWithin(key, src)) continue;
       await entries.delete(key);
-      await entries.put({ path: moved(key), mtime: now });
+      await entries.put({ ...entry, path: moved(key), mtime: now });
       touched.push(key, moved(key));
     }
     for (const folder of await folders.getAll()) {

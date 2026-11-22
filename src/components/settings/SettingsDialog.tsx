@@ -8,8 +8,9 @@ import { AppearanceSection, EditorSection } from "./AppearanceSettings";
 import { ThisVaultSection } from "./RepositorySettings";
 import { InstallSection } from "./InstallSettings";
 import { VaultsSection } from "./VaultsSettings";
+import { StorageSection } from "./StorageSettings";
 
-export type SettingsSection = "appearance" | "editor" | "search" | "ai" | "vault" | "vaults" | "app";
+export type SettingsSection = "appearance" | "editor" | "search" | "ai" | "vault" | "vaults" | "storage" | "app";
 
 const SECTIONS: Array<{ id: SettingsSection; label: string }> = [
   { id: "appearance", label: "Appearance" },
@@ -18,6 +19,7 @@ const SECTIONS: Array<{ id: SettingsSection; label: string }> = [
   { id: "ai", label: "AI" },
   { id: "vault", label: "This repository" },
   { id: "vaults", label: "Repositories & sync" },
+  { id: "storage", label: "Storage" },
   { id: "app", label: "Install app" },
 ];
 
@@ -68,6 +70,7 @@ export function SettingsDialog({ onClose, initial = "appearance" }: { onClose():
             {section === "ai" && <AiSection />}
             {section === "vault" && <ThisVaultSection />}
             {section === "vaults" && <VaultsSection />}
+            {section === "storage" && <StorageSection />}
             {section === "app" && <InstallSection />}
           </div>
         </div>
