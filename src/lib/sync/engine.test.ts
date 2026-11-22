@@ -237,6 +237,62 @@ describe("SyncEngine attachments and drawings", () => {
 });
 
 describe("SyncEngine downloads", () => {
+  it("doesn't read or hash unchanged files, or list an unchanged remote, on later syncs", async () => {
+    const remote = new FakeRemote();
+    await remote.push({ "a.md": "A", "pic.png": new Uint8Array([1, 2, 3]) });
+    let t = 1000;
+    const local = new LocalStore(`sync-${n++}`, () => t++);
+    open.push(local);
+    const engine = new SyncEngine(local, new MemorySyncState(), remote, "", () => DAY);
+    await engine.sync();
+    await local.write("b.md", "B");
+    await engine.sync(); // pushes b.md: the remote's tree changes once more
+
+    const reads: string[] = [];
+    const [read, readBinary] = [local.read.bind(local), local.readBinary.bind(local)];
+    local.read = async (p) => (reads.push(p), read(p));
+    local.readBinary = async (p) => (reads.push(p), readBinary(p));
+    let listings = 0;
+    const files = remote.files.bind(remote);
+    remote.files = async (tree) => (listings++, files(tree));
+
+    await engine.sync(); // lists the new tree once
+    reads.length = 0;
+    listings = 0;
+    const r = await engine.sync();
+    expect(r).toMatchObject({ changedLocally: [], pushed: [], commit: null });
+    expect(reads).toEqual([]);
+    expect(listings).toBe(0);
+    expect(await engine.pendingChanges()).toBe(0);
+    expect(reads).toEqual([]);
+
+    // A change on either side is still found.
+    await local.write("a.md", "A2");
+    await remote.push({ "pic.png": new Uint8Array([9]) });
+    const r2 = await engine.sync();
+    expect(r2.pushed).toEqual(["a.md"]);
+    expect(r2.changedLocally).toEqual(["pic.png"]);
+  });
+
+  it("checks a remembered hash before acting on it, so typing is never overwritten", async () => {
+    const remote = new FakeRemote();
+    await remote.push({ "a.md": "A" });
+    // A clock that doesn't move: a later write gets the same time as the hashed one.
+    const local = new LocalStore(`sync-${n++}`, () => 1000);
+    open.push(local);
+    const engine = new SyncEngine(local, new MemorySyncState(), remote, "", () => DAY);
+    await engine.sync();
+    await engine.sync(); // remembers a.md's hash
+    await local.write("a.md", "typed here");
+    await remote.push({ "a.md": "A-remote" });
+    const r = await engine.sync();
+    expect(r.deferred).toEqual(["a.md"]);
+    expect((await local.read("a.md"))!.content).toBe("typed here");
+    // The next sync hashes it afresh and sees both sides changed: nothing lost.
+    const r2 = await engine.sync();
+    expect(r2.conflicts).toMatchObject([{ path: "a.md", ours: "typed here", theirs: "A-remote" }]);
+  });
+
   it("fetches a large first sync in parallel", async () => {
     const files: Record<string, string> = {};
     for (let i = 0; i < 40; i++) files[`n${i}.md`] = `note ${i}`;

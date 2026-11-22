@@ -153,6 +153,18 @@ Vercel's invocation and transfer budgets.
 - **Rate limits:** 5,000 requests/hour per user is far more than this needs; the client
   backs off on `403`/`429` and shows sync status.
 - **Offline:** works naturally. Edits stay in IndexedDB and are committed when back online.
+- **Cheap repeat syncs:** the sync state remembers each local file's id by modification time
+  and the remote's file list by tree, so a sync where little changed reads and hashes only the
+  changed files and skips listing an unchanged branch. A remembered id is checked against the
+  file before it's acted on.
+- **Several tabs or windows:** the store reports each saved change and other tabs re-read those
+  files (BroadcastChannel). A save that finds the file changed since it was loaded merges the
+  two (or keeps the other version as a "(from another window)" copy), and a Web Lock lets only
+  one tab sync at a time.
+- **Listing is cheap:** the local store keeps each file's path and time in an `entries` store,
+  so listing the repository never reads note text or attachment bytes.
+- **Failures are contained:** error boundaries around the sidebar, panel, note view, side pane
+  and dialogs replace a crashed part with a message and Try again.
 
 ### End-to-end encryption (optional, per repository)
 Offered when connecting an empty repository. `EncryptedRemote` wraps the GitHub remote, so the

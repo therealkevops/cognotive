@@ -7,6 +7,15 @@ export interface SyncSnapshot {
   /** Local vault path → git blob sha, for every synced file. */
   base: Record<string, string>;
   syncedAt: number | null;
+  /**
+   * Remembered so a sync needn't re-read everything (both optional: older snapshots lack them).
+   * `hashes`: each local file's id at a modification time; `scheme`: the id of empty content,
+   * so the hashes are dropped if the remote names content differently (say, encryption).
+   */
+  hashes?: Record<string, { mtime: number; sha: string }>;
+  scheme?: string;
+  /** The remote's syncable files (vault path → id) at one tree, reused while the branch stays there. */
+  remoteTree?: { tree: string; files: Record<string, string> };
 }
 
 interface SyncDB extends DBSchema {

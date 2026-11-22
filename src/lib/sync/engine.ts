@@ -5,7 +5,7 @@ import { PROPERTIES_PATH } from "../vault/file-properties";
 import { SETTINGS_PATH } from "../vault/settings";
 import { gitBlobSha } from "./hash";
 import { RemoteMovedError, type Change, type RemoteRepo } from "./remote";
-import type { SyncStateStore } from "./state";
+import type { SyncSnapshot, SyncStateStore } from "./state";
 
 /** Text file types that sync, besides attachments (see isBinary). Other files in the repo are left alone. */
 const TEXT_EXTENSIONS = new Set([".md", ".markdown", ".txt", ".excalidraw", ".canvas", ".json", ".csv"]);
@@ -48,6 +48,12 @@ export interface SyncConflict {
   /** Line-by-line review (notes and other text) or a choice of whole file. */
   kind: "text" | "file";
   at: number;
+}
+
+interface LocalFile {
+  sha: string;
+  /** The file's content as it was when `sha` was worked out; null if it has changed since. */
+  load(): Promise<Content | null>;
 }
 
 interface LocalWrite {
@@ -93,14 +99,70 @@ export class SyncEngine {
     return joinPath(this.folder, path);
   }
 
-  private async localFiles(): Promise<Map<string, { content: Content; sha: string }>> {
-    const out = new Map<string, { content: Content; sha: string }>();
+  /** Local files' ids by modification time, so unchanged files aren't read and hashed again. */
+  private hashes: Map<string, { mtime: number; sha: string }> | null = null;
+  private scheme: Promise<string> | null = null;
+
+  private async loadHashes(snapshot: SyncSnapshot) {
+    this.scheme ??= this.id("");
+    const scheme = await this.scheme;
+    if (!this.hashes) this.hashes = new Map(snapshot.scheme === scheme ? Object.entries(snapshot.hashes ?? {}) : []);
+    return scheme;
+  }
+
+  /**
+   * Every syncable local file with its id. Contents are read only for files changed since
+   * they were last hashed (and later on demand, through `load`).
+   */
+  private async localFiles(snapshot: SyncSnapshot): Promise<Map<string, LocalFile>> {
+    await this.loadHashes(snapshot);
+    const hashes = this.hashes!;
+    const out = new Map<string, LocalFile>();
+    const seen = new Set<string>();
     for (const e of await this.local.list()) {
       if (e.kind !== "file" || !isSyncable(e.path)) continue;
-      const content = isBinary(e.path) ? await this.local.readBinary(e.path) : (await this.local.read(e.path))?.content;
-      if (content !== undefined) out.set(e.path, { content, sha: await this.id(content) });
+      seen.add(e.path);
+      let loaded: Promise<Content | undefined> | null = null;
+      const read = () =>
+        (loaded ??= isBinary(e.path) ? this.local.readBinary(e.path) : this.local.read(e.path).then((f) => f?.content));
+      const known = hashes.get(e.path);
+      let sha = known?.mtime === e.mtime ? known.sha : undefined;
+      const fromCache = sha !== undefined;
+      if (sha === undefined) {
+        const content = await read();
+        if (content === undefined) continue;
+        sha = await this.id(content);
+        // Trusted next time only if hashed after the write's millisecond: a later write gets a later time.
+        if (Date.now() > e.mtime) hashes.set(e.path, { mtime: e.mtime, sha });
+        else hashes.delete(e.path);
+      }
+      const id = sha;
+      let checked: Promise<Content | null> | null = null;
+      out.set(e.path, {
+        sha,
+        // Read later than it was hashed: make sure it's still the same (it may have been typed in).
+        load: () =>
+          (checked ??= read().then(async (c) => {
+            if (c !== undefined && (!fromCache || (await this.id(c)) === id)) return c;
+            hashes.delete(e.path); // hash it afresh next time
+            return null;
+          })),
+      });
     }
+    for (const path of [...hashes.keys()]) if (!seen.has(path)) hashes.delete(path);
     return out;
+  }
+
+  /** The remote's syncable files at a tree, from the last listing if the tree hasn't changed. */
+  private async remoteFiles(tree: string, cached: SyncSnapshot["remoteTree"]): Promise<Map<string, string>> {
+    if (cached?.tree === tree) return new Map(Object.entries(cached.files));
+    const remote = new Map<string, string>();
+    for (const [repoPath, sha] of await this.remote.files(tree)) {
+      if (!isWithin(repoPath, this.folder)) continue;
+      const path = this.folder ? repoPath.slice(this.folder.length + 1) : repoPath;
+      if (isSyncable(path)) remote.set(path, sha);
+    }
+    return remote;
   }
 
   /** Downloads made during one pass, keyed by sha (and kind), shared by prefetch and reads. */
@@ -137,8 +199,9 @@ export class SyncEngine {
 
   /** Number of local files changed since the last sync. */
   async pendingChanges(): Promise<number> {
-    const { base } = await this.state.load();
-    const local = await this.localFiles();
+    const snapshot = await this.state.load();
+    const { base } = snapshot;
+    const local = await this.localFiles(snapshot);
     let n = 0;
     for (const [path, f] of local) if (base[path] !== f.sha) n++;
     for (const path of Object.keys(base)) if (!local.has(path)) n++;
@@ -160,15 +223,8 @@ export class SyncEngine {
     const base = new Map(Object.entries(snapshot.base));
     const head = await this.remote.head();
 
-    const remote = new Map<string, string>();
-    if (head) {
-      for (const [repoPath, sha] of await this.remote.files(head.tree)) {
-        if (!isWithin(repoPath, this.folder)) continue;
-        const path = this.folder ? repoPath.slice(this.folder.length + 1) : repoPath;
-        if (isSyncable(path)) remote.set(path, sha);
-      }
-    }
-    const local = await this.localFiles();
+    const remote = head ? await this.remoteFiles(head.tree, snapshot.remoteTree) : new Map<string, string>();
+    const local = await this.localFiles(snapshot);
 
     // Download everything this pass will need in parallel up front.
     this.downloads.clear();
@@ -183,6 +239,7 @@ export class SyncEngine {
 
     const pushes: Change[] = [];
     const writes: LocalWrite[] = [];
+    const deferred: string[] = [];
     const newBase = new Map(base);
     const conflicts: SyncConflict[] = [];
 
@@ -194,39 +251,62 @@ export class SyncEngine {
       const setBase = (sha: string | undefined) =>
         sha === undefined ? newBase.delete(path) : newBase.set(path, sha);
 
+      // Our content, as hashed; null: edited since, so it waits for the next pass.
+      const mine = async () => (l ? await l.load() : undefined);
+
       if (l?.sha === r) {
         // Same on both sides (or gone from both).
         setBase(r);
       } else if (l?.sha === b) {
         // Only the remote changed: bring it down.
+        const expected = await mine();
+        if (expected === null) {
+          deferred.push(path);
+          continue;
+        }
         writes.push({
           path,
-          expected: l?.content,
+          expected,
           content: r === undefined ? null : await this.read(path, r),
           baseSha: r,
         });
       } else if (r === b) {
         // Only we changed: send it up.
-        pushes.push({ path: this.toRepo(path), content: l?.content ?? null });
+        const content = await mine();
+        if (content === null) {
+          deferred.push(path);
+          continue;
+        }
+        pushes.push({ path: this.toRepo(path), content: content ?? null });
         setBase(l?.sha);
       } else if (l === undefined) {
         // We deleted it, they edited it: keep their edit.
         writes.push({ path, expected: undefined, content: await this.read(path, r!), baseSha: r });
       } else if (r === undefined) {
         // They deleted it, we edited it: keep ours.
-        pushes.push({ path: this.toRepo(path), content: l.content });
+        const content = await l.load();
+        if (content === null) {
+          deferred.push(path);
+          continue;
+        }
+        pushes.push({ path: this.toRepo(path), content });
         setBase(l.sha);
       } else {
         // Both edited.
+        const ours = await l.load();
+        if (ours === null) {
+          deferred.push(path);
+          continue;
+        }
         const theirs = await this.read(path, r);
         const baseContent = b !== undefined ? await this.read(path, b) : undefined;
         const text =
-          MERGEABLE.has(extname(path)) && !isDrawing(path) && typeof l.content === "string" && typeof theirs === "string";
+          MERGEABLE.has(extname(path)) && !isDrawing(path) && typeof ours === "string" && typeof theirs === "string";
         const baseText = typeof baseContent === "string" ? baseContent : text && b === undefined ? "" : undefined;
-        const merged = text && baseText !== undefined ? mergeText(l.content as string, baseText, theirs as string) : null;
+        const merged = text && baseText !== undefined ? mergeText(ours as string, baseText, theirs as string) : null;
         const conflict = (kind: SyncConflict["kind"]): SyncConflict => ({
           path,
-          ours: l.content,
+          ours: ours,
           theirs,
           ...(typeof baseContent === "string" ? { base: baseContent } : text ? { base: "" } : {}),
           kind,
@@ -234,21 +314,21 @@ export class SyncEngine {
         });
         if (merged !== null) {
           const sha = await this.id(merged);
-          writes.push({ path, expected: l.content, content: merged, baseSha: sha });
+          writes.push({ path, expected: ours, content: merged, baseSha: sha });
           pushes.push({ path: this.toRepo(path), content: merged });
           // Until the local write lands, the base is what the remote will hold.
           setBase(sha);
         } else if (text && baseText !== undefined) {
           // Everything that merges, merged; where the same lines changed, the remote's
           // lines for now. Ours is kept in the conflict for review.
-          const resolved = mergeTheirs(l.content as string, baseText, theirs as string);
+          const resolved = mergeTheirs(ours as string, baseText, theirs as string);
           const sha = await this.id(resolved);
-          writes.push({ path, expected: l.content, content: resolved, baseSha: sha, conflict: conflict("text") });
+          writes.push({ path, expected: ours, content: resolved, baseSha: sha, conflict: conflict("text") });
           if (sha !== r) pushes.push({ path: this.toRepo(path), content: resolved });
           setBase(sha);
         } else {
           // Drawings, canvases, attachments: the remote's file for now, ours kept in the conflict.
-          writes.push({ path, expected: l.content, content: theirs, baseSha: r, conflict: conflict("file") });
+          writes.push({ path, expected: ours, content: theirs, baseSha: r, conflict: conflict("file") });
         }
       }
     }
@@ -261,7 +341,6 @@ export class SyncEngine {
     }
 
     const changedLocally: string[] = [];
-    const deferred: string[] = [];
     for (const w of writes) {
       if (await this.write(w)) {
         changedLocally.push(w.path);
@@ -277,7 +356,16 @@ export class SyncEngine {
       }
     }
 
-    await this.state.save({ head: newHead, base: Object.fromEntries(newBase), syncedAt: Date.now() });
+    const scheme = await this.loadHashes(snapshot);
+    await this.state.save({
+      head: newHead,
+      base: Object.fromEntries(newBase),
+      syncedAt: Date.now(),
+      hashes: Object.fromEntries(this.hashes!),
+      scheme,
+      // The listing is still right if nothing was committed; after a commit the next pass lists the new tree.
+      ...(head && !pushes.length ? { remoteTree: { tree: head.tree, files: Object.fromEntries(remote) } } : {}),
+    });
     return {
       changedLocally,
       pushed: pushes.map((p) => (this.folder ? p.path.slice(this.folder.length + 1) : p.path)),
