@@ -13,6 +13,8 @@ export interface LinkContext {
   resolve(target: string): string | null;
   /** Content of a note, for embeds. */
   read(path: string): string | undefined;
+  /** A live query block's results as markdown; without it, query blocks show as code. */
+  query?(source: string, lang: "query" | "dataview"): string;
 }
 
 const WIKILINK = /(!?)\[\[([^\]\n]+?)\]\]/g;

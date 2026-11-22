@@ -1,8 +1,10 @@
 import { ensureSyntaxTree } from "@codemirror/language";
-import { StateField, type EditorState, type Range } from "@codemirror/state";
+import { StateEffect, StateField, type EditorState, type Range } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, WidgetType } from "@codemirror/view";
 import { TableWidget, tableGridOn, typingText } from "./table-grid";
 import { fillAssets, linkHost, livePreviewOn } from "./wikilinks";
+import { hasModKey, openHow } from "../links/open";
+import { splitLinkText } from "../links/parse";
 
 /**
  * A block of markdown shown rendered in live preview: a table, or an embedded
@@ -13,7 +15,7 @@ class RenderedBlock extends WidgetType {
   constructor(
     readonly markdown: string,
     readonly from: number,
-    readonly kind: "table" | "embed",
+    readonly kind: "table" | "embed" | "query",
     readonly title?: string,
   ) {
     super();
@@ -40,7 +42,18 @@ class RenderedBlock extends WidgetType {
       fillAssets(body, host);
     });
     wrap.addEventListener("mousedown", (e) => {
-      if ((e.target as HTMLElement).closest("a")) return;
+      // Links open their note: in query results always (there's nothing to edit there),
+      // elsewhere as links do in live preview (a click, or Ctrl/Cmd+click).
+      const a = (e.target as HTMLElement).closest("a");
+      if (a) {
+        if (!(this.kind === "query" || hasModKey(e) || host?.clickFollows?.() !== false)) return;
+        e.preventDefault();
+        if (a.classList.contains("internal-link")) {
+          const parts = splitLinkText(a.dataset.href ?? "");
+          host?.open(parts.target, parts.heading ?? (parts.block ? `^${parts.block}` : undefined), openHow(e));
+        } else if (a.getAttribute("href")) window.open(a.getAttribute("href")!, "_blank", "noopener");
+        return;
+      }
       e.preventDefault();
       view.dispatch({ selection: { anchor: this.from } });
       view.focus();
@@ -61,6 +74,9 @@ function touched(state: EditorState, from: number, to: number) {
 
 const EMBED_LINE = /^!\[\[([^\]\n]+?)\]\]\s*$/;
 
+/** Dispatched when other notes change, so blocks that show them (queries) are drawn again. */
+export const refreshBlocks = StateEffect.define<null>();
+
 function build(state: EditorState): DecorationSet {
   if (!state.facet(livePreviewOn)) return Decoration.none;
   const host = state.facet(linkHost);
@@ -69,6 +85,22 @@ function build(state: EditorState): DecorationSet {
   const tree = ensureSyntaxTree(state, state.doc.length, 50);
   tree?.iterate({
     enter: (n) => {
+      // ```query and ```dataview blocks show their results until the cursor goes in.
+      if (n.name === "FencedCode" && host?.queryMarkdown) {
+        const first = state.doc.lineAt(n.from);
+        const lang = /^\s*(?:```|~~~)\s*(query|dataview)\s*$/i.exec(first.text)?.[1]?.toLowerCase() as "query" | "dataview" | undefined;
+        const last = state.doc.lineAt(n.to);
+        if (lang && last.number > first.number && !touched(state, first.from, last.to)) {
+          const source = state.sliceDoc(first.to + 1, last.from);
+          out.push(
+            Decoration.replace({
+              widget: new RenderedBlock(host.queryMarkdown(source, lang), first.from, "query", lang === "dataview" ? "Dataview" : "Query"),
+              block: true,
+            }).range(first.from, last.to),
+          );
+        }
+        return false;
+      }
       if (n.name !== "Table") return;
       const from = state.doc.lineAt(n.from).from;
       const to = state.doc.lineAt(n.to).to;

@@ -120,6 +120,27 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
     tags, are copied into the note
   - Starter templates (Meeting, Project, Person, Weekly review, Map of content, Daily) can be added when a
     repository is created, or later from the Templates tab
+- **Live queries**: a code block that lists the notes (or tasks) matching a query, kept up to date
+  in reading view and live preview (click a result to open it; click elsewhere in the block to edit
+  the query). *Insert a live query* in the palette starts one. The app's search syntax plus options:
+
+  ````markdown
+  ```query
+  #project [status:active] garden
+  show: table status, owner, due     (or: list, tasks, done tasks, all tasks)
+  sort: due desc
+  limit: 20
+  from: Projects                     (a folder, or "Folder", #tag, [[Note]])
+  where: due < date(today) and owner = "Ann"
+  ```
+  ````
+
+  Obsidian's **Dataview** blocks work too, for the common part of its language: `LIST`, `TABLE a, b
+  AS "B"`, `TASK`, `FROM #tag / "Folder" / [[Note]] / outgoing([[Note]])` with `and`, `or`, `-`,
+  `WHERE` conditions (`=`, `!=`, `<`, `>`, `and`, `or`, `!`, `contains()`, `length()`, `date(today)`),
+  `SORT` and `LIMIT`. Fields are properties plus `file.name`, `file.folder`, `file.mtime`,
+  `file.tags`, `file.inlinks` and `file.outlinks`. DataviewJS isn't run, and `GROUP BY` and
+  `CALENDAR` aren't supported yet (a block says so in place)
 - **Keeping notes safe in the browser**: the app asks the browser to keep its storage permanently
   (Settings → Repositories & sync shows whether it agreed, and how much space notes use).
   Repositories kept only in this browser get a reminder to export a backup or connect GitHub when

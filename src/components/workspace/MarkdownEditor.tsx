@@ -12,6 +12,7 @@ import {
   spellcheckExtension,
   spellcheckMode,
 } from "@/lib/editor/setup";
+import { refreshBlocks } from "@/lib/editor/live-blocks";
 import type { LinkHost } from "@/lib/editor/wikilinks";
 
 export interface MarkdownEditorProps {
@@ -57,6 +58,7 @@ export default function MarkdownEditor({
       linkText: (p) => (linksRef.current?.linkText ? linksRef.current.linkText(p) : p.replace(/\.md$/i, "")),
       linkSelection: () => linksRef.current?.linkSelection?.(),
       askSelection: () => linksRef.current?.askSelection?.(),
+      queryMarkdown: (src, lang) => linksRef.current?.queryMarkdown?.(src, lang) ?? "",
       currentPath: () => linksRef.current?.currentPath?.() ?? null,
       formatLink: (inner, embed) => linksRef.current?.formatLink?.(inner, embed) ?? null,
       noteContent: (p) => linksRef.current?.noteContent?.(p),
@@ -74,6 +76,11 @@ export default function MarkdownEditor({
     }),
     [],
   );
+
+  // Other notes changed: query blocks show results from them, so draw them again.
+  useEffect(() => {
+    view.current?.dispatch({ effects: refreshBlocks.of(null) });
+  }, [links]);
 
   // Create the view once.
   useEffect(() => {

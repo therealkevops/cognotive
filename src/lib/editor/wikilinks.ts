@@ -56,6 +56,8 @@ export interface LinkHost {
   addBlockId?(path: string, block: Block, id: string): void;
   /** Opens a note picker that links the selection to the chosen note (Ctrl/Cmd+Shift+K). */
   linkSelection?(): void;
+  /** A live query block's results, as markdown (see src/lib/query). */
+  queryMarkdown?(source: string, lang: "query" | "dataview"): string;
   /** Asks the AI about the selection (Ctrl/Cmd+Shift+Enter; Ctrl+Shift+A is taken by Chrome's tab search). */
   askSelection?(): void;
   headings(path: string): string[];

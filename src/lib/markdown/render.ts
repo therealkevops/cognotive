@@ -1,3 +1,4 @@
+import { expandQueries } from "../query/query";
 import type { Element, Root as HastRoot } from "hast";
 import rehypeHighlight from "rehype-highlight";
 import rehypeKatex from "rehype-katex";
@@ -82,5 +83,6 @@ function processor(ctx: LinkContext) {
  * <pre><code class="language-mermaid"> for the client to draw.
  */
 export function renderMarkdown(markdown: string, links: LinkContext = NO_LINKS): string {
-  return String(processor(links).processSync(splitFrontmatter(markdown).body));
+  const body = splitFrontmatter(markdown).body;
+  return String(processor(links).processSync(links.query ? expandQueries(body, links.query) : body));
 }

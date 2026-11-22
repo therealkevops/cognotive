@@ -54,7 +54,9 @@ import { neighbourhoodCanvas, type Neighbour } from "@/lib/canvas/map";
 import { convertLinks, formatLink, markdownLink } from "@/lib/links/format";
 import { splitLinkText } from "@/lib/links/parse";
 import { setFrontmatterProperty, splitFrontmatter } from "@/lib/markdown/frontmatter";
-import { healthIgnored, hubProperty, vaultHealth } from "@/lib/links/health";
+import { healthIgnored, hubProperty, todayStamp, vaultHealth } from "@/lib/links/health";
+import { queryCacheFor, queryContext } from "@/lib/query/context";
+import { queryToMarkdown } from "@/lib/query/query";
 import { extractHeadings } from "@/lib/markdown/outline";
 import { blockIdChange, listBlocks } from "@/lib/markdown/blocks";
 import { previewMarkdown } from "@/lib/markdown/preview";
@@ -573,6 +575,34 @@ export function Workspace() {
   }, [vault.links, vault.indexVersion, vault.settings.propertyTypes]);
 
   // What the editor needs for [[links]].
+  // Live query blocks: results from the indexes, cached until a note changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- a fresh cache for each version of the index
+  const cachedQuery = useMemo(() => queryCacheFor(), [vault.indexVersion]);
+  const runQueryBlock = useCallback(
+    (source: string, lang: "query" | "dataview"): string => {
+      const self = vault.active?.path;
+      return cachedQuery(`${self}\u0000${lang}\u0000${source}`, () => {
+        const mtimes = new Map(vault.entries.map((e) => [e.path, e.mtime]));
+        return queryToMarkdown(
+          source,
+          lang,
+          queryContext({
+            links: vault.links,
+            search: vault.index,
+            mtime: (p) => mtimes.get(p),
+            linkFor: (p) => {
+              const t = vault.links.linkText(p);
+              return formatLink(vault.settings.linkFormat, self ?? "", { path: p, target: t }, t);
+            },
+            today: todayStamp(),
+            ...(self ? { self } : {}),
+          }),
+        );
+      });
+    },
+    [cachedQuery, vault.active?.path, vault.entries, vault.links, vault.index, vault.settings.linkFormat],
+  );
+
   const linkHost = useMemo<LinkHost>(
     () => ({
       resolve: (t) => vault.links.resolve(t, vault.active?.path),
@@ -594,6 +624,7 @@ export function Workspace() {
       linkText: (p) => (vault.entries.some((e) => e.path === p && e.kind === "file") ? vault.links.linkText(p) : null),
       linkSelection: () => setLinkPickerOpen(true),
       askSelection: () => askRef.current(),
+      queryMarkdown: (src, lang) => runQueryBlock(src, lang),
       currentPath: () => vault.active?.path ?? null,
       formatLink: (inner, embed) => {
         const from = vault.active?.path;
@@ -653,7 +684,7 @@ export function Workspace() {
       },
       propertyInfo,
     }),
-    [vault, openLink, recent, inbound, propertyInfo],
+    [vault, openLink, recent, inbound, propertyInfo, runQueryBlock],
   );
 
   /**
@@ -745,10 +776,11 @@ export function Workspace() {
     () => ({
       resolve: (t) => vault.links.resolve(t, vault.active?.path),
       read: (p) => vault.links.content(p),
+      query: (src, lang) => runQueryBlock(src, lang),
     }),
     // indexVersion: re-render links and embeds when other notes change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [vault.links, vault.active?.path, vault.indexVersion],
+    [vault.links, vault.active?.path, vault.indexVersion, runQueryBlock],
   );
   // What a canvas needs: files to place as cards, note previews, pictures and link resolution.
   const canvasVault = useMemo<CanvasVault>(
@@ -1230,6 +1262,7 @@ export function Workspace() {
     { id: "health", label: "Open repository health" },
     { id: "tasks", label: "Show tasks" },
     { id: "capture", label: "Quick capture…" },
+    { id: "insert-query", label: "Insert a live query", when: editing },
     { id: "map-canvas", label: "Map this note as a canvas", when: kind === "note" },
     {
       id: "hub-toggle",
@@ -1298,6 +1331,16 @@ export function Workspace() {
     health: () => setHealthOpen(true),
     tasks: () => openSidebarTab("tasks"),
     capture: () => setCapturing({}),
+    "insert-query": () => {
+      if (!view) return;
+      const { from } = view.state.selection.main;
+      const line = view.state.doc.lineAt(from);
+      const before = line.text.trim() ? "\n\n" : "";
+      const block = `${before}\`\`\`query\n#tag [status:active]\nshow: table status, due\nsort: due\n\`\`\`\n`;
+      const at = line.text.trim() ? line.to : line.from;
+      view.dispatch({ changes: { from: at, insert: block }, selection: { anchor: at + before.length + 9, head: at + before.length + 13 }, userEvent: "input" });
+      view.focus();
+    },
     "ai-summarise": () => activePathNow && runAction({ kind: "summarise", path: activePathNow }),
     "ai-links": () => activePathNow && runAction({ kind: "suggest-links", path: activePathNow }),
     "ai-properties": () => activePathNow && runAction({ kind: "suggest-properties", path: activePathNow }),
