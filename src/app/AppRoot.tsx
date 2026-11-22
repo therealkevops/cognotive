@@ -6,6 +6,7 @@ import { useEffect, useMemo } from "react";
 import { SyncProvider } from "@/components/sync/useSync";
 import { VaultProvider } from "@/components/vault/useVault";
 import { SemanticProvider } from "@/components/semantic/useSemantic";
+import { asksUser, requestPersistence } from "@/lib/storage-safety";
 import { VaultsProvider, useVaults } from "@/components/vault/useVaults";
 import { LocalStore } from "@/lib/vault/local-store";
 
@@ -51,6 +52,9 @@ export function AppRoot() {
     if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
+    // Ask the browser to keep the notes stored here (Chrome and Safari decide without asking;
+    // Firefox would show a prompt, so there it's a button in Settings → Repositories & sync).
+    if (!asksUser()) void requestPersistence();
   }, []);
   return (
     <VaultsProvider>

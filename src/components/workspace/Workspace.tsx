@@ -103,6 +103,8 @@ import { Outline } from "./Outline";
 import { QuickSwitcher } from "./QuickSwitcher";
 import { SearchPanel } from "./SearchPanel";
 import { CaptureDialog } from "./CaptureDialog";
+import { BackupBanner } from "./BackupBanner";
+import { backupPrefs } from "@/lib/storage-safety";
 import { appendCapture, captureEntry, captureTime, fromShare, type Captured } from "@/lib/capture/capture";
 import { takeShared } from "@/lib/capture/shared";
 import { TasksPanel } from "./TasksPanel";
@@ -1125,6 +1127,7 @@ export function Workspace() {
     a.download = `${vaults.active.name.replace(/[\\/:*?"<>|]/g, "-")} ${formatDate(new Date(), "YYYY-MM-DD")}.zip`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    backupPrefs.markBackup(vault.vaultId);
   };
 
   const importZip = async (file: File) => {
@@ -1456,6 +1459,7 @@ export function Workspace() {
             </div>
           )}
           {activePathNow && <ConflictBanner path={activePathNow} onReview={setReviewing} />}
+          <BackupBanner onExport={exportZip} onConnect={() => setSettingsOpen("vaults")} />
           <div className="flex min-h-0 flex-1">
             <div
               className={`min-h-0 min-w-0 flex-1 ${kind === "drawing" || kind === "canvas" ? "overflow-hidden" : "overflow-y-auto"}`}

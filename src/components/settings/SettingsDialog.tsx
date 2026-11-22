@@ -28,6 +28,7 @@ import { AiSection } from "../ai/AiSettings";
 import { SearchSection } from "../semantic/SemanticSettings";
 import { KNOWN_PROPERTIES, PROPERTY_NAME, withNewNoteProperties } from "@/lib/vault/new-note-properties";
 import { useVault } from "../vault/useVault";
+import { formatBytes, requestPersistence, storageStatus, type StorageStatus } from "@/lib/storage-safety";
 import { useVaults } from "../vault/useVaults";
 
 export type SettingsSection = "appearance" | "editor" | "search" | "ai" | "vault" | "vaults" | "app";
@@ -597,7 +598,55 @@ function VaultsSection() {
       <div className="mt-4">
         {adding ? <ConnectRepoForm onDone={() => setAdding(false)} /> : <AddButtons onGitHub={() => setAdding(true)} />}
       </div>
+      <StorageGroup />
     </>
+  );
+}
+
+/** Whether the browser will keep what's stored here, and how much that is. */
+function StorageGroup() {
+  const [status, setStatus] = useState<StorageStatus | null>(null);
+  const [asked, setAsked] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void storageStatus().then((s) => live && setStatus(s));
+    return () => {
+      live = false;
+    };
+  }, [asked]);
+  if (!status?.supported) return null;
+  return (
+    <div className="mt-8">
+      <Group title="Storage on this device">
+        <Row
+          label={status.persisted ? "Kept permanently" : "May be cleared by the browser"}
+          description={
+            <>
+              {status.persisted
+                ? "The browser won't delete your notes to free up space."
+                : "When space runs low (or, in Safari, after a week without a visit) the browser may delete what's stored here. Repositories synced with GitHub keep a copy there; the others only exist here."}
+              {status.usage !== undefined && status.quota ? ` Using ${formatBytes(status.usage)} of ${formatBytes(status.quota)}.` : ""}
+              {asked && !status.persisted && " The browser said no; it decides by how much you use the app. Installing the app usually helps."}
+            </>
+          }
+        >
+          {!status.persisted && (
+            <div className="flex sm:justify-end">
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={async () => {
+                  await requestPersistence();
+                  setAsked(true);
+                }}
+              >
+                Keep notes on this device
+              </button>
+            </div>
+          )}
+        </Row>
+      </Group>
+    </div>
   );
 }
 

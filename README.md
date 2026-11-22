@@ -120,6 +120,11 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
     tags, are copied into the note
   - Starter templates (Meeting, Project, Person, Weekly review, Map of content, Daily) can be added when a
     repository is created, or later from the Templates tab
+- **Keeping notes safe in the browser**: the app asks the browser to keep its storage permanently
+  (Settings → Repositories & sync shows whether it agreed, and how much space notes use).
+  Repositories kept only in this browser get a reminder to export a backup or connect GitHub when
+  they've changed since the last backup two weeks ago, and straight away in Safari when not
+  installed, since Safari may clear a site's data after a week without a visit
 - **Quick capture**: jot something down without opening a note. *Quick capture* in the sidebar, the
   command palette, or the installed app's icon (long-press, *Quick note*) opens a box for text and
   photos or files; it's added to **today's daily note** (or an **inbox** note, in Settings → This
