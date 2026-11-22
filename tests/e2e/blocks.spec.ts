@@ -1,8 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import { acceptSuggestion, editor, title, tree } from "./helpers";
 
-const editor = (page: Page) => page.locator(".cm-content");
-const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
-const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
 const selected = (page: Page) => page.locator(".cm-tooltip-autocomplete [aria-selected=true]");
 
 async function newNote(page: Page) {
@@ -17,8 +15,7 @@ async function newNote(page: Page) {
 
 async function pick(page: Page, text: string) {
   await expect(selected(page)).toContainText(text);
-  await page.waitForTimeout(100); // the editor ignores Enter for a moment after suggestions open
-  await page.keyboard.press("Enter");
+  await acceptSuggestion(page);
 }
 
 test("[[Note#^ suggests blocks and gives the chosen one an id", async ({ page }) => {

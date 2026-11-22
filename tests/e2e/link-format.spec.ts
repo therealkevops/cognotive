@@ -1,22 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
+import { acceptSuggestion, editor, openApp, palette, title, tree } from "./helpers";
 
-const editor = (page: Page) => page.locator(".cm-content");
-const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
-const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
 const selected = (page: Page) => page.locator(".cm-tooltip-autocomplete [aria-selected=true]");
-
-async function openApp(page: Page) {
-  await page.goto("/");
-  await expect(editor(page)).toBeVisible();
-}
-
-async function palette(page: Page, command: string) {
-  await page.keyboard.press("ControlOrMeta+p");
-  const dialog = page.getByRole("dialog", { name: "Command palette" });
-  await dialog.getByRole("combobox").fill(command);
-  await page.keyboard.press("Enter");
-  await expect(dialog).toBeHidden();
-}
 
 async function useMarkdownLinks(page: Page) {
   await page.getByRole("button", { name: "Settings" }).click();
@@ -43,8 +28,7 @@ test("with markdown links on, picked links are written as relative markdown link
 
   await page.keyboard.type("Read [[Linking");
   await expect(selected(page)).toContainText("Linking notes");
-  await page.waitForTimeout(100);
-  await page.keyboard.press("Enter");
+  await acceptSuggestion(page);
   await expect(editor(page)).toHaveText("Read [Linking notes](../Linking%20notes.md)");
 
   // It still works as a link in the app.

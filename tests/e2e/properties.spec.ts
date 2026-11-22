@@ -1,10 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-
-/** Accepts the highlighted suggestion (the editor ignores Enter for a moment after the list changes). */
-async function accept(page: Page) {
-  await page.waitForTimeout(150);
-  await page.keyboard.press("Enter");
-}
+import { expect, test } from "@playwright/test";
+import { acceptSuggestion } from "./helpers";
 
 test("properties are suggested, explained and checked as you type", async ({ page }) => {
   await page.goto("/");
@@ -24,18 +19,18 @@ test("properties are suggested, explained and checked as you type", async ({ pag
   const list = page.locator(".cm-tooltip-autocomplete");
   await expect(list.getByRole("option", { name: /^tags/ })).toBeVisible();
   await expect(page.locator(".cm-completionInfo")).toContainText("Tags for the note");
-  await accept(page);
+  await acceptSuggestion(page);
   // tags: [] with the cursor inside, and the repository's tags offered.
   await expect(list.getByRole("option", { name: /^guide/ })).toBeVisible();
   await page.keyboard.type("gu");
   await expect(list.getByRole("option").first()).toHaveText(/^guide/);
-  await accept(page);
+  await acceptSuggestion(page);
   await page.keyboard.press("End");
   await page.keyboard.press("Enter");
 
   await page.keyboard.type("hu");
   await expect(list.getByRole("option").first()).toHaveText(/^hub/);
-  await accept(page);
+  await acceptSuggestion(page);
   await expect(list.getByRole("option", { name: /^true/ })).toBeVisible();
   await page.keyboard.type("maybe");
   await page.keyboard.press("Escape");
@@ -68,10 +63,10 @@ test("live preview shows properties as a panel, with Add property and a hub chec
   await expect(list.getByRole("option", { name: /^tags/ })).toBeVisible();
   await page.keyboard.type("ta");
   await expect(list.getByRole("option").first()).toHaveText(/^tags/);
-  await accept(page);
+  await acceptSuggestion(page);
   await page.keyboard.type("gu");
   await expect(list.getByRole("option").first()).toHaveText(/^guide/);
-  await accept(page);
+  await acceptSuggestion(page);
 
   // Leave the block: it shows as a panel.
   await editor.getByText("Body text").click();
@@ -84,9 +79,9 @@ test("live preview shows properties as a panel, with Add property and a hub chec
   await expect(panel).toBeHidden(); // editing the YAML now
   await page.keyboard.type("hu");
   await expect(list.getByRole("option").first()).toHaveText(/^hub/);
-  await accept(page);
+  await acceptSuggestion(page);
   await expect(list.getByRole("option").first()).toHaveText(/^true/);
-  await accept(page);
+  await acceptSuggestion(page);
   await editor.getByText("Body text").click();
 
   // hub is a checkbox: unticking it writes false.

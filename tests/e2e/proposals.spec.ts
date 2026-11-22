@@ -1,9 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { FakeLLM } from "./fake-llm";
-
-const GOOD_KEY = "sk-or-v1-good-key-0123456789abcdefghij";
-const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
-const editor = (page: Page) => page.locator(".cm-content");
+import { editor, GOOD_KEY, tree } from "./helpers";
 
 async function setUp(page: Page, llm: FakeLLM) {
   await llm.install(page);
@@ -95,7 +92,8 @@ test("a change that clashes with an edit made since isn't applied", async ({ pag
   await editor(page).getByText("# Welcome to noted-ai").click();
   await page.keyboard.press("End");
   await page.keyboard.type("!");
-  await page.waitForTimeout(600);
+  await expect(editor(page)).toContainText("# Welcome to noted-ai!");
+  await expect(page.getByText("Saved", { exact: true })).toBeVisible();
 
   const [title, heading] = [changes.getByRole("listitem").nth(0), changes.getByRole("listitem").nth(1)];
   await title.getByRole("button", { name: "Apply" }).click();

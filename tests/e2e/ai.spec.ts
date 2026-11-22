@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { FakeLLM } from "./fake-llm";
-
-const GOOD_KEY = "sk-or-v1-good-key-0123456789abcdefghij";
+import { GOOD_KEY } from "./helpers";
 
 async function openAiSettings(page: Page) {
   await page.getByRole("button", { name: "Settings", exact: true }).first().click();

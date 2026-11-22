@@ -1,8 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { FakeLLM } from "./fake-llm";
+import { editor, GOOD_KEY } from "./helpers";
 
-const GOOD_KEY = "sk-or-v1-good-key-0123456789abcdefghij";
-const editor = (page: Page) => page.locator(".cm-content");
 const chat = (page: Page) => page.getByRole("region", { name: "Chat" });
 
 async function setUp(page: Page, llm: FakeLLM, { key = true } = {}) {

@@ -1,8 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-
-const editor = (page: Page) => page.locator(".cm-content");
-const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
-const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
+import { acceptSuggestion, editor, title, tree } from "./helpers";
 
 async function newNote(page: Page, name: string) {
   await page.goto("/");
@@ -19,8 +16,7 @@ test("typing [[ suggests notes, and links can be followed", async ({ page }) => 
   await newNote(page, "Daily");
   await page.keyboard.type("Read [[Welc");
   await expect(page.locator(".cm-tooltip-autocomplete [aria-selected=true]")).toContainText("Welcome");
-  await page.waitForTimeout(100); // the editor ignores Enter for a moment after suggestions open
-  await page.keyboard.press("Enter");
+  await acceptSuggestion(page);
   await page.keyboard.type(" today.");
   await page.getByRole("radio", { name: "Source" }).click();
   await expect(editor(page)).toHaveText("Read [[Welcome]] today.");

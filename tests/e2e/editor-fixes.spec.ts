@@ -1,7 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-
-const editor = (page: Page) => page.locator(".cm-content");
-const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
+import { expect, test } from "@playwright/test";
+import { editor, title } from "./helpers";
 
 test("edits are still there after switching to reading view and back", async ({ page }) => {
   await page.goto("/");

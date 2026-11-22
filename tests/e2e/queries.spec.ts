@@ -1,8 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-
-const editor = (page: Page) => page.locator(".cm-content");
-const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
-const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
+import { editor, title, tree } from "./helpers";
 
 async function addNote(page: Page, name: string, text: string) {
   await page.getByRole("button", { name: "New note", exact: true }).click();

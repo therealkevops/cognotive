@@ -1,9 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { FakeGitHub } from "./fake-github";
-
-const editor = (page: Page) => page.locator(".cm-content");
-const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
-const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
+import { editor, title, tree } from "./helpers";
 
 /** A small red PNG, made in the page so it is a real image. */
 async function pasteImage(page: Page) {

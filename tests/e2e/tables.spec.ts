@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import { editor, title } from "./helpers";
 
-const editor = (page: Page) => page.locator(".cm-content");
-const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
 const grid = (page: Page) => page.locator(".cm-table-grid");
 const cell = (page: Page, name: string) => grid(page).getByRole("textbox", { name, exact: true });
 
@@ -77,7 +76,7 @@ test("Tab past the last cell adds a row, arrow keys leave the table, undo works 
   await expect(grid(page).locator("tbody tr")).toHaveCount(3);
   await page.keyboard.type("x");
   await expect(cell(page, "Row 3, Column 1")).toHaveText("x");
-  await page.waitForTimeout(600); // a separate undo step
+  await page.waitForTimeout(600); // longer than the editor groups typing into one undo step (500 ms)
   await page.keyboard.type("yz");
   await page.keyboard.press("ControlOrMeta+z");
   await expect(cell(page, "Row 3, Column 1")).toHaveText("x");

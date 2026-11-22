@@ -1,14 +1,6 @@
 import { strToU8, zipSync } from "fflate";
-import { expect, test, type Page } from "@playwright/test";
-
-const editor = (page: Page) => page.locator(".cm-content");
-const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
-const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
-
-async function openApp(page: Page) {
-  await page.goto("/");
-  await expect(editor(page)).toBeVisible();
-}
+import { expect, test } from "@playwright/test";
+import { editor, openApp, title, tree } from "./helpers";
 
 test("a note created from a link goes in the linking note's folder", async ({ page }) => {
   await openApp(page);

@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import { editor, ymd } from "./helpers";
 
-const editor = (page: Page) => page.locator(".cm-content");
-const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const today = ymd(new Date());
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64");
 

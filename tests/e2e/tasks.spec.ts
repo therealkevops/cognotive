@@ -1,8 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { editor, tree, ymd } from "./helpers";
 
-const editor = (page: Page) => page.locator(".cm-content");
-const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
-const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const today = ymd(new Date());
 const yesterday = ymd(new Date(Date.now() - 86_400_000));
 

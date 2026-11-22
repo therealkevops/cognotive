@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { FakeLLM } from "./fake-llm";
-
-const GOOD_KEY = "sk-or-v1-good-key-0123456789abcdefghij";
+import { GOOD_KEY } from "./helpers";
 
 async function setUp(page: Page, llm: FakeLLM, model?: RegExp) {
   await llm.install(page);

@@ -1,8 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import { acceptSuggestion, editor, title, tree } from "./helpers";
 
-const editor = (page: Page) => page.locator(".cm-content");
-const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
-const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
 const suggestions = (page: Page) => page.locator(".cm-tooltip-autocomplete");
 
 async function newNote(page: Page) {
@@ -42,10 +40,9 @@ test("typing [[ around selected text makes it a link and suggests notes", async 
   await page.keyboard.type("Welc");
   await page.keyboard.press("Shift+Home");
   await page.keyboard.type("[[");
-  // The editor ignores Enter for a moment after suggestions open; wait for the highlighted one.
+  // Wait for the highlighted one.
   await expect(suggestions(page).locator("[aria-selected=true]")).toContainText("Welcome");
-  await page.waitForTimeout(100);
-  await page.keyboard.press("Enter");
+  await acceptSuggestion(page);
   await page.getByRole("radio", { name: "Source" }).click();
   await expect(editor(page)).toHaveText("[[Welcome]]");
 });

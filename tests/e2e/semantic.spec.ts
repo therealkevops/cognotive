@@ -1,8 +1,7 @@
 import fs from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { FakeLLM } from "./fake-llm";
-
-const editor = (page: Page) => page.locator(".cm-content");
+import { editor } from "./helpers";
 
 async function turnOn(page: Page) {
   await page.getByRole("button", { name: "Settings", exact: true }).first().click();

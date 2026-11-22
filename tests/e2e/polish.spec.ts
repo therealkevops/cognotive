@@ -1,24 +1,8 @@
 import { strToU8, unzipSync, zipSync } from "fflate";
 import { readFileSync } from "node:fs";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { FakeGitHub } from "./fake-github";
-
-const editor = (page: Page) => page.locator(".cm-content");
-const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
-const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
-
-async function openApp(page: Page) {
-  await page.goto("/");
-  await expect(editor(page)).toBeVisible();
-}
-
-async function palette(page: Page, command: string) {
-  await page.keyboard.press("ControlOrMeta+p");
-  const dialog = page.getByRole("dialog", { name: "Command palette" });
-  await dialog.getByRole("combobox").fill(command);
-  await page.keyboard.press("Enter");
-  await expect(dialog).toBeHidden();
-}
+import { editor, openApp, palette, title, tree } from "./helpers";
 
 test("the command palette runs commands", async ({ page }) => {
   await openApp(page);

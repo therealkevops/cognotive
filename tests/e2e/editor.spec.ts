@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { editor, tree } from "./helpers";
 
 const mod = process.platform === "darwin" ? "Meta" : "Control";
 
@@ -7,9 +8,6 @@ async function openApp(page: Page) {
   await expect(page).toHaveTitle("noted-ai");
   await expect(page.locator(".cm-content")).toBeVisible();
 }
-
-const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
-const editor = (page: Page) => page.locator(".cm-content");
 
 test("a new repository opens on the welcome note", async ({ page }) => {
   await openApp(page);

@@ -1,14 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
+import { editor, openApp, title, tree } from "./helpers";
 
-const editor = (page: Page) => page.locator(".cm-content");
-const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
-const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
 const card = (page: Page) => page.getByRole("dialog", { name: "Link preview" });
-
-async function openApp(page: Page) {
-  await page.goto("/");
-  await expect(editor(page)).toBeVisible();
-}
 
 test("hovering a link shows the note rendered, and its title opens it", async ({ page }) => {
   await openApp(page);
@@ -53,7 +46,7 @@ test("previews can be limited to Ctrl/Cmd hovers", async ({ page }) => {
 
   const link = editor(page).locator(".cm-wikilink", { hasText: "Linking notes" });
   await link.hover();
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(800); // longer than the hover delay: no card should have appeared
   await expect(card(page)).toHaveCount(0);
 
   const box = (await link.boundingBox())!;

@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import { editor, title } from "./helpers";
 
-const editor = (page: Page) => page.locator(".cm-content");
-const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
 const tabs = (page: Page) => page.getByRole("tablist", { name: "Open notes" });
 const link = (page: Page) => editor(page).locator(".cm-wikilink", { hasText: "Linking notes" });
 

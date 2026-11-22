@@ -1,9 +1,6 @@
 import { strToU8, zipSync } from "fflate";
 import { expect, test, type Page } from "@playwright/test";
-
-const editor = (page: Page) => page.locator(".cm-content");
-const title = (page: Page) => page.getByRole("textbox", { name: "Note title" });
-const tree = (page: Page) => page.getByRole("tree", { name: "Repository files" });
+import { editor, title, tree } from "./helpers";
 
 /** Creates and opens a new local repository, with or without the starter templates. */
 async function newRepository(page: Page, name: string, starters: boolean) {
