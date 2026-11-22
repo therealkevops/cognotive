@@ -29,6 +29,7 @@ import { exportVault } from "@/lib/vault/zip";
 import { LocalStore } from "@/lib/vault/local-store";
 import {
   basename,
+  displayName,
   dirname,
   extensionFor,
   extname,
@@ -56,6 +57,7 @@ import {
   type FileProperties,
 } from "@/lib/vault/file-properties";
 import { WELCOME_NOTES } from "@/lib/vault/welcome";
+import { decideSave } from "@/lib/vault/save-merge";
 
 const SAVE_DELAY_MS = 400;
 /** Where pasted, dropped and uploaded files go. */
@@ -220,6 +222,9 @@ export function VaultProvider({
   const pending = useRef<{ path: string; text: string } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activePath = useRef<string | null>(null);
+  /** The open file as this window last loaded or saved it: what another window's change is merged against. */
+  const loaded = useRef<{ path: string; text: string } | null>(null);
+  const openRef = useRef<(path: string | null) => Promise<void>>(async () => {});
   const version = useRef(0);
   // Lets stable callbacks read the latest entries without re-creating them.
   const entriesRef = useRef<VaultEntry[]>([]);
@@ -246,8 +251,23 @@ export function VaultProvider({
     if (!p) return;
     pending.current = null;
     try {
-      const file = await store.write(p.path, p.text);
-      indexes.set(p.path, p.text);
+      // Another window may have saved this file since this one loaded it: merge, or keep both.
+      const base = loaded.current?.path === p.path ? loaded.current.text : undefined;
+      const theirs = base === undefined ? undefined : (await store.read(p.path))?.content;
+      const decision = base === undefined ? { text: p.text } : decideSave(p.path, p.text, base, theirs, (x) => entriesRef.current.some((e) => e.path === x));
+      if (decision.copy) {
+        await store.write(decision.copy.path, decision.copy.content);
+        indexes.set(decision.copy.path, decision.copy.content);
+        setEntries(await store.list());
+        setError(
+          `"${displayName(p.path)}" was also changed in another window, in the same place. This window's version is saved; the other is kept as "${displayName(decision.copy.path)}".`,
+        );
+      }
+      const file = await store.write(p.path, decision.text);
+      indexes.set(p.path, decision.text);
+      const reopen = decision.text !== p.text && activePath.current === p.path && !pending.current;
+      // If the merged text isn't shown yet (more typing is pending), keep merging against the old base.
+      if (loaded.current?.path === p.path && (reopen || decision.text === p.text)) loaded.current = { path: p.path, text: decision.text };
       bumpIndex();
       if (!pending.current) setSaveState("saved");
       setEntries((prev) => prev.map((e) => (e.path === p.path ? { ...e, mtime: file.mtime } : e)));
@@ -261,6 +281,7 @@ export function VaultProvider({
         }
       }
       changed();
+      if (reopen) await openRef.current(p.path); // show the merged text
     } catch (e) {
       setSaveState("error");
       fail(e);
@@ -281,6 +302,7 @@ export function VaultProvider({
       const file = await store.read(path);
       if (activePath.current !== path) return; // a newer open won
       const text = file?.content ?? "";
+      loaded.current = { path, text };
       version.current += 1;
       setActive({ path, initial: text, version: version.current });
       setActiveText(text);
@@ -837,6 +859,40 @@ export function VaultProvider({
     },
     [store, indexes, bumpIndex, open, applyFileProps],
   );
+
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
+
+  // Other windows and tabs with this repository open: tell them what changed here, and
+  // re-read what they changed, as after a sync.
+  const reloadRef = useRef(reload);
+  useEffect(() => {
+    reloadRef.current = reload;
+  }, [reload]);
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined" || !store.onChange) return;
+    const channel = new BroadcastChannel(`noted-ai:vault:${vaultId}`);
+    let batch = new Set<string>();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = store.onChange((paths) => {
+      for (const p of paths) batch.add(p);
+      timer ??= setTimeout(() => {
+        channel.postMessage({ paths: [...batch] });
+        batch = new Set();
+        timer = undefined;
+      }, 50);
+    });
+    channel.onmessage = (e: MessageEvent<{ paths?: unknown }>) => {
+      const paths = e.data?.paths;
+      if (Array.isArray(paths)) void reloadRef.current(paths.filter((p): p is string => typeof p === "string"));
+    };
+    return () => {
+      stop();
+      if (timer) clearTimeout(timer);
+      channel.close();
+    };
+  }, [store, vaultId]);
 
   const api = useMemo<VaultApi>(
     () => ({

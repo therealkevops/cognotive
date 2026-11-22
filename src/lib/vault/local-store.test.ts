@@ -177,4 +177,27 @@ describe("LocalStore", () => {
     expect(await s.read("Notes/a.md")).toMatchObject({ content: "hello" });
     expect(await s.readBinary("Notes/p.png")).toEqual(new Uint8Array([7]));
   });
+
+  it("says which paths changed after each saved change", async () => {
+    const s = makeStore();
+    const seen: string[][] = [];
+    const stop = s.onChange((paths) => seen.push([...paths].sort()));
+    await s.write("A/a.md", "a");
+    await s.writeBinary("A/p.png", new Uint8Array([1]));
+    expect(await s.writeIf("A/a.md", "wrong", "x")).toBe(false);
+    await s.writeIf("A/a.md", "a", "b");
+    await s.createFolder("A/Sub");
+    await s.rename("A", "B");
+    await s.delete("B/p.png");
+    stop();
+    await s.write("c.md", "c");
+    expect(seen).toEqual([
+      ["A/a.md"],
+      ["A/p.png"],
+      ["A/a.md"],
+      ["A/Sub"],
+      ["A/Sub", "A/a.md", "A/p.png", "B/Sub", "B/a.md", "B/p.png"],
+      ["B/p.png"],
+    ]);
+  });
 });

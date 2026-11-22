@@ -196,7 +196,14 @@ export function SyncProvider({
       return;
     }
     running.current = true;
+    // One window syncs at a time (two at once would race on the record of what was synced);
+    // the others wait their turn and then find little or nothing left to do.
+    const exclusive = async (fn: () => Promise<void>): Promise<void> => {
+      if (typeof navigator !== "undefined" && navigator.locks) await navigator.locks.request(`noted-ai:sync:${config.id}`, fn);
+      else await fn();
+    };
     try {
+      await exclusive(async () => {
       do {
         again.current = false;
         setStatus({ kind: "syncing" });
@@ -234,10 +241,11 @@ export function SyncProvider({
           }
         }
       } while (again.current);
+      });
     } finally {
       running.current = false;
     }
-  }, [engine, config.owner, config.repo, conflictStore]);
+  }, [engine, config.id, config.owner, config.repo, conflictStore]);
 
   // First sync once the vault has loaded, and again when the user signs in.
   const signedIn = !!stored;

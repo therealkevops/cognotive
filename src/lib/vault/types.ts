@@ -30,4 +30,6 @@ export interface VaultStore {
   delete(path: string): Promise<void>;
   /** Renames or moves a file or folder (with its contents). Fails if `to` exists. */
   rename(from: string, to: string): Promise<void>;
+  /** Calls `listener` with the changed paths after each saved change; returns a stop function. */
+  onChange?(listener: (paths: string[]) => void): () => void;
 }
