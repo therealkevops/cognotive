@@ -1,85 +1,32 @@
 "use client";
 
 import type { EditorView } from "@codemirror/view";
-import {
-  ArrowLeft,
-  ArrowRight,
-  BookOpen,
-  CalendarDays,
-  CodeXml,
-  Files,
-  History,
-  FilePlus,
-  ListChecks,
-  ListTree,
-  Link2,
-  Activity,
-  PanelLeft,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PanelRightClose,
-  PanelRightOpen,
-  Pencil,
-  Search,
-  Settings,
-  Tags,
-  LayoutTemplate,
-  SlidersHorizontal,
-  Sparkles,
-  X,
-  Zap,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, CodeXml, Files, History, FilePlus, ListChecks, ListTree, Link2, Activity, PanelLeft, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Pencil, Search, Settings, Tags, LayoutTemplate, SlidersHorizontal, Sparkles, X, Zap } from "lucide-react";
 import dynamic from "next/dynamic";
 import { reloadOnChunkError } from "@/lib/chunk";
 import type { ConflictRecord } from "@/lib/sync/conflicts";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell, RailButton } from "@/components/AppShell";
-import { isDark, loadAppearance } from "@/lib/appearance";
+import { isDark } from "@/lib/appearance";
 import type { OpenHow } from "@/lib/links/open";
 import { EMPTY_HISTORY, goBack, goForward, renameInHistory, visit, type NavHistory } from "@/lib/nav/history";
 import { readPref, writePref } from "@/lib/prefs";
 import { editTableSource } from "@/lib/editor/table-keys";
 import { addProperty } from "@/lib/editor/properties-panel";
-import { deletePropertyIn, renamePropertyIn } from "@/lib/vault/property-ops";
-import type { LinkHost } from "@/lib/editor/wikilinks";
-import { collectPropertyInfo, yamlValue, type PropertyInfo } from "@/lib/editor/properties";
+import { yamlValue } from "@/lib/editor/properties";
 import { drawingProperties, keepDrawingProperties, setDrawingProperty } from "@/lib/drawing/properties";
-import type { LinkContext } from "@/lib/markdown/remark-links";
 import { ChatPanel } from "../ai/ChatPanel";
 import { AskDialog, type AskSource } from "../ai/AskDialog";
 import { AiActionsContext, useRunAction } from "../ai/useAsk";
 import { usePairFromLink } from "../ai/usePairFromLink";
-import { serializeCanvas } from "@/lib/canvas/format";
-import { neighbourhoodCanvas, type Neighbour } from "@/lib/canvas/map";
-import { convertLinks, formatLink, markdownLink } from "@/lib/links/format";
-import { splitLinkText } from "@/lib/links/parse";
-import { setFrontmatterProperty, splitFrontmatter } from "@/lib/markdown/frontmatter";
-import { healthIgnored, hubProperty, todayStamp, vaultHealth } from "@/lib/links/health";
-import { queryCacheFor, queryContext } from "@/lib/query/context";
-import { queryToMarkdown } from "@/lib/query/query";
+import { convertLinks, formatLink } from "@/lib/links/format";
+import { setFrontmatterProperty } from "@/lib/markdown/frontmatter";
+import { healthIgnored, hubProperty, vaultHealth } from "@/lib/links/health";
 import { extractHeadings } from "@/lib/markdown/outline";
-import { blockIdChange, listBlocks } from "@/lib/markdown/blocks";
-import { previewMarkdown } from "@/lib/markdown/preview";
-import { sectionUnder } from "@/lib/markdown/remark-links";
-import {
-  basename,
-  dirname,
-  extname,
-  canvasName,
-  displayName,
-  isCanvas,
-  isDrawing,
-  isImage,
-  isNote,
-  joinPath,
-  noteTitle,
-} from "@/lib/vault/paths";
+import { basename, dirname, displayName, isCanvas, isDrawing, isNote, noteTitle } from "@/lib/vault/paths";
 import { drawingJson, isObsidianDrawing, replaceScene } from "@/lib/drawing/obsidian";
-import { drawingName } from "@/lib/vault/paths";
-import type { CanvasVault } from "./CanvasView";
-import type { DrawingVault } from "./DrawingView";
-import { formatDate, newNoteFromLink } from "@/lib/vault/settings";
-import { insertIntoNote, noteFromTemplate, renderTemplate, type Rendered } from "@/lib/templates/templates";
+import { newNoteFromLink } from "@/lib/vault/settings";
+import { insertIntoNote, renderTemplate, type Rendered } from "@/lib/templates/templates";
 import { SettingsDialog, type SettingsSection } from "../settings/SettingsDialog";
 import { HistoryDialog } from "../sync/HistoryDialog";
 import { SyncButton } from "../sync/SyncButton";
@@ -106,14 +53,16 @@ import { QuickSwitcher } from "./QuickSwitcher";
 import { SearchPanel } from "./SearchPanel";
 import { CaptureDialog } from "./CaptureDialog";
 import { BackupBanner } from "./BackupBanner";
-import { backupPrefs } from "@/lib/storage-safety";
-import { appendCapture, captureEntry, captureTime, fromShare, type Captured } from "@/lib/capture/capture";
+import { fromShare, type Captured } from "@/lib/capture/capture";
 import { takeShared } from "@/lib/capture/shared";
 import { TasksPanel } from "./TasksPanel";
 import { toggleTask, type Task } from "@/lib/tasks/tasks";
 import { TagsPanel } from "./TagsPanel";
 import { addStarterTemplates, needsDialog, TemplatesPanel, UseTemplateDialog, useTemplatePaths } from "./Templates";
 import { Toolbar } from "./Toolbar";
+import { EmptyState, SaveIndicator, TitleInput, Toasts } from "./WorkspaceParts";
+import { captureTarget, dailyNote, deletePropertyEverywhere, exportZip, importZip, mapAsCanvas, renamePropertyEverywhere, saveCapture } from "./vault-actions";
+import { useEditorHosts } from "./useEditorHosts";
 
 const MarkdownEditor = dynamic(() => reloadOnChunkError(() => import("./MarkdownEditor"))(), { ssr: false });
 // Excalidraw is about 1 MB: loaded only when a drawing is opened.
@@ -338,28 +287,8 @@ export function Workspace() {
     void vault.open(null);
   };
 
-  /** Opens (or creates) the daily note for a date, from the vault's daily-note settings. */
-  /** A day's daily note: where it is, and (if it doesn't exist yet) what it starts as, from the template. */
-  const dailyNote = (date = new Date()) => {
-    const s = vault.settings;
-    const name = formatDate(date, s.dailyFormat || "YYYY-MM-DD");
-    const path = joinPath(s.dailyFolder, `${name}.md`);
-    let content = "";
-    let cursor: number | null = null;
-    if (s.dailyTemplate && !vault.exists(path)) {
-      const t = vault.links.resolve(s.dailyTemplate.replace(/\.md$/i, ""));
-      if (t) {
-        const note = noteFromTemplate(
-          renderTemplate(vault.links.content(t) ?? "", { title: basename(name), now: date, folder: s.dailyFolder, inputs: {} }),
-        );
-        content = note.content;
-        cursor = note.cursor;
-      }
-    }
-    return { path, name, content, cursor };
-  };
   const openDaily = async (date = new Date()) => {
-    const { path, content, cursor } = dailyNote(date);
+    const { path, content, cursor } = dailyNote(vault, date);
     if (cursor !== null) pendingCursor.current = { path, fromEnd: content.length - cursor };
     await vault.createNoteWith(path, content);
   };
@@ -367,27 +296,6 @@ export function Workspace() {
   // Quick capture: a dialog (or something shared to the app) adds an item to today's note or the inbox.
   const [capturing, setCapturing] = useState<{ initial?: { captured: Captured; files: File[] } } | null>(null);
   const [captured, setCaptured] = useState<string | null>(null);
-  const captureTarget = () => {
-    const s = vault.settings;
-    if (s.captureTo === "inbox") {
-      const path = /\.md$/i.test(s.captureInbox) ? s.captureInbox : `${s.captureInbox}.md`;
-      return { path, start: `# ${noteTitle(path)}\n`, label: noteTitle(path) };
-    }
-    const d = dailyNote();
-    return { path: d.path, start: d.content, label: `today's note (${d.name})` };
-  };
-  const saveCapture = async (c: Captured, files: File[]) => {
-    const target = captureTarget();
-    const paths = files.length ? await vault.addAttachments(files) : [];
-    const embeds = paths.map((p) => {
-      const t = vault.links.linkText(p);
-      return formatLink(vault.settings.linkFormat, target.path, { path: p, target: t, embed: true }, t);
-    });
-    const entry = captureEntry({ ...c, embeds }, captureTime());
-    if (vault.exists(target.path)) await vault.writeNote(target.path, appendCapture(latestText(target.path), entry));
-    else await vault.writeFile(target.path, appendCapture(target.start, entry));
-    setCaptured(target.path);
-  };
   useEffect(() => {
     if (!captured) return;
     const t = setTimeout(() => setCaptured(null), 6000);
@@ -560,134 +468,7 @@ export function Workspace() {
     setSidebarOpen(true);
   }, []);
 
-  // How many notes link to each file, for ranking link suggestions.
-  const inbound = useMemo(
-    () => vault.indexed.links.inboundCounts(),
-    [vault.indexed],
-  );
 
-  // Property names, values and tags across the repository, worked out when first asked for.
-  const propertyInfo = useMemo(() => {
-    let info: PropertyInfo | null = null;
-    return () => (info ??= collectPropertyInfo(vault.indexed.links, vault.settings.propertyTypes));
-  }, [vault.indexed, vault.settings.propertyTypes]);
-
-  // What the editor needs for [[links]].
-  // Live query blocks: results from the indexes, cached until a note changes.
-  const cachedQuery = useMemo(() => queryCacheFor(vault.indexed), [vault.indexed]);
-  const runQueryBlock = useCallback(
-    (source: string, lang: "query" | "dataview"): string => {
-      const self = vault.active?.path;
-      return cachedQuery(`${self}\u0000${lang}\u0000${source}`, () => {
-        const mtimes = new Map(vault.entries.map((e) => [e.path, e.mtime]));
-        return queryToMarkdown(
-          source,
-          lang,
-          queryContext({
-            links: vault.indexed.links,
-            search: vault.indexed.search,
-            mtime: (p) => mtimes.get(p),
-            linkFor: (p) => {
-              const t = vault.indexed.links.linkText(p);
-              return formatLink(vault.settings.linkFormat, self ?? "", { path: p, target: t }, t);
-            },
-            today: todayStamp(),
-            ...(self ? { self } : {}),
-          }),
-        );
-      });
-    },
-    [cachedQuery, vault.active?.path, vault.entries, vault.indexed, vault.settings.linkFormat],
-  );
-
-  const linkHost = useMemo<LinkHost>(
-    () => ({
-      resolve: (t) => vault.links.resolve(t, vault.active?.path),
-      open: (t, h, how) => void openLink(t, h, how),
-      clickFollows: () => loadAppearance().linkClick === "follow",
-      notes: () =>
-        vault.links
-          .paths()
-          .filter((p) => p !== vault.active?.path)
-          .sort()
-          .map((p) => ({
-            path: p,
-            title: displayName(p),
-            aliases: vault.links.get(p)?.aliases ?? [],
-            linkText: vault.links.linkText(p),
-            recentRank: recent.includes(p) ? recent.filter((r) => r !== vault.active?.path).indexOf(p) : undefined,
-            inbound: inbound.get(p) ?? 0,
-          })),
-      linkText: (p) => (vault.entries.some((e) => e.path === p && e.kind === "file") ? vault.links.linkText(p) : null),
-      linkSelection: () => setLinkPickerOpen(true),
-      askSelection: () => askRef.current(),
-      queryMarkdown: (src, lang) => runQueryBlock(src, lang),
-      currentPath: () => vault.active?.path ?? null,
-      formatLink: (inner, embed) => {
-        const from = vault.active?.path;
-        if (vault.settings.linkFormat !== "markdown" || !from) return null;
-        const { target, heading, block, alias } = splitLinkText(inner);
-        if (!target) return null; // "[[#Heading]]" within the note stays a wikilink
-        const path = vault.links.resolve(target, from);
-        return markdownLink(from, { path, target, sub: heading ?? (block ? `^${block}` : undefined), alias, embed });
-      },
-      noteContent: (p) => (isNote(p) ? vault.links.content(p) : undefined),
-      addBlockId: (p, block, id) => {
-        const content = vault.links.content(p);
-        if (content === undefined) return;
-        // Find the block again in the saved text, in case it moved.
-        const now = listBlocks(content);
-        const same = now.find((b) => b.from === block.from && b.text === block.text) ?? now.find((b) => b.text === block.text);
-        if (!same || same.id) return;
-        const c = blockIdChange(same, id);
-        void vault.writeNote(p, content.slice(0, c.from) + c.insert + content.slice(c.from));
-      },
-      headings: (p) => vault.links.get(p)?.headings.map((h) => h.text) ?? [],
-      notePreview: (t, sub) => {
-        const p = vault.links.resolve(t, vault.active?.path);
-        if (!p) return null;
-        if (isImage(p) || isDrawing(p)) {
-          return { title: isDrawing(p) ? drawingName(p) : basename(p), markdown: `![[${vault.links.linkText(p)}]]` };
-        }
-        if (!isNote(p)) return { title: basename(p), markdown: "" };
-        const body = splitFrontmatter(vault.links.content(p) ?? "").body;
-        const where = sub ? ` › ${sub.startsWith("^") ? "block" : sub}` : "";
-        return { title: noteTitle(p) + where, markdown: previewMarkdown(body, sub) };
-      },
-      hoverPreview: () => loadAppearance().hoverPreview,
-      embedPath: (t) => {
-        const p = vault.links.resolve(t, vault.active?.path);
-        return p && (isImage(p) || isDrawing(p)) ? p : null;
-      },
-      fileUrl: (p) => vault.fileUrl(p, { dark: prefersDark() }),
-      saveFiles: async (files) => {
-        const paths = await vault.addAttachments(files);
-        return paths.map((p) => vault.links.linkText(p));
-      },
-      renderHtml: async (md) => {
-        const { renderMarkdown } = await import("@/lib/markdown/render");
-        return renderMarkdown(md, {
-          resolve: (t) => vault.links.resolve(t, vault.active?.path),
-          read: (p) => vault.links.content(p),
-        });
-      },
-      noteEmbed: (inner) => {
-        const { target, heading } = splitLinkText(inner);
-        const p = target ? vault.links.resolve(target, vault.active?.path) : null;
-        if (!p || !isNote(p) || p === vault.active?.path) return null;
-        const body = splitFrontmatter(vault.links.content(p) ?? "").body;
-        const markdown = heading ? (sectionUnder(body, heading) ?? "") : body;
-        return { markdown, title: heading ? `${noteTitle(p)} › ${heading}` : noteTitle(p) };
-      },
-      propertyInfo,
-    }),
-    [vault, openLink, recent, inbound, propertyInfo, runQueryBlock],
-  );
-
-  /**
-   * Links the editor's selection to `path`, in the vault's link format:
-   * "[[Note|selection]]", or "[[Note]]" if nothing (or the link text) is selected.
-   */
   /** Opens "Ask" on the editor's selection. */
   const askSelection = () => {
     const path = vault.active?.path;
@@ -715,6 +496,10 @@ export function Workspace() {
     view.dispatch({ changes: { from: line.to, insert: `\n\n${text}` }, userEvent: "input" });
   };
 
+  /**
+   * Links the editor's selection to `path`, in the vault's link format:
+   * "[[Note|selection]]", or "[[Note]]" if nothing (or the link text) is selected.
+   */
   const linkSelectionTo = (path: string) => {
     if (!view) return;
     const target = vault.links.linkText(path);
@@ -726,95 +511,10 @@ export function Workspace() {
     view.focus();
   };
 
-  // What a drawing needs to link to notes and place vault pictures, as in Obsidian.
-  const drawingVault = useMemo<DrawingVault>(() => {
-    const describe = (p: string) => ({
-      path: p,
-      title: isNote(p) || isDrawing(p) || isCanvas(p) ? displayName(p) : basename(p),
-      linkText: vault.links.linkText(p),
-      folder: dirname(p),
-    });
-    return {
-      notes: () =>
-        vault.links
-          .paths()
-          .filter((p) => p !== vault.active?.path)
-          .sort()
-          .map(describe),
-      pictures: () =>
-        vault.entries
-          .filter(
-            (e) =>
-              e.kind === "file" &&
-              e.path !== vault.active?.path &&
-              (isImage(e.path) || isDrawing(e.path)) &&
-              !e.path.split("/").some((seg) => seg.startsWith(".")),
-          )
-          .map((e) => describe(e.path))
-          .sort((a, b) => a.title.localeCompare(b.title)),
-      pictureData: async (p) => {
-        // Drawings come back as an SVG rendering; embed the light version, like an exported image.
-        const url = await vault.fileUrl(p, { dark: false });
-        if (!url) return null;
-        const blob = await (await fetch(url)).blob();
-        const dataURL = await new Promise<string>((resolve, reject) => {
-          const r = new FileReader();
-          r.onload = () => resolve(r.result as string);
-          r.onerror = () => reject(r.error);
-          r.readAsDataURL(blob);
-        });
-        return { dataURL, mimeType: blob.type || "image/png" };
-      },
-      resolve: (t) => vault.links.resolve(t, vault.active?.path),
-    };
-  }, [vault]);
 
-  const linkContext = useMemo<LinkContext>(
-    () => ({
-      resolve: (t) => vault.indexed.links.resolve(t, vault.active?.path),
-      read: (p) => vault.indexed.links.content(p),
-      query: (src, lang) => runQueryBlock(src, lang),
-    }),
-    [vault.indexed, vault.active?.path, runQueryBlock],
-  );
-  const { fileUrl: fileUrlOf, writeNote: writeNoteAt } = vault;
-  // What a canvas needs: files to place as cards, note previews, pictures and link resolution.
-  const canvasVault = useMemo<CanvasVault>(
-    () => ({
-      files: () =>
-        vault.entries
-          .filter((e) => e.kind === "file" && e.path !== vault.active?.path && !e.path.split("/").some((seg) => seg.startsWith(".")))
-          .map((e) => ({
-            path: e.path,
-            title: isDrawing(e.path) ? drawingName(e.path) : isCanvas(e.path) ? canvasName(e.path) : isNote(e.path) ? noteTitle(e.path) : basename(e.path),
-            folder: dirname(e.path),
-          }))
-          .sort((a, b) => a.title.localeCompare(b.title)),
-      notePreview: (p, subpath) => {
-        const content = vault.indexed.links.content(p);
-        if (content === undefined) return null;
-        const sub = subpath?.replace(/^#/, "") || undefined;
-        return {
-          title: noteTitle(p) + (sub ? ` › ${sub.startsWith("^") ? "block" : sub}` : ""),
-          markdown: previewMarkdown(splitFrontmatter(content).body, sub),
-        };
-      },
-      fileUrl: (p) => fileUrlOf(p, { dark: prefersDark() }),
-      exists: (p) => vault.entries.some((e) => e.path === p),
-      links: linkContext,
-      noteProperties: (p) => ({
-        properties: vault.indexed.links.get(p)?.properties ?? {},
-        info: propertyInfo(),
-        set: (key, value) => {
-          const text = vault.indexed.links.content(p) ?? "";
-          const next = setFrontmatterProperty(text, key, value === undefined ? undefined : yamlValue(value));
-          if (next !== text) void writeNoteAt(p, next);
-        },
-      }),
-    }),
-    [vault.entries, vault.indexed, vault.active?.path, linkContext, propertyInfo, fileUrlOf, writeNoteAt],
-  );
 
+  const onLinkSelection = useCallback(() => setLinkPickerOpen(true), []);
+  const { inbound, propertyInfo, linkHost, linkContext, drawingVault, canvasVault } = useEditorHosts({ openLink, recent, onLinkSelection, askRef });
 
   const activePathNow = vault.active?.path ?? null;
   const kind = !activePathNow
@@ -875,7 +575,7 @@ export function Workspace() {
 
   /** Ticks or clears a task in its note: in the editor when the note is open, so the cursor stays put. */
   const toggleTaskIn = async (task: Task, done: boolean): Promise<boolean> => {
-    const next = toggleTask(latestText(task.path), task, done);
+    const next = toggleTask(vault.textOf(task.path) ?? "", task, done);
     if (next === null) return false;
     const line = next.split("\n")[task.line];
     if (task.path === vault.active?.path && view) {
@@ -889,56 +589,7 @@ export function Workspace() {
     return true;
   };
 
-  /** The latest text of a file: the open file's (with unsaved edits), or the saved one. */
-  const latestText = (path: string) => vault.textOf(path) ?? "";
-  const isAttachment = (path: string) => !isNote(path) && !isDrawing(path) && !isCanvas(path);
 
-  /** Renames a property in every file that has it (not where the new name is already taken). */
-  const renamePropertyEverywhere = async (from: string, to: string) => {
-    let changed = 0;
-    let clashes = 0;
-    for (const path of vault.links.paths()) {
-      const props = vault.links.get(path)?.properties ?? {};
-      if (!(from in props)) continue;
-      if (isAttachment(path)) {
-        if (to in props) {
-          clashes++;
-          continue;
-        }
-        await vault.setFileProperty(path, to, props[from]);
-        await vault.setFileProperty(path, from, undefined);
-        changed++;
-        continue;
-      }
-      const next = renamePropertyIn(path, latestText(path), from, to);
-      if (next === "clash") clashes++;
-      else if (next !== "unchanged") {
-        await vault.writeNote(path, next);
-        changed++;
-      }
-    }
-    return { changed, clashes };
-  };
-
-  /** Removes a property from every file that has it. */
-  const deletePropertyEverywhere = async (key: string) => {
-    let changed = 0;
-    for (const path of vault.links.paths()) {
-      const props = vault.links.get(path)?.properties ?? {};
-      if (!(key in props)) continue;
-      if (isAttachment(path)) {
-        await vault.setFileProperty(path, key, undefined);
-        changed++;
-        continue;
-      }
-      const next = deletePropertyIn(path, latestText(path), key);
-      if (next !== "unchanged") {
-        await vault.writeNote(path, next);
-        changed++;
-      }
-    }
-    return changed;
-  };
 
   const sidebar = (
     <>
@@ -1018,8 +669,8 @@ export function Workspace() {
               setSearchQuery(q);
               setTab("search");
             }}
-            onRename={renamePropertyEverywhere}
-            onDelete={deletePropertyEverywhere}
+            onRename={(from, to) => renamePropertyEverywhere(vault, from, to)}
+            onDelete={(key) => deletePropertyEverywhere(vault, key)}
             onTable={(key) => setPropertyTable(filesWithProperties(vault.links, [{ key }]))}
           />
         ) : (
@@ -1145,58 +796,7 @@ export function Workspace() {
     </>
   );
 
-  const exportZip = async () => {
-    const bytes = await vault.exportZip();
-    const url = URL.createObjectURL(new Blob([bytes.slice().buffer], { type: "application/zip" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${vaults.active.name.replace(/[\\/:*?"<>|]/g, "-")} ${formatDate(new Date(), "YYYY-MM-DD")}.zip`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    backupPrefs.markBackup(vault.vaultId);
-  };
 
-  const importZip = async (file: File) => {
-    const { readZip } = await import("@/lib/vault/zip");
-    const files = readZip(new Uint8Array(await file.arrayBuffer()));
-    const r = await vault.importFiles(files);
-    setImportNote(
-      `Imported ${r.added} ${r.added === 1 ? "file" : "files"}` +
-        (r.renamed ? `, ${r.renamed} renamed because a different file had the same name` : "") +
-        (r.skipped ? `, ${r.skipped} already here` : "") +
-        ".",
-    );
-  };
-
-  /**
-   * Makes a canvas of the open note and what's connected to it: typed
-   * relations first, then mutual links, links out and links in (up to 16),
-   * saved as "<note> map.canvas" next to the note and opened.
-   */
-  const mapAsCanvas = async () => {
-    const center = activePathNow;
-    if (!center) return;
-    const found = new Map<string, Neighbour>();
-    const add = (path: string, direction: "out" | "in", label?: string) => {
-      if (path === center) return;
-      const prev = found.get(path);
-      if (!prev) found.set(path, { path, direction, ...(label ? { label } : {}) });
-      else {
-        if (prev.direction !== direction) prev.direction = "both";
-        if (label && !prev.label) prev.label = label;
-      }
-    };
-    for (const r of vault.links.canvasRelations(center)) if (r.resolved) add(r.other, r.direction, r.label);
-    for (const o of vault.links.outgoing(center)) if (o.resolved) add(o.resolved, "out");
-    for (const b of vault.links.backlinks(center)) if (!isCanvas(b.source)) add(b.source, "in");
-    const rank = (n: Neighbour) => (n.label ? 0 : n.direction === "both" ? 1 : n.direction === "out" ? 2 : 3);
-    const neighbours = [...found.values()].sort((a, b) => rank(a) - rank(b)).slice(0, 16);
-    const data = neighbourhoodCanvas(center, neighbours);
-    const base = joinPath(dirname(center), `${noteTitle(center)} map`);
-    let path = `${base}.canvas`;
-    for (let i = 2; vault.exists(path); i++) path = `${base} ${i}.canvas`;
-    await vault.createNoteWith(path, serializeCanvas(data));
-  };
 
   /** Rewrites every link in the open note in one format (one undoable edit in the editor). */
   const convertActiveLinks = (to: "markdown" | "wikilink") => {
@@ -1341,7 +941,7 @@ export function Workspace() {
     "ai-week": () => runAction({ kind: "daily-review" }),
     "ai-orphans": () => runAction({ kind: "fix-orphans", paths: currentHealth().orphans }),
     "ai-stale": () => runAction({ kind: "review-stale", paths: currentHealth().stale.map((h) => h.path) }),
-    "map-canvas": () => void mapAsCanvas(),
+    "map-canvas": () => activePathNow && void mapAsCanvas(vault, activePathNow),
     "hub-toggle": () => setActiveProperty("hub", activeIsMarkedHub ? undefined : true),
     "mode-live": () => setMode("live"),
     "mode-source": () => setMode("source"),
@@ -1361,7 +961,7 @@ export function Workspace() {
       setReviewing(c);
     },
     history: () => setHistoryOpen(true),
-    export: () => void exportZip(),
+    export: () => void exportZip(vault, vaults.active.name),
     import: chooseZip,
     settings: () => setSettingsOpen("appearance"),
     install: () => setSettingsOpen("app"),
@@ -1414,7 +1014,7 @@ export function Workspace() {
                 {panelTab === "outline" ? (
                   <Outline markdown={vault.activeText} onJump={jumpTo} />
                 ) : panelTab === "links" ? (
-                  <LinksPanel onOpenLink={(t) => void openLink(t)} onMapCanvas={kind === "note" ? () => void mapAsCanvas() : undefined} />
+                  <LinksPanel onOpenLink={(t) => void openLink(t)} onMapCanvas={kind === "note" && activePathNow ? () => void mapAsCanvas(vault, activePathNow) : undefined} />
                 ) : (
                   <ChatPanel links={linkContext} onOpenLink={(t) => void openLink(t)} onOpenSettings={() => setSettingsOpen("ai")} />
                 )}
@@ -1496,7 +1096,7 @@ export function Workspace() {
             </div>
           )}
           {activePathNow && <ConflictBanner path={activePathNow} onReview={setReviewing} />}
-          <BackupBanner onExport={exportZip} onConnect={() => setSettingsOpen("vaults")} />
+          <BackupBanner onExport={() => exportZip(vault, vaults.active.name)} onConnect={() => setSettingsOpen("vaults")} />
           <div className="flex min-h-0 flex-1">
             <div
               className={`min-h-0 min-w-0 flex-1 ${kind === "drawing" || kind === "canvas" ? "overflow-hidden" : "overflow-y-auto"}`}
@@ -1634,7 +1234,7 @@ export function Workspace() {
         onChange={(e) => {
           const f = e.target.files?.[0];
           e.target.value = "";
-          if (f) void importZip(f);
+          if (f) void importZip(vault, f).then(setImportNote);
         }}
       />
       {importNote && (
@@ -1694,8 +1294,8 @@ export function Workspace() {
       {capturing && (
         <CaptureDialog
           initial={capturing.initial}
-          destination={captureTarget().label}
-          onSave={saveCapture}
+          destination={captureTarget(vault).label}
+          onSave={async (c, files) => setCaptured(await saveCapture(vault, c, files))}
           onClose={() => setCapturing(null)}
         />
       )}
@@ -1744,99 +1344,3 @@ export function Workspace() {
 }
 
 const prefersDark = isDark;
-
-/** A file's name without its extension: what the title box shows and edits. */
-function stem(path: string) {
-  const name = basename(path);
-  const ext = extname(name);
-  return ext ? name.slice(0, -ext.length) : name;
-}
-
-/** The file's name, editable in place. Renames on Enter or blur; the extension is kept. */
-function TitleInput({ path }: { path: string }) {
-  const vault = useVault();
-  const [value, setValue] = useState(stem(path));
-  const commit = async () => {
-    const name = value.trim();
-    if (name === stem(path)) return;
-    if (!name || !(await vault.rename(path, name))) setValue(stem(path));
-  };
-  return (
-    <input
-      aria-label="Note title"
-      className="min-w-0 flex-1 truncate rounded-md bg-transparent px-1.5 py-0.5 font-serif text-lg outline-none hover:bg-foreground/[0.04] focus:bg-foreground/[0.04]"
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={() => void commit()}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") e.currentTarget.blur();
-        if (e.key === "Escape") {
-          setValue(stem(path));
-          e.currentTarget.blur();
-        }
-      }}
-    />
-  );
-}
-
-function SaveIndicator() {
-  const { saveState, active } = useVault();
-  if (!active) return null;
-  const label = saveState === "saving" ? "Saving…" : saveState === "error" ? "Not saved" : "Saved";
-  return (
-    <span role="status" className={`hidden text-xs sm:inline ${saveState === "error" ? "text-red-600" : "text-muted"}`}>
-      {label}
-    </span>
-  );
-}
-
-function EmptyState({ onCreate, onFind }: { onCreate(): void; onFind(): void }) {
-  return (
-    <div className="mx-auto mt-24 max-w-sm px-6 text-center">
-      <p className="mb-4 text-muted">No note is open.</p>
-      <div className="flex justify-center gap-2">
-        <button type="button" className="button-primary" onClick={onCreate}>
-          New note
-        </button>
-        <button type="button" className="button-secondary" onClick={onFind}>
-          Open a note…
-        </button>
-      </div>
-    </div>
-  );
-}
-
-
-function Toasts() {
-  const { error, clearError } = useVault();
-  const { notices, dismissNotices } = useSync();
-  useEffect(() => {
-    if (!error) return;
-    const t = setTimeout(clearError, 6000);
-    return () => clearTimeout(t);
-  }, [error, clearError]);
-
-  const toasts = [
-    ...(error ? [{ key: "error", text: error, tone: "error", dismiss: clearError }] : []),
-    ...notices.map((n, i) => ({ key: `n${i}`, text: n, tone: "info", dismiss: dismissNotices })),
-  ];
-  if (!toasts.length) return null;
-  return (
-    <div className="fixed right-4 bottom-4 z-50 flex max-w-sm flex-col gap-2">
-      {toasts.map((t) => (
-        <div
-          key={t.key}
-          role={t.tone === "error" ? "alert" : "status"}
-          className={`menu-panel flex items-start gap-3 px-4 py-3 text-sm ${
-            t.tone === "error" ? "border-red-300 dark:border-red-800" : ""
-          }`}
-        >
-          <span className="flex-1">{t.text}</span>
-          <button type="button" className="icon-button h-6 w-6" aria-label="Dismiss" onClick={t.dismiss}>
-            <X size={14} aria-hidden />
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
