@@ -5,6 +5,10 @@ import { ErrorBoundary } from "./ErrorBoundary";
 const RAIL = "3.25rem";
 
 /**
+ * Each column starts with a header row of the same height (HEADER, 48px) with a divider under it,
+ * so the repository name, the file name and the panel tabs line up across the window, and the
+ * collapsed rails' first icons sit on the same line.
+ *
  * The three-pane layout: repository sidebar on the left, editor in the middle, and a
  * context panel on the right. Either side can collapse to a slim rail of icons
  * (from md / lg up). Below md the sidebar is an overlay opened from the header.
@@ -48,7 +52,7 @@ export function AppShell({
         aria-label="Repository"
         className={`${
           sidebarOpen ? "fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] shadow-xl" : "hidden"
-        } min-h-0 min-w-0 flex-col border-r border-border bg-sidebar px-2.5 py-3 md:static md:z-auto md:w-auto md:max-w-none md:shadow-none ${
+        } min-h-0 min-w-0 flex-col border-r border-border bg-sidebar px-2.5 pb-3 md:static md:z-auto md:w-auto md:max-w-none md:shadow-none ${
           leftCollapsed ? "md:hidden" : "md:flex"
         }`}
       >
@@ -57,7 +61,7 @@ export function AppShell({
       {leftCollapsed && (
         <nav
           aria-label="Repository rail"
-          className="hidden min-h-0 flex-col items-center gap-1 border-r border-border bg-sidebar py-3 md:flex"
+          className="hidden min-h-0 flex-col items-center gap-1 border-r border-border bg-sidebar pt-1.5 pb-3 md:flex"
         >
           {leftRail}
         </nav>
@@ -68,14 +72,14 @@ export function AppShell({
       {rightCollapsed ? (
         <nav
           aria-label="Context rail"
-          className="hidden min-h-0 flex-col items-center gap-1 border-l border-border bg-background py-3 lg:flex"
+          className="hidden min-h-0 flex-col items-center gap-1 border-l border-border bg-background pt-1.5 pb-3 lg:flex"
         >
           {rightRail}
         </nav>
       ) : (
         <aside
           aria-label="Context"
-          className="hidden min-h-0 min-w-0 overflow-y-auto border-l border-border bg-background px-4 py-3 lg:block"
+          className="hidden min-h-0 min-w-0 overflow-y-auto border-l border-border bg-background px-4 pb-3 lg:block"
         >
           <ErrorBoundary name="The side panel">{panel}</ErrorBoundary>
         </aside>

@@ -26,13 +26,13 @@ export function VaultSwitcher({ onManage }: { onManage(): void }) {
 
   const Icon = active.kind === "github" ? FolderGit2 : HardDrive;
   return (
-    <div ref={ref} className="relative mb-3">
+    <div ref={ref} className="relative">
       <button
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Repository: ${active.name}. Switch repository`}
-        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left font-semibold tracking-tight text-[1.0625rem] hover:bg-foreground/[0.05]"
+        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left font-semibold tracking-tight text-[1.0625rem] hover:bg-foreground/[0.05]"
         onClick={() => setOpen((o) => !o)}
       >
         <Icon size={16} className="shrink-0 text-muted" aria-hidden />

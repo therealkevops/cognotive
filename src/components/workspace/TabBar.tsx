@@ -27,7 +27,7 @@ export function TabBar({
 }) {
   if (tabs.length < 2) return null;
   return (
-    <div className="flex items-center pr-2">
+    <div className="flex items-center border-b border-border pr-2">
     <div role="tablist" aria-label="Open notes" className="flex min-w-0 flex-1 gap-1 overflow-x-auto px-3 pt-1.5 pb-1">
       {tabs.map((path) => {
         const Icon = isDrawing(path) ? PenTool : isCanvas(path) ? LayoutDashboard : isImage(path) ? ImageIcon : FileText;

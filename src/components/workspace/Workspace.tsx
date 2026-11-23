@@ -603,13 +603,14 @@ export function Workspace() {
 
   const sidebar = (
     <>
-      <div className="flex items-start gap-1">
+      {/* The header row: the same height as the note's and the panel's, with a divider under it. */}
+      <div className="-mx-2.5 mb-3 flex h-12 shrink-0 items-center gap-1 border-b border-border px-2.5">
         <div className="min-w-0 flex-1">
           <VaultSwitcher onManage={() => setSettingsOpen("vaults")} />
         </div>
         <button
           type="button"
-          className="icon-button mt-1 hidden md:inline-flex"
+          className="icon-button hidden md:inline-flex"
           aria-label="Collapse sidebar"
           title="Collapse sidebar (Ctrl/Cmd+\)"
           onClick={() => setLeftCollapsed(true)}
@@ -1007,7 +1008,7 @@ export function Workspace() {
           panel={
             vault.active ? (
               <>
-                <div className="mb-4 flex items-center gap-1">
+                <div className="sticky top-0 z-10 -mx-4 mb-4 flex h-12 items-center gap-1 border-b border-border bg-background px-4">
                 <div role="tablist" aria-label="Note panels" className="segmented flex flex-1">
                   {(
                     [
@@ -1048,7 +1049,7 @@ export function Workspace() {
             ) : null
           }
         >
-          <header className="flex items-center gap-2 px-3 py-2">
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
             <button
               type="button"
               className="icon-button md:hidden"
@@ -1117,7 +1118,7 @@ export function Workspace() {
           </header>
           <TabBar tabs={visibleTabs} active={activePathNow} onSelect={(p) => void vault.open(p)} onClose={closeTab} onCloseAll={closeAllTabs} />
           {kind === "note" && mode !== "reading" && (
-            <div className="border-y border-border px-3 py-1">
+            <div className="border-b border-border px-3 py-1">
               <Toolbar view={view} />
             </div>
           )}
