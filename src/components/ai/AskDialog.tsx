@@ -23,6 +23,8 @@ export interface AskSource {
   from: number;
   to: number;
   text: string;
+  /** Asked straight away (typed after "/ask"). */
+  question?: string;
 }
 
 const QUICK = ["Explain this", "Summarise this", "What else in my notes relates to this?", "What's missing or unclear here?"];
@@ -116,6 +118,16 @@ export function AskDialog({
       if (ctrl.current === c) ctrl.current = null;
     }
   };
+
+  // "/ask what does this mean": ask it as the dialog opens.
+  const asked0 = useRef(false);
+  useEffect(() => {
+    if (asked0.current || !source.question) return;
+    asked0.current = true;
+    void ask(source.question);
+    // Once, for the question the dialog opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const saveAsNote = async () => {
     // A quick prompt names the note after the passage; a typed question after itself.

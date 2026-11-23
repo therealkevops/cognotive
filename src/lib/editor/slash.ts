@@ -33,7 +33,7 @@ export interface SlashCommand {
   label: string;
   /** What it does, shown beside the menu. */
   info: string;
-  section: "blocks" | "insert" | "tasks";
+  section: "blocks" | "insert" | "tasks" | "ai";
   /** Acts straight away. */
   run?: Apply;
   /** Takes what's typed after "/name " and offers ways to finish (first is the default). */
@@ -46,6 +46,7 @@ const SECTIONS: Record<SlashCommand["section"], CompletionSection> = {
   blocks: { name: "Blocks", rank: 0 },
   insert: { name: "Insert", rank: 1 },
   tasks: { name: "Tasks and dates", rank: 2 },
+  ai: { name: "AI", rank: 3 },
 };
 
 /* ---------- Edits ---------- */
@@ -414,6 +415,100 @@ export const SLASH_COMMANDS: SlashCommand[] = [
       ),
   },
 ];
+
+/* ---------- AI ---------- */
+
+/**
+ * The passage "/ask" is about: the paragraph the cursor is in (lines up to a blank line), or,
+ * typed on an empty line, the paragraph above it.
+ */
+export function passageAt(view: EditorView, pos: number): { from: number; to: number; text: string } | null {
+  const doc = view.state.doc;
+  let n = doc.lineAt(pos).number;
+  if (!doc.line(n).text.trim()) {
+    while (n > 1 && !doc.line(n).text.trim()) n--;
+    if (!doc.line(n).text.trim()) return null;
+  }
+  let first = n;
+  let last = n;
+  while (first > 1 && doc.line(first - 1).text.trim()) first--;
+  while (last < doc.lines && doc.line(last + 1).text.trim()) last++;
+  const raw = doc.sliceString(doc.line(first).from, doc.line(last).to);
+  const text = raw.trim();
+  if (!text) return null;
+  const from = doc.line(first).from + raw.indexOf(text);
+  return { from, to: from + text.length, text };
+}
+
+const QUICK_QUESTIONS = ["Explain this", "Summarise this", "What else in my notes relates to this?", "What's missing or unclear here?"];
+
+/** Removes what was typed, then asks about the paragraph there. */
+const askHere = (question?: string): Apply => (view, from, to) => {
+  replaceTyped(view, from, to, "");
+  const passage = passageAt(view, from);
+  if (passage) view.state.facet(linkHost)?.askAbout?.(passage, question);
+};
+
+const aiAction = (kind: Parameters<NonNullable<LinkHost["aiAction"]>>[0]): Apply => (view, from, to) => {
+  replaceTyped(view, from, to, "");
+  view.state.facet(linkHost)?.aiAction?.(kind);
+};
+
+const aiReady = (host: LinkHost | null) => !!host?.aiReady?.();
+
+SLASH_COMMANDS.push(
+  {
+    name: "ask",
+    aliases: ["ai", "question", "explain"],
+    label: "Ask AI about this paragraph",
+    info: "Asks about the paragraph you're in; type a question after it, e.g. /ask what does this mean",
+    section: "ai",
+    available: aiReady,
+    choices: (typed) =>
+      typed
+        ? [{ label: `Ask: ${typed.charAt(0).toUpperCase()}${typed.slice(1)}`, detail: "about this paragraph", apply: askHere(typed) }]
+        : [
+            { label: "Ask about this paragraph…", detail: "type or pick a question", apply: askHere() },
+            ...QUICK_QUESTIONS.map((q) => ({ label: q, apply: askHere(q) })),
+          ],
+  },
+  {
+    name: "summarise",
+    aliases: ["summarize", "summary", "tldr"],
+    label: "Summarise this note",
+    info: "The AI sums up the note's main points, decisions and open questions, in the chat",
+    section: "ai",
+    available: aiReady,
+    run: aiAction("summarise"),
+  },
+  {
+    name: "links",
+    aliases: ["connect", "linkify"],
+    label: "Suggest links",
+    info: "The AI proposes links to other notes; nothing changes until you apply them",
+    section: "ai",
+    available: aiReady,
+    run: aiAction("suggest-links"),
+  },
+  {
+    name: "tags",
+    aliases: ["properties", "autotag"],
+    label: "Suggest tags and properties",
+    info: "The AI proposes tags and properties, using the ones already in use",
+    section: "ai",
+    available: aiReady,
+    run: aiAction("suggest-properties"),
+  },
+  {
+    name: "review",
+    aliases: ["week", "weekly"],
+    label: "Review my week",
+    info: "What you worked on this week, from the notes you changed, in the chat",
+    section: "ai",
+    available: aiReady,
+    run: aiAction("daily-review"),
+  },
+);
 
 /** The starting live query: notes with a tag and a status, as a table (shared with the command palette). */
 export const QUERY_BLOCK = "```query\n#tag [status:active]\nshow: table status, due\nsort: due\n```";

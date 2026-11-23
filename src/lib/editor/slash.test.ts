@@ -123,4 +123,39 @@ describe("the / menu", () => {
     expect(choose("See /link‸", "Link to a note")).toBe("See [[]]");
     expect(choose("/embed‸", "Embed a note or image")).toBe("![[]]");
   });
+
+  it("offers AI commands only when AI is set up", () => {
+    expect(labels("/‸")).not.toContain("Summarise this note");
+    const calls: unknown[] = [];
+    const ai = { ...host, aiReady: () => true, askAbout: (p: unknown, q?: string) => calls.push(["ask", p, q]), aiAction: (k: string) => calls.push(["run", k]) } as LinkHost;
+    const make = (doc: string) => {
+      const pos = doc.indexOf("‸");
+      const state = EditorState.create({ doc: doc.replace("‸", ""), extensions: [markdown({ base: markdownLanguage, extensions: [FrontmatterSyntax, WikiLinkSyntax] }), linkHost.of(ai)] });
+      return { result: completeSlash(new CompletionContext(state, pos, false), NOW), state, pos };
+    };
+    const run = (doc: string, label: string) => {
+      const { result, state, pos } = make(doc);
+      const option = result!.options.find((o) => o.label === label)!;
+      const view = new EditorView({ state, parent: document.body });
+      views.push(view);
+      (option.apply as (v: EditorView, c: Completion, f: number, t: number) => void)(view, option, result!.from, pos);
+      return view.state.doc.toString();
+    };
+
+    const section = make("/‸").result!.options.filter((o) => typeof o.section === "object" && o.section.name === "AI").map((o) => o.label);
+    expect(section).toEqual(["Ask AI about this paragraph", "Summarise this note", "Suggest links", "Suggest tags and properties", "Review my week"]);
+
+    // /ask with a question: about the paragraph it's typed in, with the command taken out.
+    expect(run("Intro.\n\nTomatoes need sun.\nWater them daily. /ask why daily‸\n\nMore.", "Ask: Why daily")).toBe("Intro.\n\nTomatoes need sun.\nWater them daily. \n\nMore.");
+    expect(calls.at(-1)).toEqual(["ask", { from: 8, to: 44, text: "Tomatoes need sun.\nWater them daily." }, "why daily"]);
+    // On an empty line, the paragraph above.
+    expect(make("Tomatoes need sun.\n\n/ask ‸").result!.options.map((o) => o.label)[0]).toBe("Ask about this paragraph…");
+    run("Tomatoes need sun.\n\n/ask ‸", "Explain this");
+    expect(calls.at(-1)).toEqual(["ask", { from: 0, to: 18, text: "Tomatoes need sun." }, "Explain this"]);
+
+    expect(run("Notes /summarise‸", "Summarise this note")).toBe("Notes ");
+    expect(calls.at(-1)).toEqual(["run", "summarise"]);
+    run("/review‸", "Review my week");
+    expect(calls.at(-1)).toEqual(["run", "daily-review"]);
+  });
 });

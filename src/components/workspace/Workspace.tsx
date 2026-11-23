@@ -65,6 +65,7 @@ import { captureTarget, dailyNote, deletePropertyEverywhere, exportZip, importZi
 import { useEditorHosts } from "./useEditorHosts";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { placeBlock, QUERY_BLOCK } from "@/lib/editor/slash";
+import { useAiSetup } from "../ai/useAiSetup";
 
 const MarkdownEditor = dynamic(() => reloadOnChunkError(() => import("./MarkdownEditor"))(), { ssr: false });
 // Excalidraw is about 1 MB: loaded only when a drawing is opened.
@@ -484,6 +485,12 @@ export function Workspace() {
   useEffect(() => {
     askRef.current = askSelection;
   });
+  // AI for the "/" menu, kept current below (once actions are set up).
+  const aiRef = useRef<{
+    ready: boolean;
+    ask(passage: { from: number; to: number; text: string }, question?: string): void;
+    run(kind: "summarise" | "suggest-links" | "suggest-properties" | "daily-review"): void;
+  }>({ ready: false, ask() {}, run() {} });
   /** Replaces a passage (if it's still there) with `insert`. */
   const replacePassage = (src: AskSource, insert: string) => {
     if (!view || vault.active?.path !== src.path || view.state.sliceDoc(src.from, src.to) !== src.text) return;
@@ -517,7 +524,7 @@ export function Workspace() {
 
   const onLinkSelection = useCallback(() => setLinkPickerOpen(true), []);
   const onInsertTemplate = useCallback(() => setTemplatePicker("insert"), []);
-  const { inbound, propertyInfo, linkHost, linkContext, drawingVault, canvasVault } = useEditorHosts({ openLink, recent, onLinkSelection, onInsertTemplate, askRef });
+  const { inbound, propertyInfo, linkHost, linkContext, drawingVault, canvasVault } = useEditorHosts({ openLink, recent, onLinkSelection, onInsertTemplate, askRef, aiRef });
 
   const activePathNow = vault.active?.path ?? null;
   const kind = !activePathNow
@@ -776,6 +783,21 @@ export function Workspace() {
     setRightCollapsed(false);
   }, [setRightCollapsed]);
   const runAction = useRunAction(showChat);
+  const aiSetup = useAiSetup();
+  useEffect(() => {
+    aiRef.current = {
+      ready: aiSetup === null,
+      ask: (passage, question) => {
+        const path = vault.active?.path;
+        if (path) setAsking({ path, ...passage, ...(question ? { question } : {}) });
+      },
+      run: (kind) => {
+        const path = vault.active?.path;
+        if (kind === "daily-review") runAction({ kind });
+        else if (path && isNote(path)) runAction({ kind, path });
+      },
+    };
+  });
   usePairFromLink(() => setSettingsOpen("ai"));
   const currentHealth = () => {
     const mtimes = new Map(vault.entries.map((e) => [e.path, e.mtime]));

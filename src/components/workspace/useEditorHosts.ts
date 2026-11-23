@@ -35,6 +35,7 @@ export function useEditorHosts({
   onLinkSelection,
   onInsertTemplate,
   askRef,
+  aiRef,
 }: {
   openLink(target: string, heading?: string, how?: OpenHow): Promise<void> | void;
   recent: string[];
@@ -44,6 +45,12 @@ export function useEditorHosts({
   onInsertTemplate(): void;
   /** Opens "Ask" on the editor's selection (a ref, so the host needn't change with it). */
   askRef: RefObject<() => void>;
+  /** AI for the "/" menu: whether it's ready, and what asking and actions do (a ref, read when used). */
+  aiRef: RefObject<{
+    ready: boolean;
+    ask(passage: { from: number; to: number; text: string }, question?: string): void;
+    run(kind: "summarise" | "suggest-links" | "suggest-properties" | "daily-review"): void;
+  }>;
 }) {
   const vault = useVault();
 
@@ -109,6 +116,9 @@ export function useEditorHosts({
       linkSelection: () => onLinkSelection(),
       askSelection: () => askRef.current(),
       insertTemplate: () => onInsertTemplate(),
+      aiReady: () => aiRef.current.ready,
+      askAbout: (passage, question) => aiRef.current.ask(passage, question),
+      aiAction: (kind) => aiRef.current.run(kind),
       newDrawing: async () => {
         const path = uniquePath(joinPath(vault.settings.attachmentFolder, "Drawing.excalidraw"), vault.exists);
         await vault.writeFile(path, EMPTY_DRAWING);
@@ -184,7 +194,7 @@ export function useEditorHosts({
       },
       propertyInfo,
     }),
-    [vault, openLink, recent, inbound, propertyInfo, runQueryBlock, onLinkSelection, onInsertTemplate, askRef],
+    [vault, openLink, recent, inbound, propertyInfo, runQueryBlock, onLinkSelection, onInsertTemplate, askRef, aiRef],
   );
 
   // What a drawing needs to link to notes and place vault pictures, as in Obsidian.

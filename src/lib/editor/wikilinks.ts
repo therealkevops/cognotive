@@ -64,6 +64,12 @@ export interface LinkHost {
   insertTemplate?(): void;
   /** The link to the daily note for a date, in the repository's link format ("/daily"). */
   dailyNoteLink?(date: Date): string;
+  /** Whether AI is set up, so the "/" menu offers its commands. */
+  aiReady?(): boolean;
+  /** Opens "Ask" on a passage (and asks `question` straight away, if given). */
+  askAbout?(passage: { from: number; to: number; text: string }, question?: string): void;
+  /** Runs an AI action on the open note (or, for the review, the repository) in the chat. */
+  aiAction?(kind: "summarise" | "suggest-links" | "suggest-properties" | "daily-review"): void;
   /** Asks the AI about the selection (Ctrl/Cmd+Shift+Enter; Ctrl+Shift+A is taken by Chrome's tab search). */
   askSelection?(): void;
   headings(path: string): string[];

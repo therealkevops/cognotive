@@ -181,6 +181,10 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
     `[due:: 2026-11-24]`; `/date` inserts a plain date and `/daily this fri` links that day's
     daily note. "next tue" means Tuesday of next week. In live preview task fields read as
     "Due Tue 24 Nov" and "High priority". A slash in "24/11" or "and/or" is left alone
+  - *AI* (once AI is set up in Settings): `/ask` asks about the paragraph you're in (type a
+    question after it, `/ask what does this mean`, or pick a quick one), `/summarise`, `/links`
+    (suggest links), `/tags` (suggest tags and properties) and `/review` (your week). Changes the AI
+    proposes still wait for you to apply them
 - Tabs for open files (the button at the end of the tab bar, or the command *Close all tabs*, closes them all), and a side pane to read one note while writing another (the columns
   button in the file tree, or Shift+Enter in the quick switcher)
 - Version history for repositories synced with GitHub: see how a note changed and restore an older version
