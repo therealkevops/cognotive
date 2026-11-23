@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { splitFrontmatter } from "./frontmatter";
-import { renderMarkdown } from "./render";
+import { loadRendererExtras, renderMarkdown } from "./render";
+
+// KaTeX and the highlighter normally load on first need; here they are loaded up front.
+beforeAll(() => loadRendererExtras());
 
 describe("renderMarkdown", () => {
   it("renders GFM: tables, task lists, strikethrough, autolinks", () => {

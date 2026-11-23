@@ -12,6 +12,7 @@ import { formatLink } from "@/lib/links/format";
 import { todayStamp } from "@/lib/links/health";
 import type { LinkContext } from "@/lib/markdown/remark-links";
 import { renderMarkdown } from "@/lib/markdown/render";
+import { useRendererVersion } from "@/lib/markdown/use-renderer";
 import { displayName, joinPath, noteTitle, uniquePath } from "@/lib/vault/paths";
 import { Modal } from "../workspace/Modal";
 import { useVault } from "../vault/useVault";
@@ -66,7 +67,9 @@ export function AskDialog({
   useEffect(() => () => ctrl.current?.abort(), []);
 
   const encrypted = vaultConfig.kind === "github" && !!vaultConfig.encrypted;
-  const html = useMemo(() => (answer ? renderMarkdown(answer, links) : ""), [answer, links]);
+  const extras = useRendererVersion();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- drawn again once KaTeX or the highlighter loads
+  const html = useMemo(() => (answer ? renderMarkdown(answer, links) : ""), [answer, links, extras]);
 
   const ask = async (q: string) => {
     const text = q.trim();

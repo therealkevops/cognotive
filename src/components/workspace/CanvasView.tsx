@@ -80,6 +80,7 @@ import { CANVAS_VIEW_EVENT, GRID_GAP, loadCanvasView, saveCanvasView, type Canva
 import { openHow, type OpenHow } from "@/lib/links/open";
 import { splitLinkText } from "@/lib/links/parse";
 import { renderMarkdown } from "@/lib/markdown/render";
+import { useRendererVersion } from "@/lib/markdown/use-renderer";
 import type { LinkContext } from "@/lib/markdown/remark-links";
 import { TREE_DRAG_TYPE } from "@/lib/vault/drag";
 import { basename, isCanvas, isDrawing, isImage, isNote } from "@/lib/vault/paths";
@@ -1261,7 +1262,12 @@ function TextCard({ id, data, selected }: NodeProps<CardNode>) {
   const isEditing = editing === id;
   const short = (compact || titleOnly(c)) && !isEditing;
   const [draft, setDraft] = useState(c.text);
-  const html = useMemo(() => (isEditing || short ? "" : renderMarkdown(c.text, vault.links)), [c.text, isEditing, short, vault.links]);
+  const extras = useRendererVersion();
+  const html = useMemo(
+    () => (isEditing || short ? "" : renderMarkdown(c.text, vault.links)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- drawn again once KaTeX or the highlighter loads
+    [c.text, isEditing, short, vault.links, extras],
+  );
   const ref = useRef<HTMLDivElement>(null);
   useAssets(ref, html);
   useFade(ref, html);
@@ -1329,9 +1335,11 @@ function FileCard({ id, data, selected }: NodeProps<CardNode>) {
   );
   // The card's header already shows the title: leave out a first heading that only repeats it.
   const short = (compact || titleOnly(c)) && !picture;
+  const extras = useRendererVersion();
   const html = useMemo(
     () => (preview && !short ? renderMarkdown(withoutTitle(preview.markdown, preview.title), vault.links) : ""),
-    [preview, short, vault.links],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- drawn again once KaTeX or the highlighter loads
+    [preview, short, vault.links, extras],
   );
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {

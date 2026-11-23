@@ -178,8 +178,8 @@ export function useEditorHosts({
         return paths.map((p) => vault.links.linkText(p));
       },
       renderHtml: async (md) => {
-        const { renderMarkdown } = await import("@/lib/markdown/render");
-        return renderMarkdown(md, {
+        const { renderMarkdownReady } = await import("@/lib/markdown/render");
+        return renderMarkdownReady(md, {
           resolve: (t) => vault.links.resolve(t, vault.active?.path),
           read: (p) => vault.links.content(p),
         });

@@ -15,6 +15,7 @@ import { useAiSettings } from "@/lib/ai/useAiSettings";
 import { splitLinkText } from "@/lib/links/parse";
 import type { LinkContext } from "@/lib/markdown/remark-links";
 import { renderMarkdown } from "@/lib/markdown/render";
+import { useRendererVersion } from "@/lib/markdown/use-renderer";
 import { displayName, isNote } from "@/lib/vault/paths";
 import { useVault } from "../vault/useVault";
 
@@ -251,7 +252,12 @@ function Turn({
   onRetry(): void;
   onOpen(path: string): void;
 }) {
-  const html = useMemo(() => (turn.role === "assistant" && turn.content ? renderMarkdown(turn.content, links) : ""), [turn.role, turn.content, links]);
+  const extras = useRendererVersion();
+  const html = useMemo(
+    () => (turn.role === "assistant" && turn.content ? renderMarkdown(turn.content, links) : ""),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- drawn again once KaTeX or the highlighter loads
+    [turn.role, turn.content, links, extras],
+  );
   if (turn.role === "user") {
     return (
       <div className="ml-6 rounded-lg bg-accent/10 px-3 py-2 whitespace-pre-wrap" data-role="user">

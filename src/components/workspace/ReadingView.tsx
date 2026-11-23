@@ -1,11 +1,11 @@
 "use client";
 
-import "katex/dist/katex.min.css";
 import { useEffect, useMemo, useRef, type MouseEvent } from "react";
 import { openHow, type OpenHow } from "@/lib/links/open";
 import { splitLinkText } from "@/lib/links/parse";
 import { isDark } from "@/lib/appearance";
 import { renderMarkdown } from "@/lib/markdown/render";
+import { useRendererVersion } from "@/lib/markdown/use-renderer";
 import type { LinkContext } from "@/lib/markdown/remark-links";
 import type { PropertyInfo } from "@/lib/editor/properties";
 import { PropertiesEditor } from "./PropertiesEditor";
@@ -69,7 +69,9 @@ export default function ReadingView({
   fileUrl,
   onOpenFile,
 }: ReadingViewProps) {
-  const html = useMemo(() => renderMarkdown(markdown, links), [markdown, links]);
+  const extras = useRendererVersion();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- drawn again once KaTeX or the highlighter loads
+  const html = useMemo(() => renderMarkdown(markdown, links), [markdown, links, extras]);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
