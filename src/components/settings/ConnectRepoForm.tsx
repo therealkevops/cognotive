@@ -191,7 +191,7 @@ export function ConnectRepoForm({ onDone }: { onDone(): void }) {
       <h4 className="font-serif text-lg">Connect a GitHub repository</h4>
       <div className="space-y-3">
         <p className="text-sm text-muted">
-          k-note syncs with a GitHub token that can only reach the repositories you pick.
+          CogNotive.ai syncs with a GitHub token that can only reach the repositories you pick.
         </p>
         {pat ? (
           <p className="flex items-center justify-between gap-2 text-sm">

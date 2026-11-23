@@ -68,7 +68,7 @@ export function collectPropertyInfo(index: LinkIndex, types: Record<string, Prop
 
 type Kind = PropertyType;
 
-/** Properties k-note understands. */
+/** Properties CogNotive.ai understands. */
 export const PROPERTY_DOCS: Record<string, { kind: Kind; doc: string }> = {
   tags: { kind: "list", doc: "Tags for the note, as in tags: [idea, work]. Same as writing #idea in the text." },
   aliases: { kind: "list", doc: "Other names for the note. [[Links]] and the quick switcher find it by these too." },

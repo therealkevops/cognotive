@@ -80,7 +80,7 @@ test("a change that clashes with an edit made since isn't applied", async ({ pag
   await setUp(page, llm);
   await page.getByRole("button", { name: "Close settings" }).click();
   llm.script = [
-    { calls: [{ name: "edit_note", args: { path: "Welcome", find: "# Welcome to k-note", replace: "# Welcome, gardener" } }] },
+    { calls: [{ name: "edit_note", args: { path: "Welcome", find: "# Welcome to CogNotive.ai", replace: "# Welcome, gardener" } }] },
     { calls: [{ name: "edit_note", args: { path: "Welcome", find: "## Formatting", replace: "## Formatting basics" } }] },
     "Done.",
   ];
@@ -89,10 +89,10 @@ test("a change that clashes with an edit made since isn't applied", async ({ pag
   await expect(changes.getByRole("listitem")).toHaveCount(2);
 
   // Meanwhile, the title is edited by hand.
-  await editor(page).getByText("# Welcome to k-note").click();
+  await editor(page).getByText("# Welcome to CogNotive.ai").click();
   await page.keyboard.press("End");
   await page.keyboard.type("!");
-  await expect(editor(page)).toContainText("# Welcome to k-note!");
+  await expect(editor(page)).toContainText("# Welcome to CogNotive.ai!");
   await expect(page.getByText("Saved", { exact: true })).toBeVisible();
 
   const [title, heading] = [changes.getByRole("listitem").nth(0), changes.getByRole("listitem").nth(1)];
@@ -101,7 +101,7 @@ test("a change that clashes with an edit made since isn't applied", async ({ pag
   // The other change merges onto the edit.
   await heading.getByRole("button", { name: "Apply" }).click();
   await expect(heading).toContainText("Applied");
-  await expect(editor(page)).toContainText("# Welcome to k-note!");
+  await expect(editor(page)).toContainText("# Welcome to CogNotive.ai!");
   await expect(editor(page)).toContainText("## Formatting basics");
 });
 

@@ -27,7 +27,7 @@ export class FakeLLM {
   localModels = ["llama3.2:latest", "qwen3:8b"];
   /** The local server refuses tools, as Ollama does for models without tool support. */
   localNoTools = false;
-  /** The k-note bridge on 127.0.0.1:41414: whether it's running, and its pairing code. */
+  /** The CogNotive.ai bridge on 127.0.0.1:41414: whether it's running, and its pairing code. */
   bridgeRunning = false;
   bridgeCode = "c0de".repeat(12);
   /** Replies used in order before falling back to `reply`. */
@@ -70,7 +70,7 @@ export class FakeLLM {
     // request (sent without an Origin header) still gets through.
     if (host === "local" && this.localBlocksOrigin && req.headers()["origin"]) return route.abort("failed");
     const auth = req.headers()["authorization"];
-    if (host === "bridge" && path === "/bridge/ping") return json({ ok: true, name: "k-note-bridge", version: "0.1.0" });
+    if (host === "bridge" && path === "/bridge/ping") return json({ ok: true, name: "cognotive-bridge", version: "0.1.0" });
     const keyOk =
       host === "local" || (host === "bridge" ? auth === `Bearer ${this.bridgeCode}` : auth && this.keys.has(auth.replace(/^Bearer /, "")));
     if (host === "bridge" && !keyOk) return json({ error: { message: "Wrong pairing code.", code: "unauthorized" } }, 401);

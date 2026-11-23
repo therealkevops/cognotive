@@ -7,7 +7,7 @@ import { cacheUsage, removeModel, repositoryUsage, storageParts, type Repository
 import { useVaults } from "../vault/useVaults";
 import { Group, Row, SectionHeader } from "./parts";
 
-/* What k-note keeps in this browser, and whether the browser will keep it. */
+/* What CogNotive.ai keeps in this browser, and whether the browser will keep it. */
 
 const COLOURS: Record<StoragePart["id"], string> = {
   notes: "var(--series-1)",
@@ -57,7 +57,7 @@ export function StorageSection() {
 
   return (
     <section aria-label="Storage">
-      <SectionHeader title="Storage" description="What k-note keeps in this browser on this device." />
+      <SectionHeader title="Storage" description="What CogNotive.ai keeps in this browser on this device." />
       {error ? (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           Couldn&apos;t measure the storage: {error}

@@ -5,13 +5,13 @@ import os from "node:os";
 import path from "node:path";
 
 /**
- * Where the bridge keeps its pairing code: ~/.k-note (or K_NOTE_HOME). A ~/.noted-ai left by
+ * Where the bridge keeps its pairing code: ~/.cognotive (or COGNOTIVE_HOME). A ~/.noted-ai left by
  * the app's earlier name is still used, so an existing pairing keeps working.
  */
 export function bridgeHome(env: Record<string, string | undefined> = process.env, home = os.homedir()): string {
-  const set = env.K_NOTE_HOME || env.NOTED_AI_HOME;
+  const set = env.COGNOTIVE_HOME || env.NOTED_AI_HOME;
   if (set) return set;
-  const current = path.join(home, ".k-note");
+  const current = path.join(home, ".cognotive");
   const earlier = path.join(home, ".noted-ai");
   return !existsSync(current) && existsSync(earlier) ? earlier : current;
 }

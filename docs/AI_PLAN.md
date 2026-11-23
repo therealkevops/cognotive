@@ -1,6 +1,6 @@
-# k-note: AI and agent plan
+# CogNotive.ai: AI and agent plan
 
-How to bring agentic AI into k-note, borrowing the provider design of
+How to bring agentic AI into CogNotive.ai, borrowing the provider design of
 [Rabbithole](https://github.com/shlokkhemani/rabbithole) (OpenRouter, a local AI server, or any
 OpenAI-compatible endpoint, called straight from the browser) and building the agent on the
 repository's own structure: links, hubs, properties, tags and health checks.
@@ -23,10 +23,10 @@ a server-side Claude proxy with a key held on Vercel.
 
 ## 1. What we take from Rabbithole
 
-Rabbithole's web app is a static site, like k-note, and calls models directly from the browser.
+Rabbithole's web app is a static site, like CogNotive.ai, and calls models directly from the browser.
 The parts worth copying (in `src/web/provider/` and `src/web/settings/` of that repository):
 
-| Rabbithole | What it does | In k-note |
+| Rabbithole | What it does | In CogNotive.ai |
 |---|---|---|
 | `provider-registry.js` | A few provider presets, all speaking the **OpenAI-compatible** Chat Completions API: OpenRouter (`https://openrouter.ai/api/v1`, key required), Local (`http://localhost:11434/v1`, Ollama's default, no key), Custom (any base URL, optional key), and a subscription bridge. Each preset keeps its own model and settings, so switching back restores them. | Same presets and per-preset settings. |
 | `openai-compatible.js` | One provider class: `POST {base}/chat/completions` with `stream: true`, parses SSE `data:` lines, adds OpenRouter's `HTTP-Referer` / `X-Title` headers, turns 401/429 into plain-English errors. | Same, plus **tool calls** (Rabbithole doesn't need them). |
@@ -36,7 +36,7 @@ The parts worth copying (in `src/web/provider/` and `src/web/settings/` of that 
 | `credential-store.js`, `key-validation.js` | Keys only on this device, per provider, optionally for this session only; OpenRouter keys checked with `GET /key`; spots an Anthropic or OpenAI key pasted in the wrong place. | Same rules, kept in IndexedDB like GitHub tokens. |
 | `src/node/bridge/` | `npx … bridge`: a loopback-only server that lets the page use a signed-in Claude Code or Codex subscription through an OpenAI-compatible endpoint, with a pairing token and origin checks. | **Later** (phase E): the same idea, plus an MCP server so Claude Code can work with the notes directly. |
 
-What we *don't* copy: Rabbithole's branching-canvas document model. k-note already has notes,
+What we *don't* copy: Rabbithole's branching-canvas document model. CogNotive.ai already has notes,
 links and canvases, and the agent's results go into those.
 
 ---
@@ -67,7 +67,7 @@ links and canvases, and the agent's results go into those.
 ## 3. Architecture
 
 ```
-Browser (k-note)
+Browser (CogNotive.ai)
 ├─ AI settings (Settings → AI): provider preset, base URL, model, key (IndexedDB)
 ├─ Provider: OpenAI-compatible client ─────────────► openrouter.ai/api/v1
 │    stream: true, tools, abort                  ├──► localhost:11434/v1 (Ollama)
@@ -100,7 +100,7 @@ New code, in the existing layout:
 
 ### The agent loop
 
-1. Build messages: a short system prompt (what k-note is, the open note's path, how to cite),
+1. Build messages: a short system prompt (what CogNotive.ai is, the open note's path, how to cite),
    the conversation, and the tool schemas.
 2. Stream one completion. Text goes to the chat as it arrives; `tool_calls` are collected.
 3. Run each tool call in the browser. Reads return results straight away; writes become pending
@@ -153,7 +153,7 @@ ask about the repository ("what have I written about X, and how does it connect 
 cited notes. Context chips show what's included: the open note, a selection, a hub, search
 results. Conversations can be saved as a note (`AI/2026-11-18 Question.md`) so they sync.
 
-**Ask anywhere** (Rabbithole's idea, k-note style): select text in a note and choose **Ask** (or
+**Ask anywhere** (Rabbithole's idea, CogNotive.ai style): select text in a note and choose **Ask** (or
 Ctrl/Cmd+Shift+A). The answer streams into a popover; **Save as note** makes it a new note linked
 from the selection, so explorations become part of the graph instead of disappearing.
 
@@ -203,7 +203,7 @@ Each phase is a branch, tested with the fake LLM server, merged on request.
 | **B. Read agent** | Tool loop, read tools, citations, "Read N notes", fallback for models without tools, context fitting | "What have I written about X?" is answered from several notes, with working citations |
 | **C. Write proposals** | Write tools, Changes tray with diffs, apply/reject, save chat as note, ask-anywhere with Save as note | The agent can draft a hub or add links, and nothing changes until you apply it |
 | **D. Agent actions** | The actions in section 4, wired into Connections, Properties, Repository health, hubs, Today | Each action works end to end on a sample repository |
-| **E. Bridge and MCP (optional)** | A small local companion (`npx k-note bridge`): use a Claude Code or Codex subscription via a loopback OpenAI-compatible endpoint (as Rabbithole does), and an MCP server that exposes the same tools so Claude Code can work with a local clone of the repository | Claude Code can answer from and propose changes to your notes |
+| **E. Bridge and MCP (optional)** | A small local companion (`npx cognotive bridge`): use a Claude Code or Codex subscription via a loopback OpenAI-compatible endpoint (as Rabbithole does), and an MCP server that exposes the same tools so Claude Code can work with a local clone of the repository | Claude Code can answer from and propose changes to your notes |
 
 Phases A and B are the core; C makes it agentic; D is where it pays off day to day.
 

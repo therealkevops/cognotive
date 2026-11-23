@@ -58,7 +58,7 @@ export function AppRoot() {
     if (!asksUser()) void requestPersistence();
   }, []);
   return (
-    <ErrorBoundary name="k-note" page>
+    <ErrorBoundary name="CogNotive.ai" page>
       <VaultsProvider>
         <ClientOnlyVaults />
       </VaultsProvider>

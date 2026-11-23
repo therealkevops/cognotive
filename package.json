@@ -1,5 +1,5 @@
 {
-  "name": "k-note",
+  "name": "cognotive",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -15,8 +15,8 @@
     "test:e2e": "playwright test",
     "check": "npm run lint && npm run typecheck && npm test",
     "build:bridge": "node scripts/build-bridge.mjs",
-    "bridge": "node scripts/build-bridge.mjs && node bridge/dist/k-note.mjs bridge",
-    "mcp": "node scripts/build-bridge.mjs && node bridge/dist/k-note.mjs mcp"
+    "bridge": "node scripts/build-bridge.mjs && node bridge/dist/cognotive.mjs bridge",
+    "mcp": "node scripts/build-bridge.mjs && node bridge/dist/cognotive.mjs mcp"
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.20.4",
@@ -73,7 +73,6 @@
     "eslint-config-next": "16.4.6",
     "fake-indexeddb": "6.2.8",
     "jsdom": "31.0.1",
-    "opentype.js": "^1.3.4",
     "rolldown": "1.2.19",
     "tailwindcss": "4.3.3",
     "typescript": "^5",

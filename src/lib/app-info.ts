@@ -1,5 +1,5 @@
 /** Static facts about the running build, shared by the UI and /api/health. */
-export const APP_NAME = "k-note";
+export const APP_NAME = "CogNotive.ai";
 
 type Env = Record<string, string | undefined>;
 

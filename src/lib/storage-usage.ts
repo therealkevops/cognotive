@@ -3,7 +3,7 @@ import type { StoredNote } from "./semantic/semantic-index";
 import { LocalStore, type StoreUsage } from "./vault/local-store";
 import { conflictDbName } from "./sync/conflicts";
 
-/* What k-note keeps in this browser, measured part by part for Settings → Storage. */
+/* What CogNotive.ai keeps in this browser, measured part by part for Settings → Storage. */
 
 /** Where transformers.js keeps the search model and its runtime once downloaded from this app. */
 export const MODEL_CACHE = "transformers-cache";
@@ -116,7 +116,7 @@ async function responseBytes(res: Response): Promise<number> {
   return (await res.blob()).size;
 }
 
-/** The browser caches k-note uses (Cache Storage), by purpose. */
+/** The browser caches CogNotive.ai uses (Cache Storage), by purpose. */
 export async function cacheUsage(): Promise<CacheUsage> {
   const out: CacheUsage = { model: 0, app: 0, shared: 0 };
   if (typeof caches === "undefined") return out;

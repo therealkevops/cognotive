@@ -39,9 +39,9 @@ test("double-click adds a text card whose [[links]] count as backlinks", async (
 test("note cards, a labelled arrow between them, and it all survives a reload", async ({ page }) => {
   await newCanvas(page);
   await addNote(page, "Welcome");
-  await expect(card(page, "Welcome to k-note")).toBeVisible();
+  await expect(card(page, "Welcome to CogNotive.ai")).toBeVisible();
   // Move the first card aside so the second doesn't land on top of it.
-  const first = card(page, "Welcome to k-note");
+  const first = card(page, "Welcome to CogNotive.ai");
   const fb = (await first.boundingBox())!;
   // Grab the card body (the title bar is a button that opens the note).
   await page.mouse.move(fb.x + fb.width / 2, fb.y + 80);
@@ -90,14 +90,14 @@ test("note cards, a labelled arrow between them, and it all survives a reload", 
   // Reload: the canvas comes back as it was.
   await page.reload();
   await tree(page).getByRole("treeitem", { name: "Canvas" }).click();
-  await expect(card(page, "Welcome to k-note")).toBeVisible();
+  await expect(card(page, "Welcome to CogNotive.ai")).toBeVisible();
   await expect(board(page).locator(".canvas-edge-label")).toHaveText("supports");
 });
 
 test("grouping cards, and moving the group moves them", async ({ page }) => {
   await newCanvas(page);
   await addNote(page, "Welcome");
-  const note = card(page, "Welcome to k-note");
+  const note = card(page, "Welcome to CogNotive.ai");
   await expect(note).toBeVisible();
   // It's selected after adding; group it.
   await page.getByRole("button", { name: "Group the selected cards" }).click();

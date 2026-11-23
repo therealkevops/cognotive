@@ -44,7 +44,7 @@ export const PROVIDERS: Record<ProviderId, ProviderPreset> = {
   bridge: {
     id: "bridge",
     label: "Claude plan",
-    description: "Your Claude subscription, through Claude Code on this computer and the k-note bridge. No API key.",
+    description: "Your Claude subscription, through Claude Code on this computer and the CogNotive.ai bridge. No API key.",
     baseUrl: "http://127.0.0.1:41414/v1",
     requiresKey: true,
     allowsKey: true,

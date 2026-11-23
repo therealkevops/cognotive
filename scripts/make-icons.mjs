@@ -1,54 +1,62 @@
-// Draws the k-note icons and renders them to the PNG sizes the web app manifest and iOS need.
-// The logo is a periodic-table tile: "Kn" with an atomic number (11: k is the 11th letter)
-// and the name below it. Letters are drawn from the Geist font (bundled with Next.js) as
-// paths, so the icon looks the same everywhere, whatever fonts a device has.
-// Run with: node scripts/make-icons.mjs  (uses opentype.js and the Playwright browser)
+// Draws the CogNotive.ai icons and renders them to the PNG sizes the web app manifest and iOS
+// need. The logo is a cog (cognition), drawn from geometry so it looks the same everywhere;
+// the browser-tab version is bolder, to stay readable at 16px. Run with: node scripts/make-icons.mjs  (uses the Playwright browser)
 import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
-const opentype = require("opentype.js");
-const font = opentype.loadSync(require.resolve("next/dist/compiled/@vercel/og/Geist-Regular.ttf"));
 
 const INK = "#1f1e1d";
 const PAPER = "#faf9f5";
-const CLAY = "#c96442";
-const NUMBER = "11";
 
-/** Text as a path, placed by its centre (or its left edge), on a baseline. */
-function text(str, size, { x, y, anchor = "middle" }) {
-  const probe = font.getPath(str, 0, 0, size).getBoundingBox();
-  const left = anchor === "middle" ? x - (probe.x1 + probe.x2) / 2 : x - probe.x1;
-  return font.getPath(str, left, y, size).toPathData(2);
+const f = (n) => Number(n.toFixed(2));
+const at = (cx, cy, radius, angle) => `${f(cx + radius * Math.cos(angle))} ${f(cy + radius * Math.sin(angle))}`;
+
+/**
+ * A cog as one path: `teeth` teeth reaching from radius `root` to `tip`, with a round hole of
+ * radius `hole` (drawn with fill-rule evenodd). Tooth sides taper slightly, as on a real gear.
+ */
+function cog(cx, cy, { teeth, tip, root, hole }) {
+  const pitch = (2 * Math.PI) / teeth;
+  const tipHalf = pitch * 0.2;
+  const baseHalf = pitch * 0.27;
+  let d = "";
+  for (let i = 0; i < teeth; i++) {
+    const a = i * pitch - Math.PI / 2;
+    d += `${i === 0 ? "M" : "L"}${at(cx, cy, root, a - baseHalf)} `;
+    d += `L${at(cx, cy, tip, a - tipHalf)} `;
+    d += `A${tip} ${tip} 0 0 1 ${at(cx, cy, tip, a + tipHalf)} `;
+    d += `L${at(cx, cy, root, a + baseHalf)} `;
+    d += `A${root} ${root} 0 0 1 ${at(cx, cy, root, a + pitch - baseHalf)} `;
+  }
+  d += `Z M${f(cx + hole)} ${cy} A${hole} ${hole} 0 1 0 ${f(cx - hole)} ${cy} A${hole} ${hole} 0 1 0 ${f(cx + hole)} ${cy} Z`;
+  return d;
 }
 
-// The app icon, 512 × 512: a clay-edged tile on ink.
+// The app icon, 512 × 512: a paper cog on ink.
 const icon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" rx="112" fill="${INK}"/>
-  <!-- k-note as an element: atomic number, symbol and name. Drawn by scripts/make-icons.mjs. -->
-  <rect x="80" y="80" width="352" height="352" rx="30" fill="none" stroke="${CLAY}" stroke-width="12"/>
-  <path d="${text(NUMBER, 50, { x: 116, y: 146, anchor: "start" })}" fill="${PAPER}" fill-opacity="0.8"/>
-  <path d="${text("Kn", 186, { x: 256, y: 326 })}" fill="${PAPER}" stroke="${PAPER}" stroke-width="7" stroke-linejoin="round"/>
-  <path d="${text("k-note", 44, { x: 256, y: 392 })}" fill="${PAPER}" fill-opacity="0.75"/>
+  <!-- CogNotive.ai: a cog. Drawn by scripts/make-icons.mjs. -->
+  <path d="${cog(256, 256, { teeth: 8, tip: 176, root: 138, hole: 82 })}" fill="${PAPER}" fill-rule="evenodd" stroke="${PAPER}" stroke-width="10" stroke-linejoin="round"/>
 </svg>
 `;
 writeFileSync(new URL("../public/icons/icon.svg", import.meta.url), icon);
 
-// The browser-tab icon, 64 × 64: just the symbol, bold enough for 16px. It flips to paper
-// in dark browser themes so it doesn't vanish on a dark tab bar.
+// The browser-tab icon, 64 × 64: the cog alone, bold enough for 16px. It flips to paper in
+// dark browser themes so it doesn't vanish on a dark tab bar.
 const favicon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- "Kn", the k-note symbol, readable at 16px. Drawn by scripts/make-icons.mjs. -->
+  <!-- The CogNotive.ai cog, readable at 16px. Drawn by scripts/make-icons.mjs. -->
   <style>
     .bg { fill: ${INK}; }
-    .kn { fill: ${PAPER}; stroke: ${PAPER}; }
+    .cog { fill: ${PAPER}; stroke: ${PAPER}; }
     @media (prefers-color-scheme: dark) {
       .bg { fill: ${PAPER}; }
-      .kn { fill: ${INK}; stroke: ${INK}; }
+      .cog { fill: ${INK}; stroke: ${INK}; }
     }
   </style>
   <rect class="bg" width="64" height="64" rx="14"/>
-  <path class="kn" d="${text("Kn", 36, { x: 32, y: 45 })}" stroke-width="2.6" stroke-linejoin="round"/>
+  <path class="cog" d="${cog(32, 32, { teeth: 8, tip: 24, root: 18.5, hole: 8.5 })}" fill-rule="evenodd" stroke-width="1.5" stroke-linejoin="round"/>
 </svg>
 `;
 writeFileSync(new URL("../public/icons/favicon.svg", import.meta.url), favicon);

@@ -1,6 +1,6 @@
 @AGENTS.md
 
-# k-note
+# CogNotive.ai
 
 - Design and roadmap: `docs/PLAN.md`; AI and agent features: `docs/AI_PLAN.md`. Read the relevant
   one before starting a phase.

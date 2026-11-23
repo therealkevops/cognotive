@@ -117,7 +117,7 @@ export function claudeRunner({ command = ["claude"], env = process.env }: { comm
     async run({ model, system, prompt, signal, onDelta }) {
       if (signal?.aborted) throw new BridgeError("Stopped.", 499, "aborted");
       // A fresh, empty folder per turn: nothing for Claude Code to read.
-      const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "k-note-bridge-"));
+      const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "cognotive-bridge-"));
       try {
         const args = [
           "-p",

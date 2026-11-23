@@ -8,7 +8,7 @@ import { NoteFolder } from "./folder";
 import { mcpServer } from "./mcp";
 
 function folderWith(files: Record<string, string>) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "k-note-mcp-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "cognotive-mcp-"));
   for (const [p, c] of Object.entries(files)) {
     fs.mkdirSync(path.dirname(path.join(root, p)), { recursive: true });
     fs.writeFileSync(path.join(root, p), c);
@@ -32,7 +32,7 @@ describe("MCP server", () => {
   it("introduces itself and lists the tools", async () => {
     const s = mcpServer(new NoteFolder(folderWith(files)), { version: "1.0" });
     const init = (await s.handle({ jsonrpc: "2.0", id: 0, method: "initialize", params: { protocolVersion: "2025-06-18" } })) as { result: Record<string, unknown> };
-    expect(init.result).toMatchObject({ protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "k-note" } });
+    expect(init.result).toMatchObject({ protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "cognotive" } });
     expect(await s.handle({ jsonrpc: "2.0", method: "notifications/initialized" })).toBeNull();
     const list = (await s.handle({ jsonrpc: "2.0", id: 2, method: "tools/list" })) as { result: { tools: Array<{ name: string; inputSchema: { type: string }; annotations: { readOnlyHint: boolean } }> } };
     const names = list.result.tools.map((t) => t.name);

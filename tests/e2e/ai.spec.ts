@@ -60,7 +60,7 @@ test("set up OpenRouter, then chat about the open note", async ({ page }) => {
   expect(llm.calls).toHaveLength(1);
   expect(llm.calls[0].model).toBe("openai/gpt-5");
   expect(llm.calls[0].auth).toBe(`Bearer ${GOOD_KEY}`);
-  expect(llm.calls[0].headers["x-title"]).toBe("k-note");
+  expect(llm.calls[0].headers["x-title"]).toBe("CogNotive.ai");
 
   // A follow-up without the note; the conversation goes with it.
   await chat.getByRole("button", { name: "Welcome" }).click();
