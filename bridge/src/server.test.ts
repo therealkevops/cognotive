@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { claudeRunner, HARDENING_ARGS } from "./claude";
 import { createBridge, originAllowed } from "./server";
-import { readOrCreateToken, tokenMatches } from "./token";
+import { bridgeHome, readOrCreateToken, tokenMatches } from "./token";
 
 const FAKE = path.join(path.dirname(fileURLToPath(import.meta.url)), "../test/fake-claude.mjs");
 const TOKEN = "a".repeat(48);
@@ -158,14 +158,25 @@ describe("chat", () => {
 });
 
 describe("pairing code", () => {
+  it("lives in ~/.k-note, or the ~/.noted-ai an earlier version paired in", () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "k-note-user-"));
+    expect(bridgeHome({}, home)).toBe(path.join(home, ".k-note"));
+    fs.mkdirSync(path.join(home, ".noted-ai"));
+    expect(bridgeHome({}, home)).toBe(path.join(home, ".noted-ai"));
+    fs.mkdirSync(path.join(home, ".k-note"));
+    expect(bridgeHome({}, home)).toBe(path.join(home, ".k-note"));
+    expect(bridgeHome({ K_NOTE_HOME: "/x" }, home)).toBe("/x");
+  });
+
+
   it("is created once, kept private, and compared safely", async () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), "noted-ai-home-"));
-    const a = await readOrCreateToken({ env: { NOTED_AI_HOME: home } });
-    const b = await readOrCreateToken({ env: { NOTED_AI_HOME: home } });
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "k-note-home-"));
+    const a = await readOrCreateToken({ env: { K_NOTE_HOME: home } });
+    const b = await readOrCreateToken({ env: { K_NOTE_HOME: home } });
     expect(a.created).toBe(true);
     expect(b).toEqual({ token: a.token, created: false });
     expect(fs.statSync(path.join(home, "bridge-token")).mode & 0o777).toBe(0o600);
-    expect((await readOrCreateToken({ env: { NOTED_AI_HOME: home }, renew: true })).token).not.toBe(a.token);
+    expect((await readOrCreateToken({ env: { K_NOTE_HOME: home }, renew: true })).token).not.toBe(a.token);
     expect(tokenMatches(a.token, `Bearer ${a.token}`)).toBe(true);
     expect(tokenMatches(a.token, a.token)).toBe(false);
   });

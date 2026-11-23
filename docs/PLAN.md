@@ -1,4 +1,4 @@
-# noted-ai — Plan
+# k-note — Plan
 
 A markdown note-taking app in the spirit of Obsidian: wikilinks, backlinks, a graph view,
 rich formatting, Excalidraw drawings, and an LLM that can answer questions by exploring the

@@ -23,9 +23,9 @@ test("a change saved in one tab shows in the other", async ({ context }) => {
   await source(b);
 
   // The open note, edited in A, updates in B.
-  await typeAfter(a, "# Welcome to noted-ai", " (edited in A)");
+  await typeAfter(a, "# Welcome to k-note", " (edited in A)");
   await expect(a.getByText("Saved", { exact: true })).toBeVisible();
-  await expect(editor(b)).toContainText("# Welcome to noted-ai (edited in A)");
+  await expect(editor(b)).toContainText("# Welcome to k-note (edited in A)");
 
   // A new note made in A appears in B's file tree.
   await a.getByRole("button", { name: "New note", exact: true }).click();
@@ -42,10 +42,10 @@ test("edits made in two tabs at once are merged, not overwritten", async ({ cont
 
   // Both type before either has saved: B saves first, then A saves onto B's change.
   await typeAfter(b, "**Bold**, *italic*", " (B)");
-  await typeAfter(a, "# Welcome to noted-ai", " (A)");
+  await typeAfter(a, "# Welcome to k-note", " (A)");
 
   for (const page of [a, b]) {
-    await expect(editor(page)).toContainText("# Welcome to noted-ai (A)");
+    await expect(editor(page)).toContainText("# Welcome to k-note (A)");
     await expect(editor(page)).toContainText("`inline code`. (B)");
   }
 });
@@ -58,12 +58,12 @@ test("when both tabs change the same line, the other version is kept as a copy",
   await source(a);
   await source(b);
 
-  await typeAfter(b, "# Welcome to noted-ai", " (B)");
-  await typeAfter(a, "# Welcome to noted-ai", " (A)");
+  await typeAfter(b, "# Welcome to k-note", " (B)");
+  await typeAfter(a, "# Welcome to k-note", " (A)");
 
   await expect(a.getByRole("alert").filter({ hasText: "another window" })).toContainText('the other is kept as "Welcome (from another window)"');
-  await expect(editor(a)).toContainText("# Welcome to noted-ai (A)");
-  await expect(editor(b)).toContainText("# Welcome to noted-ai (A)");
+  await expect(editor(a)).toContainText("# Welcome to k-note (A)");
+  await expect(editor(b)).toContainText("# Welcome to k-note (A)");
   await tree(a).getByRole("treeitem", { name: "Welcome (from another window)" }).click();
-  await expect(editor(a)).toContainText("# Welcome to noted-ai (B)");
+  await expect(editor(a)).toContainText("# Welcome to k-note (B)");
 });

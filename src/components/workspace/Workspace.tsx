@@ -921,7 +921,7 @@ export function Workspace() {
     { id: "import", label: "Import notes from a zip…" },
     { id: "settings", label: "Open settings" },
     { id: "storage", label: "Show storage used on this device" },
-    { id: "install", label: "Install noted-ai as an app" },
+    { id: "install", label: "Install k-note as an app" },
   ];
   const runCommand: Record<string, () => void> = {
     "new-note": () => void vault.createNote(),

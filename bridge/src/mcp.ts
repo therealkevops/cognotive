@@ -14,7 +14,7 @@ import { NoteFolder } from "./folder";
  * git shows every change before it's committed and synced.
  */
 export const INSTRUCTIONS = [
-  "These tools work on a folder of markdown notes (a noted-ai repository, Obsidian-compatible).",
+  "These tools work on a folder of markdown notes (a k-note repository, Obsidian-compatible).",
   "Search and read before answering; cite notes as [[wikilinks]]. Read a note before changing it.",
   "Notes link with [[Note name]]; properties are YAML frontmatter; hubs are notes with hub: true.",
 ].join(" ");
@@ -61,7 +61,7 @@ export function mcpServer(folder: NoteFolder, opts: { readOnly?: boolean; versio
         return ok({
           protocolVersion: typeof params.protocolVersion === "string" ? params.protocolVersion : "2025-06-18",
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: "noted-ai", version: opts.version ?? "0" },
+          serverInfo: { name: "k-note", version: opts.version ?? "0" },
           instructions: INSTRUCTIONS,
         });
       case "ping":

@@ -121,8 +121,10 @@ test("/template opens the picker; /daily links a day's note; /priority sets a ta
 
   await page.keyboard.press("Enter");
   await page.keyboard.type("- [ ] Book flights /priority hi");
+  await expect(menu(page).getByRole("option")).toHaveCount(2);
   await expect(menu(page).locator("[aria-selected=true]")).toContainText("Highest priority");
   await page.keyboard.press("ArrowDown"); // High, after Highest
+  await expect(menu(page).locator("[aria-selected=true]")).toHaveText(/^High priority/);
   await acceptSuggestion(page);
   await expect(editor(page).locator(".cm-line", { hasText: "Book flights" })).toHaveText("- [ ] Book flights [priority:: high]");
   await page.getByRole("tab", { name: "Tasks" }).click();

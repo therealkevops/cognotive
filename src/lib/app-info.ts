@@ -1,5 +1,5 @@
 /** Static facts about the running build, shared by the UI and /api/health. */
-export const APP_NAME = "noted-ai";
+export const APP_NAME = "k-note";
 
 type Env = Record<string, string | undefined>;
 

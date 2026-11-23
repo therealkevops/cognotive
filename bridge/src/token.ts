@@ -1,10 +1,20 @@
 import crypto from "node:crypto";
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-/** Where the bridge keeps its pairing code: ~/.noted-ai (or NOTED_AI_HOME). */
-export const bridgeHome = (env: Record<string, string | undefined> = process.env) => env.NOTED_AI_HOME || path.join(os.homedir(), ".noted-ai");
+/**
+ * Where the bridge keeps its pairing code: ~/.k-note (or K_NOTE_HOME). A ~/.noted-ai left by
+ * the app's earlier name is still used, so an existing pairing keeps working.
+ */
+export function bridgeHome(env: Record<string, string | undefined> = process.env, home = os.homedir()): string {
+  const set = env.K_NOTE_HOME || env.NOTED_AI_HOME;
+  if (set) return set;
+  const current = path.join(home, ".k-note");
+  const earlier = path.join(home, ".noted-ai");
+  return !existsSync(current) && existsSync(earlier) ? earlier : current;
+}
 
 /** The pairing code the app sends as a bearer token, kept between runs (readable only by this user). */
 export async function readOrCreateToken({ env = process.env as Record<string, string | undefined>, renew = false } = {}): Promise<{ token: string; created: boolean }> {

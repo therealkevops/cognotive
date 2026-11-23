@@ -408,5 +408,5 @@ function commitMessage(changes: Change[], folder: string): string {
   const names = changes.map((c) => noteTitle(folder ? c.path.slice(folder.length + 1) : c.path));
   const shown = names.slice(0, 3).join(", ");
   const more = names.length > 3 ? ` and ${names.length - 3} more` : "";
-  return `noted-ai: update ${shown}${more}`;
+  return `k-note: update ${shown}${more}`;
 }

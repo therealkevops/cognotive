@@ -64,7 +64,7 @@ export function requestHeaders(ep: Endpoint): Record<string, string> {
   if (ep.apiKey) h.Authorization = `Bearer ${ep.apiKey}`;
   if (ep.openRouter) {
     if (typeof location !== "undefined") h["HTTP-Referer"] = location.origin;
-    h["X-Title"] = "noted-ai";
+    h["X-Title"] = "k-note";
   }
   return h;
 }

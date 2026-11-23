@@ -6,7 +6,7 @@ if (typeof window !== "undefined") {
   const w = window as unknown as { EXCALIDRAW_ASSET_PATH?: string; EXCALIDRAW_EXPORT_SOURCE?: string };
   w.EXCALIDRAW_ASSET_PATH = "/excalidraw/";
   // The "source" written into files: stable across deployments (preview URLs would churn it).
-  w.EXCALIDRAW_EXPORT_SOURCE = "noted-ai";
+  w.EXCALIDRAW_EXPORT_SOURCE = "k-note";
 }
 
 export {};

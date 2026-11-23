@@ -5,7 +5,7 @@ export const EMPTY_DRAWING = JSON.stringify(
   {
     type: "excalidraw",
     version: 2,
-    source: "noted-ai",
+    source: "k-note",
     elements: [],
     appState: { gridSize: null, viewBackgroundColor: "#ffffff" },
     files: {},

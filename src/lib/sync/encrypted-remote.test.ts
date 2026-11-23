@@ -142,7 +142,7 @@ describe("EncryptedRemote", () => {
     const a = device(github, keys);
     await a.local.write("Secret project.md", "x");
     await a.engine.sync();
-    expect(messages).toEqual(["noted-ai: update 1 file"]);
+    expect(messages).toEqual(["k-note: update 1 file"]);
   });
 });
 

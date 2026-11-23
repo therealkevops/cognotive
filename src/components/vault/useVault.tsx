@@ -900,9 +900,9 @@ export function VaultProvider({
       store.onUpgrade?.((waiting) =>
         setError(
           waiting === "blocked"
-            ? "noted-ai was updated. Close its other tabs and windows to finish, and this one will carry on."
+            ? "k-note was updated. Close its other tabs and windows to finish, and this one will carry on."
             : waiting === "outdated"
-              ? "noted-ai was updated in another tab. Reload this one to keep working."
+              ? "k-note was updated in another tab. Reload this one to keep working."
               : null,
         ),
       ),

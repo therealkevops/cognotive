@@ -1,5 +1,5 @@
 {
-  "name": "noted-ai",
+  "name": "k-note",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -15,8 +15,8 @@
     "test:e2e": "playwright test",
     "check": "npm run lint && npm run typecheck && npm test",
     "build:bridge": "node scripts/build-bridge.mjs",
-    "bridge": "node scripts/build-bridge.mjs && node bridge/dist/noted-ai.mjs bridge",
-    "mcp": "node scripts/build-bridge.mjs && node bridge/dist/noted-ai.mjs mcp"
+    "bridge": "node scripts/build-bridge.mjs && node bridge/dist/k-note.mjs bridge",
+    "mcp": "node scripts/build-bridge.mjs && node bridge/dist/k-note.mjs mcp"
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.20.4",

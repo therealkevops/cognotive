@@ -152,7 +152,7 @@ export function bridgeAdvice(status: BridgeStatus, command: string): { title: st
         title: "The bridge isn't running.",
         steps: [
           "Install Claude Code and sign in: npm install -g @anthropic-ai/claude-code, then claude /login",
-          `In a clone of noted-ai, start the bridge: ${command}`,
+          `In a clone of k-note, start the bridge: ${command}`,
           "Open the pairing link it prints, or paste its pairing code below.",
         ],
       };

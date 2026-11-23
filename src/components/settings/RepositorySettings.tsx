@@ -10,7 +10,7 @@ import { useVault } from "../vault/useVault";
 
 /* Settings of the open repository. */
 
-/** Which properties every new note starts with: the ones noted-ai understands, plus your own. */
+/** Which properties every new note starts with: the ones k-note understands, plus your own. */
 export function NewNoteProperties({ value, onChange }: { value: string[]; onChange(v: string[]): void }) {
   const [custom, setCustom] = useState("");
   const [error, setError] = useState<string | null>(null);

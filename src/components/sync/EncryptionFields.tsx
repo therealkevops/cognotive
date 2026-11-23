@@ -77,11 +77,11 @@ export function RecoveryKeyStep({
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const download = () => {
-    const text = `noted-ai recovery key for ${repoLabel}\n\n${recoveryKey}\n\nThis key unlocks the encrypted notes if the passphrase is forgotten. Keep it somewhere safe and private.\n`;
+    const text = `k-note recovery key for ${repoLabel}\n\n${recoveryKey}\n\nThis key unlocks the encrypted notes if the passphrase is forgotten. Keep it somewhere safe and private.\n`;
     const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `noted-ai recovery key (${repoLabel.replace("/", " ")}).txt`;
+    a.download = `k-note recovery key (${repoLabel.replace("/", " ")}).txt`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
@@ -90,7 +90,7 @@ export function RecoveryKeyStep({
       <h4 className="font-serif text-lg">Save your recovery key</h4>
       <p className="text-sm text-muted">
         If you forget the passphrase, this key is the only way to read these notes again. Nobody else has a copy,
-        including noted-ai. Store it in a password manager or print it.
+        including k-note. Store it in a password manager or print it.
       </p>
       <p
         className="rounded-lg bg-surface px-4 py-3 text-center font-mono text-sm tracking-wide select-all"

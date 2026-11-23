@@ -58,7 +58,7 @@ export function AppRoot() {
     if (!asksUser()) void requestPersistence();
   }, []);
   return (
-    <ErrorBoundary name="noted-ai" page>
+    <ErrorBoundary name="k-note" page>
       <VaultsProvider>
         <ClientOnlyVaults />
       </VaultsProvider>

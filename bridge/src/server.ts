@@ -5,7 +5,7 @@ import { parseReply, systemPrompt, ToolCallFilter, transcript, type WireMessage,
 
 /**
  * The bridge: an OpenAI-compatible endpoint on this computer only
- * (127.0.0.1), so the noted-ai page can use a Claude plan through Claude
+ * (127.0.0.1), so the k-note page can use a Claude plan through Claude
  * Code. Three separate checks guard it: the Host header (against DNS
  * rebinding), the page's Origin (only the app's address and localhost), and
  * the pairing code (a bearer token only this user can read).
@@ -163,7 +163,7 @@ export function createBridge(o: BridgeOptions) {
         return res.end();
       }
       // Lets the app's settings see that a bridge is running before it's paired.
-      if (req.method === "GET" && url.pathname === "/bridge/ping") return send(res, 200, { ok: true, name: "noted-ai-bridge", version: o.version ?? "0" });
+      if (req.method === "GET" && url.pathname === "/bridge/ping") return send(res, 200, { ok: true, name: "k-note-bridge", version: o.version ?? "0" });
       if (!tokenMatches(o.token, req.headers.authorization)) throw new BridgeError("Wrong pairing code.", 401, "unauthorized");
 
       if (req.method === "GET" && url.pathname === "/bridge/status") {

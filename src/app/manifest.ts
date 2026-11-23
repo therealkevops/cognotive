@@ -10,8 +10,8 @@ export default function manifest(): MetadataRoute.Manifest {
   const icon = [{ src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }];
   return {
     id: "/",
-    name: "noted-ai",
-    short_name: "noted-ai",
+    name: "k-note",
+    short_name: "k-note",
     description: "Markdown notes with a knowledge graph, drawings, canvases and GitHub sync.",
     start_url: "/",
     scope: "/",
@@ -32,7 +32,7 @@ export default function manifest(): MetadataRoute.Manifest {
       { name: "Search notes", short_name: "Search", url: "/?action=search", icons: icon },
       { name: "New canvas", url: "/?action=new-canvas", icons: icon },
     ],
-    // "Share → noted-ai" from other apps (Android, desktop Chrome and Edge). The service worker
+    // "Share → k-note" from other apps (Android, desktop Chrome and Edge). The service worker
     // (public/sw.js) catches the POST, since there's no server, and opens quick capture with it.
     share_target: {
       action: "/share-target",

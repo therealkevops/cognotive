@@ -5,7 +5,7 @@ import { isIOS, useInstall } from "@/lib/install";
 import { Group, Row, SectionHeader } from "./parts";
 
 
-/* Installing noted-ai as an app. */
+/* Installing k-note as an app. */
 
 export function InstallSection() {
   const { state, install } = useInstall();
@@ -13,17 +13,17 @@ export function InstallSection() {
     <section aria-label="Install app">
       <SectionHeader
         title="Install app"
-        description="Install noted-ai to open it in its own window, from your dock, taskbar, Start menu or home screen. It works offline too."
+        description="Install k-note to open it in its own window, from your dock, taskbar, Start menu or home screen. It works offline too."
       />
       <Group>
         {state === "installed" ? (
-          <Row label="Installed" description="You're using noted-ai as an app." >
+          <Row label="Installed" description="You're using k-note as an app." >
             <span className="flex text-sm text-muted sm:justify-end">
               <Check size={16} aria-hidden className="mr-1.5 text-accent" /> Installed
             </span>
           </Row>
         ) : state === "available" ? (
-          <Row label="Install noted-ai" description="Adds it as an app on this device.">
+          <Row label="Install k-note" description="Adds it as an app on this device.">
             <div className="flex sm:justify-end">
               <button type="button" className="button-primary" onClick={() => void install()}>
                 Install
@@ -37,7 +37,7 @@ export function InstallSection() {
         ) : (
           <Row
             label="From your browser's menu"
-            description="Chrome and Edge: the install icon in the address bar, or the menu's “Install noted-ai”. Safari on a Mac: File → Add to Dock. Firefox doesn't install web apps on desktop."
+            description="Chrome and Edge: the install icon in the address bar, or the menu's “Install k-note”. Safari on a Mac: File → Add to Dock. Firefox doesn't install web apps on desktop."
             stack
           >
             <span />
