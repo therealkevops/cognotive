@@ -1,14 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- The browser-tab icon: a bold "n" that stays readable at 16px. It flips to
-       ivory in dark browser themes so it doesn't vanish on a dark tab bar. -->
+  <!-- "Kn", the k-note symbol, readable at 16px. Drawn by scripts/make-icons.mjs. -->
   <style>
     .bg { fill: #1f1e1d; }
-    .n { stroke: #faf9f5; }
+    .kn { fill: #faf9f5; stroke: #faf9f5; }
     @media (prefers-color-scheme: dark) {
       .bg { fill: #faf9f5; }
-      .n { stroke: #1f1e1d; }
+      .kn { fill: #1f1e1d; stroke: #1f1e1d; }
     }
   </style>
   <rect class="bg" width="64" height="64" rx="14"/>
-  <path class="n" d="M20 48 V18 M20 29 C20 22 25 17 33 17 C41 17 45 22 45 30 V48" fill="none" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path class="kn" d="M16.57 45L13.48 45L13.48 19.44L16.57 19.44L16.57 32.15L28.06 19.44L31.98 19.44L21.97 30.53L32.67 45L28.89 45L19.89 32.83L16.57 36.47L16.57 45ZM38.39 45L35.37 45L35.37 25.92L38.14 25.92L38.21 29.34Q38.97 27.36 40.53 26.42Q42.10 25.49 44.08 25.49L44.08 25.49Q46.27 25.49 47.70 26.46Q49.12 27.43 49.82 29.07Q50.52 30.71 50.52 32.72L50.52 32.72L50.52 45L47.50 45L47.50 33.59Q47.50 30.92 46.54 29.54Q45.59 28.15 43.43 28.15L43.43 28.15Q41.23 28.15 39.81 29.54Q38.39 30.92 38.39 33.59L38.39 33.59L38.39 45Z" stroke-width="2.6" stroke-linejoin="round"/>
 </svg>

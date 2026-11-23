@@ -1,6 +1,6 @@
 // k-note service worker: lets the installed app open without a connection.
 // Notes themselves live in IndexedDB; this only caches the app's own files.
-const CACHE = "noted-ai-v4";
+const CACHE = "noted-ai-v5";
 // Something shared to the installed app, kept until the app takes it (src/lib/capture/shared.ts).
 const SHARE_CACHE = "noted-ai-share";
 const SHELL = "/";
