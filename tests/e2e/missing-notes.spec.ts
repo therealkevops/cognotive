@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from "fflate";
 import { expect, test } from "@playwright/test";
-import { editor, openApp, title, tree } from "./helpers";
+import { editor, openApp, title, tree, treeAction } from "./helpers";
 
 test("a note created from a link goes in the linking note's folder", async ({ page }) => {
   await openApp(page);
@@ -8,9 +8,7 @@ test("a note created from a link goes in the linking note's folder", async ({ pa
   const name = page.getByRole("textbox", { name: "New name" });
   await name.fill("Work");
   await name.press("Enter");
-  const folder = tree(page).getByRole("treeitem", { name: "Work" });
-  await folder.hover();
-  await page.getByRole("button", { name: "New note in Work" }).click();
+  await treeAction(page, "Work", "New note here");
   await expect(title(page)).toHaveValue("Untitled");
   await editor(page).click();
   await page.keyboard.type("Next: [[Roadmap]]");
@@ -267,15 +265,13 @@ test("Repository health suggests a hub for an orphan", async ({ page }) => {
 
 test("deleting a linked note warns, and can turn the links into text", async ({ page }) => {
   await openApp(page);
-  const item = tree(page).getByRole("treeitem", { name: "Linking notes" });
-  await item.hover();
-  await page.getByRole("button", { name: "Delete Linking notes" }).click();
+  await treeAction(page, "Linking notes", "Delete");
   const dialog = page.getByRole("dialog", { name: "Delete file" });
   await expect(dialog).toContainText("1 note links here");
   await expect(dialog).toContainText("Welcome");
   await dialog.getByLabel("Turn the links into plain text").check();
   await dialog.getByRole("button", { name: "Delete", exact: true }).click();
-  await expect(item).toBeHidden();
+  await expect(tree(page).getByRole("treeitem", { name: "Linking notes" })).toBeHidden();
 
   await tree(page).getByRole("treeitem", { name: "Welcome" }).click();
   await page.getByRole("radio", { name: "Source" }).click();

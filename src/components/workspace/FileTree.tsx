@@ -19,6 +19,7 @@ import { dirname, isCanvas, isDrawing, isImage, isMarkdown } from "@/lib/vault/p
 import { buildTree, type TreeNode } from "@/lib/vault/tree";
 import { ATTACHMENT_FOLDER, useVault } from "../vault/useVault";
 import { DeleteDialog } from "./DeleteDialog";
+import { RowMenu, type RowMenuHandle } from "../RowMenu";
 import { SidePaneContext } from "./SidePane";
 
 import { TREE_DRAG_TYPE as DRAG_TYPE } from "@/lib/vault/drag";
@@ -230,6 +231,9 @@ function Node({
 
   const [deleting, setDeleting] = useState(false);
   const remove = () => setDeleting(true);
+  const menu = useRef<RowMenuHandle>(null);
+  // The side pane only shows on wide screens.
+  const wide = typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
 
   return (
     <div role="none">
@@ -249,6 +253,11 @@ function Node({
         onClick={activate}
         onKeyDown={onKeyDown}
         onDoubleClick={() => setRenaming(node.path)}
+        onContextMenu={(e) => {
+          if (isRenaming) return;
+          e.preventDefault();
+          menu.current?.openAt(e.clientX, e.clientY);
+        }}
         {...(isFolder ? dropProps(node.path) : {})}
         className={`group flex cursor-pointer items-center gap-1.5 rounded-lg py-[0.3125rem] pr-1 text-sm select-none ${
           isActive ? "bg-foreground/[0.08] font-medium text-foreground" : "text-foreground/80 hover:bg-foreground/[0.05] hover:text-foreground"
@@ -282,61 +291,19 @@ function Node({
           <span className="min-w-0 flex-1 truncate">{node.name}</span>
         )}
         {!isRenaming && (
-          // Touch screens have no hover: show the actions on the selected item instead.
-          <span
-            className={`ml-auto hidden shrink-0 gap-0.5 group-focus-within:flex group-hover:flex ${
-              isActive ? "[@media(hover:none)]:flex" : ""
-            }`}
-          >
-            {isFolder && (
-              <button
-                type="button"
-                className="icon-button h-6 w-6"
-                aria-label={`New note in ${node.name}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onNewNote(node.path);
-                }}
-              >
-                <FilePlus size={14} aria-hidden />
-              </button>
-            )}
-            {!isFolder && openSide && (
-              <button
-                type="button"
-                className="icon-button hidden h-6 w-6 lg:inline-flex"
-                aria-label={`Open ${node.name} in the side pane`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openSide(node.path);
-                }}
-              >
-                <Columns2 size={14} aria-hidden />
-              </button>
-            )}
-            <button
-              type="button"
-              className="icon-button h-6 w-6"
-              aria-label={`Rename ${node.name}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                setRenaming(node.path);
-              }}
-            >
-              <Pencil size={14} aria-hidden />
-            </button>
-            <button
-              type="button"
-              className="icon-button h-6 w-6"
-              aria-label={`Delete ${node.name}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                remove();
-              }}
-            >
-              <Trash2 size={14} aria-hidden />
-            </button>
-          </span>
+          // Touch screens have no hover: the selected item shows its menu button anyway.
+          <RowMenu
+            ref={menu}
+            label={`More actions for ${node.name}`}
+            className={`ml-auto ${isActive ? "[@media(hover:none)]:opacity-100" : ""}`}
+            items={[
+              ...(isFolder ? [{ label: "New note here", icon: FilePlus, onSelect: () => onNewNote(node.path) }] : []),
+              ...(!isFolder && openSide && wide ? [{ label: "Open in side pane", icon: Columns2, onSelect: () => openSide(node.path) }] : []),
+              { label: "Rename", icon: Pencil, onSelect: () => setRenaming(node.path) },
+              "separator" as const,
+              { label: "Delete", icon: Trash2, danger: true, onSelect: remove },
+            ]}
+          />
         )}
       </div>
       {open && (

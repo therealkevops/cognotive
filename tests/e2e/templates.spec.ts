@@ -90,7 +90,8 @@ test("a template with prompts can be inserted into the open note", async ({ page
   await page.keyboard.type("Intro\n");
   await page.getByRole("tab", { name: "Templates" }).click();
   await panel.getByRole("button", { name: "New note from Person" }).hover();
-  await panel.getByRole("button", { name: "Insert Person here" }).click();
+  await panel.getByRole("button", { name: "More actions for Person" }).click();
+  await page.getByRole("menu", { name: "More actions for Person" }).getByRole("menuitem", { name: "Insert into the open note" }).click();
   const dialog = page.getByRole("dialog", { name: "Insert Person" });
   await dialog.getByLabel("Role").fill("Designer");
   await dialog.getByRole("button", { name: "Insert" }).click();
@@ -145,4 +146,15 @@ test("new notes start with the properties chosen in settings", async ({ page }) 
   await page.keyboard.type("typed here");
   await page.getByRole("radio", { name: "Source" }).click();
   await expect(editor(page)).toHaveText(`---tags: [idea]created: ${stamp}status:---# Plantyped hereend`);
+});
+
+test("a template's three-dot menu makes a note from it, inserts it, or edits it", async ({ page }) => {
+  await newRepository(page, "Work", true);
+  const panel = await openTemplates(page);
+  await panel.getByRole("button", { name: "New note from Person" }).hover();
+  await panel.getByRole("button", { name: "More actions for Person" }).click();
+  const menu = page.getByRole("menu", { name: "More actions for Person" });
+  await expect(menu.getByRole("menuitem")).toHaveText(["New note from it", "Insert into the open note", "Edit the template"]);
+  await menu.getByRole("menuitem", { name: "Edit the template" }).click();
+  await expect(title(page)).toHaveValue("Person");
 });

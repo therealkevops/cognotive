@@ -13,6 +13,7 @@ import {
 import { isNote, isWithin, joinPath, noteTitle, uniquePath } from "@/lib/vault/paths";
 import { useVault, type VaultApi } from "../vault/useVault";
 import { Modal } from "./Modal";
+import { RowMenu } from "@/components/RowMenu";
 
 /** The templates folder, or "Templates" when the setting is empty. */
 export const templateFolderOf = (folder: string) => folder.trim().replace(/^\/+|\/+$/g, "") || "Templates";
@@ -122,26 +123,14 @@ export function TemplatesPanel({
                   <span className="min-w-0 flex-1 truncate">{noteTitle(p)}</span>
                   {target && <span className="shrink-0 truncate text-xs text-muted">{target}</span>}
                 </button>
-                {canInsert && (
-                  <button
-                    type="button"
-                    className="icon-button h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                    aria-label={`Insert ${noteTitle(p)} here`}
-                    title="Insert into the open note"
-                    onClick={() => onUse(p, "insert")}
-                  >
-                    <TextCursorInput size={14} aria-hidden />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="icon-button h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                  aria-label={`Edit ${noteTitle(p)}`}
-                  title="Edit the template"
-                  onClick={() => void vault.open(p)}
-                >
-                  <Pencil size={14} aria-hidden />
-                </button>
+                <RowMenu
+                  label={`More actions for ${noteTitle(p)}`}
+                  items={[
+                    { label: "New note from it", icon: FilePlus2, onSelect: () => onUse(p, "new") },
+                    ...(canInsert ? [{ label: "Insert into the open note", icon: TextCursorInput, onSelect: () => onUse(p, "insert") }] : []),
+                    { label: "Edit the template", icon: Pencil, onSelect: () => void vault.open(p) },
+                  ]}
+                />
               </li>
             );
           })}

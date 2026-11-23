@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { acceptSuggestion } from "./helpers";
+import { acceptSuggestion, treeAction } from "./helpers";
 
 test("properties are suggested, explained and checked as you type", async ({ page }) => {
   await page.goto("/");
@@ -137,8 +137,7 @@ test("the side pane edits the properties of the note it shows", async ({ page })
   await page.goto("/");
   await expect(page.locator(".cm-content")).toBeVisible();
   const tree = page.getByRole("tree", { name: "Repository files" });
-  await tree.getByRole("treeitem", { name: "Linking notes" }).hover();
-  await page.getByRole("button", { name: "Open Linking notes in the side pane" }).click();
+  await treeAction(page, "Linking notes", "Open in side pane");
   const side = page.getByRole("region", { name: "Side pane" });
   const props = side.getByRole("region", { name: "Properties" });
   await expect(props).toContainText("#guide");
@@ -317,8 +316,7 @@ test("the side pane edits a drawing's properties", async ({ page }) => {
   await expect(page.getByTestId("drawing").locator("canvas.interactive")).toBeVisible({ timeout: 30_000 });
   const tree = page.getByRole("tree", { name: "Repository files" });
   await tree.getByRole("treeitem", { name: "Welcome" }).click();
-  await tree.getByRole("treeitem", { name: "Drawing" }).hover();
-  await page.getByRole("button", { name: "Open Drawing in the side pane" }).click();
+  await treeAction(page, "Drawing", "Open in side pane");
   const props = page.getByRole("region", { name: "Side pane" }).getByRole("region", { name: "Properties" });
   await props.getByRole("button", { name: "Add property" }).click();
   await props.getByRole("combobox", { name: "New property name" }).fill("tags");

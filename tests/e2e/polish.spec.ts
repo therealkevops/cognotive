@@ -2,7 +2,7 @@ import { strToU8, unzipSync, zipSync } from "fflate";
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { FakeGitHub } from "./fake-github";
-import { editor, openApp, palette, title, tree } from "./helpers";
+import { editor, openApp, palette, title, tree, treeAction } from "./helpers";
 
 test("the command palette runs commands", async ({ page }) => {
   await openApp(page);
@@ -59,9 +59,7 @@ test("tabs keep opened notes, and the side pane shows another note", async ({ pa
   await page.getByRole("button", { name: "Close Linking notes" }).click();
   await expect(tabs).toBeHidden(); // a single tab isn't shown
 
-  const item = tree(page).getByRole("treeitem", { name: "Linking notes" });
-  await item.hover();
-  await page.getByRole("button", { name: "Open Linking notes in the side pane" }).click();
+  await treeAction(page, "Linking notes", "Open in side pane");
   const side = page.getByRole("region", { name: "Side pane" });
   await expect(side.getByRole("heading", { name: "Linking notes", level: 1 })).toBeVisible();
   await expect(title(page)).toHaveValue("Welcome");

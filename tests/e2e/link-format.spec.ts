@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { acceptSuggestion, editor, openApp, palette, title, tree } from "./helpers";
+import { acceptSuggestion, editor, openApp, palette, title, tree, treeAction } from "./helpers";
 
 const selected = (page: Page) => page.locator(".cm-tooltip-autocomplete [aria-selected=true]");
 
@@ -20,8 +20,7 @@ test("with markdown links on, picked links are written as relative markdown link
   const name = page.getByRole("textbox", { name: "New name" });
   await name.fill("Work");
   await name.press("Enter");
-  await tree(page).getByRole("treeitem", { name: "Work" }).hover();
-  await page.getByRole("button", { name: "New note in Work" }).click();
+  await treeAction(page, "Work", "New note here");
   await expect(title(page)).toHaveValue("Untitled");
   await page.getByRole("radio", { name: "Source" }).click();
   await editor(page).click();

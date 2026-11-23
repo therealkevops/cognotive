@@ -38,3 +38,10 @@ export async function acceptSuggestion(page: Page) {
   await page.waitForTimeout(150);
   await page.keyboard.press("Enter");
 }
+
+/** Picks an action from a file tree item's "more" menu (the three dots shown on hover). */
+export async function treeAction(page: Page, item: string, action: string) {
+  await tree(page).getByRole("treeitem", { name: item }).hover();
+  await page.getByRole("button", { name: `More actions for ${item}` }).click();
+  await page.getByRole("menu", { name: `More actions for ${item}` }).getByRole("menuitem", { name: action }).click();
+}

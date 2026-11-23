@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { editor, tree } from "./helpers";
+import { editor, tree, treeAction } from "./helpers";
 
 const mod = process.platform === "darwin" ? "Meta" : "Control";
 
@@ -101,12 +101,10 @@ test("folders hold notes, and deleting a folder removes them", async ({ page }) 
   const folder = tree(page).getByRole("treeitem", { name: "Work" });
   await expect(folder).toBeVisible();
 
-  await folder.hover();
-  await page.getByRole("button", { name: "New note in Work" }).click();
+  await treeAction(page, "Work", "New note here");
   await expect(tree(page).getByRole("treeitem", { name: "Untitled" })).toBeVisible();
 
-  await folder.hover();
-  await page.getByRole("button", { name: "Delete Work" }).click();
+  await treeAction(page, "Work", "Delete");
   await page.getByRole("dialog", { name: "Delete folder" }).getByRole("button", { name: "Delete", exact: true }).click();
   await expect(folder).toBeHidden();
   await expect(tree(page).getByRole("treeitem", { name: "Untitled" })).toBeHidden();
