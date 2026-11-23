@@ -147,7 +147,7 @@ test.describe("installable app", () => {
   });
 });
 
-test("the three columns' header rows line up, with one divider across", async ({ page }) => {
+test("the three columns' header rows line up", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 760 });
   await openApp(page);
   const centre = async (loc: import("@playwright/test").Locator) => {
@@ -159,13 +159,4 @@ test("the three columns' header rows line up, with one divider across", async ({
   const tabs = await centre(page.getByRole("tablist", { name: "Note panels" }));
   expect(Math.abs(repo - title)).toBeLessThan(1);
   expect(Math.abs(tabs - title)).toBeLessThan(1);
-  // Each header row ends (with its divider) at the same height.
-  const bottoms = await page.evaluate(() =>
-    [
-      document.querySelector('[aria-label="Repository"] > * > div.border-b, [aria-label="Repository"] div.border-b'),
-      document.querySelector("main header"),
-      document.querySelector('[role="tablist"][aria-label="Note panels"]')?.parentElement,
-    ].map((e) => Math.round(e!.getBoundingClientRect().bottom)),
-  );
-  expect(new Set(bottoms).size).toBe(1);
 });

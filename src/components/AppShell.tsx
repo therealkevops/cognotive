@@ -5,9 +5,9 @@ import { ErrorBoundary } from "./ErrorBoundary";
 const RAIL = "3.25rem";
 
 /**
- * Each column starts with a header row of the same height (HEADER, 48px) with a divider under it,
- * so the repository name, the file name and the panel tabs line up across the window, and the
- * collapsed rails' first icons sit on the same line.
+ * Each column starts with a header row of the same height (48px), so the repository name, the
+ * file name and the panel tabs line up across the window, and the collapsed rails' first icons
+ * sit on the same line.
  *
  * The three-pane layout: repository sidebar on the left, editor in the middle, and a
  * context panel on the right. Either side can collapse to a slim rail of icons

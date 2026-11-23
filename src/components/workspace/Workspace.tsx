@@ -603,8 +603,8 @@ export function Workspace() {
 
   const sidebar = (
     <>
-      {/* The header row: the same height as the note's and the panel's, with a divider under it. */}
-      <div className="-mx-2.5 mb-3 flex h-12 shrink-0 items-center gap-1 border-b border-border px-2.5">
+      {/* The header row: the same height as the note's and the panel's, so they line up. */}
+      <div className="mb-1 flex h-12 shrink-0 items-center gap-1">
         <div className="min-w-0 flex-1">
           <VaultSwitcher onManage={() => setSettingsOpen("vaults")} />
         </div>
@@ -1008,7 +1008,7 @@ export function Workspace() {
           panel={
             vault.active ? (
               <>
-                <div className="sticky top-0 z-10 -mx-4 mb-4 flex h-12 items-center gap-1 border-b border-border bg-background px-4">
+                <div className="sticky top-0 z-10 -mx-4 mb-3 flex h-12 items-center gap-1 bg-background px-4">
                 <div role="tablist" aria-label="Note panels" className="segmented flex flex-1">
                   {(
                     [
@@ -1049,7 +1049,7 @@ export function Workspace() {
             ) : null
           }
         >
-          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
+          <header className="flex h-12 shrink-0 items-center gap-2 px-3">
             <button
               type="button"
               className="icon-button md:hidden"
