@@ -168,6 +168,11 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   Dataview plugins write them (`📅 2026-12-01`, `[due:: 2026-12-01]`, `⏳` scheduled, `⏫ 🔼 🔽`),
   (the app reads these markers but never writes emoji itself). The AI agent can list tasks too
   ("what's due this week?"), and the weekly review mentions overdue ones
+- **The `/` menu**: type `/` at the start of a line or after a space for commands. `/due`,
+  `/scheduled` and `/start` take a date in words (`/due this tue`, `/due next friday`,
+  `/due in 3 days`, `/due 24 nov`, `/due end of month`) and show the date it means before writing
+  `[due:: 2026-11-24]`; `/date` inserts a plain date. "next tue" means Tuesday of next week. In live
+  preview the fields read as dates ("Due Tue 24 Nov"). A slash in "24/11" or "and/or" is left alone
 - Tabs for open files (the button at the end of the tab bar, or the command *Close all tabs*, closes them all), and a side pane to read one note while writing another (the columns
   button in the file tree, or Shift+Enter in the quick switcher)
 - Version history for repositories synced with GitHub: see how a note changed and restore an older version

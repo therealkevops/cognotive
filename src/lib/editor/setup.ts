@@ -35,6 +35,7 @@ import { tagHighlighter } from "./tags";
 import { completeProperties, propertyExtensions } from "./properties";
 import { propertiesPanel } from "./properties-panel";
 import { completeLinks, linkHost, livePreviewOn, WikiLinkSyntax, wikilinkExtensions, type LinkHost } from "./wikilinks";
+import { completeSlash } from "./slash";
 
 /** Formatting shortcuts. "Mod" is Cmd on macOS and Ctrl elsewhere. */
 export const formattingKeymap = [
@@ -160,7 +161,7 @@ export function editorExtensions(opts: {
     syntaxHighlighting(markdownHighlight),
     tagHighlighter,
     ...(opts.links ? [linkHost.of(opts.links), wikilinkExtensions()] : []),
-    autocompletion({ override: [completeLinks, completeProperties], icons: false }),
+    autocompletion({ override: [completeLinks, completeProperties, (ctx) => completeSlash(ctx)], icons: false }),
     propertyExtensions(),
     tableGridExtensions(),
     tableEditing(),

@@ -287,6 +287,23 @@ mark {
 .cm-md-syntax {
   color: var(--muted);
 }
+/* A task's date field in live preview: "Due Fri 27 Nov". */
+.cm-task-date {
+  display: inline-block;
+  border-radius: 0.375rem;
+  background: color-mix(in srgb, var(--foreground) 7%, transparent);
+  padding: 0 0.4em;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.8em;
+  line-height: 1.6;
+  color: var(--muted);
+  vertical-align: 0.08em;
+  cursor: text;
+}
+.cm-task-date-due {
+  color: var(--foreground);
+}
+
 .cm-md-link {
   color: var(--accent);
   text-decoration: underline;
