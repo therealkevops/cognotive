@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { NEW_TOKEN_URL } from "@/lib/github/token-store";
 import { useSync } from "./useSync";
 
-/** How to make a fine-grained token for CogNotive.ai. */
+/** How to make a fine-grained token for Cognotive.ai. */
 export function TokenInstructions({ repo }: { repo?: string }) {
   return (
     <ol className="list-decimal space-y-1 pl-5 text-xs leading-relaxed text-muted">
@@ -17,7 +17,7 @@ export function TokenInstructions({ repo }: { repo?: string }) {
         .
       </li>
       <li>
-        Name it <strong>CogNotive.ai</strong> and pick an expiry. 90 days is a good balance; CogNotive.ai reminds you before it
+        Name it <strong>Cognotive.ai</strong> and pick an expiry. 90 days is a good balance; Cognotive.ai reminds you before it
         runs out.
       </li>
       <li>

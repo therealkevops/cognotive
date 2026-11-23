@@ -34,7 +34,7 @@ test("summarise a note from the palette, and save the summary as a property", as
   const llm = new FakeLLM();
   await setUp(page, llm);
   llm.script = [
-    { text: "- Notes live in the browser\n- Links connect them", calls: [{ name: "set_property", args: { path: "Welcome", key: "summary", value: "How CogNotive.ai works." } }] },
+    { text: "- Notes live in the browser\n- Links connect them", calls: [{ name: "set_property", args: { path: "Welcome", key: "summary", value: "How Cognotive.ai works." } }] },
     "- Notes live in the browser\n- Links connect them",
   ];
   // The chat opens on its own, showing the short question.
@@ -44,10 +44,10 @@ test("summarise a note from the palette, and save the summary as a property", as
   // The model got the full instructions and the note.
   expect(lastUser(llm)).toContain("`summary` property");
   expect(llm.calls[0].messages.some((m) => m.content.includes('<note path="Welcome.md">'))).toBe(true);
-  const change = chat(page).getByRole("listitem", { name: "Set summary of Welcome to How CogNotive.ai works." });
+  const change = chat(page).getByRole("listitem", { name: "Set summary of Welcome to How Cognotive.ai works." });
   await change.getByRole("button", { name: "Apply" }).click();
   await expect(change).toContainText("Applied");
-  await expect(editor(page)).toContainText("summary: How CogNotive.ai works.");
+  await expect(editor(page)).toContainText("summary: How Cognotive.ai works.");
 });
 
 test("Connections suggests links; the empty chat offers a weekly review", async ({ page }) => {

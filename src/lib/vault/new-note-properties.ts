@@ -1,7 +1,7 @@
 import { addMissingProperties } from "../markdown/frontmatter";
 import { formatDate } from "./settings";
 
-/** Properties CogNotive.ai understands, offered in Settings → This repository → Properties for new notes. */
+/** Properties Cognotive.ai understands, offered in Settings → This repository → Properties for new notes. */
 export const KNOWN_PROPERTIES: Array<{ key: string; description: string; value(now: Date): string }> = [
   { key: "created", description: "Today's date, filled in", value: (now) => formatDate(now, "YYYY-MM-DD") },
   { key: "tags", description: "Tags, as in tags: [idea, work]", value: () => "[]" },

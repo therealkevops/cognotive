@@ -21,7 +21,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CogNotive.ai",
+  title: "Cognotive.ai",
   description: "Markdown notes with a knowledge graph, drawings and GitHub sync.",
   icons: {
     // A bold mark for browser tabs; the detailed app icon is for installs and home screens.
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     ],
     apple: "/icons/apple-touch-icon.png",
   },
-  appleWebApp: { capable: true, title: "CogNotive.ai", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Cognotive.ai", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

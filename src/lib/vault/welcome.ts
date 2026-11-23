@@ -1,6 +1,6 @@
 /** Notes created in a brand-new vault so the first screen isn't empty. */
 export const WELCOME_NOTES: Record<string, string> = {
-  "Welcome.md": `# Welcome to CogNotive.ai
+  "Welcome.md": `# Welcome to Cognotive.ai
 
 This repository lives in your browser. To sync your notes with GitHub instead, open
 **Settings** at the bottom of the sidebar. Next, read [[Linking notes]].

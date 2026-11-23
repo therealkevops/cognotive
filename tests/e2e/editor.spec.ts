@@ -5,7 +5,7 @@ const mod = process.platform === "darwin" ? "Meta" : "Control";
 
 async function openApp(page: Page) {
   await page.goto("/");
-  await expect(page).toHaveTitle("CogNotive.ai");
+  await expect(page).toHaveTitle("Cognotive.ai");
   await expect(page.locator(".cm-content")).toBeVisible();
 }
 
@@ -56,7 +56,7 @@ test("reading view renders markdown", async ({ page }) => {
   await openApp(page);
   await page.getByRole("radio", { name: "Reading" }).click();
   const view = page.getByTestId("reading-view");
-  await expect(view.getByRole("heading", { level: 1 })).toHaveText("Welcome to CogNotive.ai");
+  await expect(view.getByRole("heading", { level: 1 })).toHaveText("Welcome to Cognotive.ai");
   await expect(view.locator("table")).toBeVisible();
   await expect(view.locator(".callout-tip")).toContainText("Live preview");
   await expect(view.locator(".katex").first()).toBeVisible();

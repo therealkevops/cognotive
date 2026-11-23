@@ -37,15 +37,15 @@ test("connects a repository, clones it, and syncs edits both ways", async ({ pag
   const editor = page.locator(".cm-content");
   await editor.click();
   await page.keyboard.press("ControlOrMeta+End");
-  await page.keyboard.type("Written in CogNotive.ai");
+  await page.keyboard.type("Written in Cognotive.ai");
   await expect(page.getByRole("button", { name: /^1 unsynced/ })).toBeVisible();
   await page.getByRole("button", { name: /^1 unsynced/ }).click();
   await expect(page.getByRole("button", { name: /^Synced/ })).toBeVisible();
-  expect(github.files()["Hello.md"]).toBe("# Hello from GitHub\nWritten in CogNotive.ai");
+  expect(github.files()["Hello.md"]).toBe("# Hello from GitHub\nWritten in Cognotive.ai");
   expect(github.files()[".obsidian/app.json"]).toBe("{}");
 
   // A change made elsewhere arrives on the next sync and shows in the open note.
-  github.push({ "Hello.md": "# Hello from GitHub\nWritten in CogNotive.ai\nAnd edited on GitHub\n" });
+  github.push({ "Hello.md": "# Hello from GitHub\nWritten in Cognotive.ai\nAnd edited on GitHub\n" });
   await page.getByRole("button", { name: /^Synced/ }).click();
   await expect(editor).toContainText("And edited on GitHub");
 

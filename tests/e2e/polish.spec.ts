@@ -137,7 +137,7 @@ test.describe("installable app", () => {
 
   test("has a manifest and registers a service worker", async ({ page, request }) => {
     const manifest = await (await request.get("/manifest.webmanifest")).json();
-    expect(manifest).toMatchObject({ name: "CogNotive.ai", display: "standalone" });
+    expect(manifest).toMatchObject({ name: "Cognotive.ai", display: "standalone" });
     await openApp(page);
     await expect
       .poll(() => page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.active?.scriptURL ?? ""))

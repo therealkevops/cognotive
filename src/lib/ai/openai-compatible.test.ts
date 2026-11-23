@@ -59,7 +59,7 @@ describe("requestHeaders", () => {
   it("adds the key and OpenRouter's app headers", () => {
     const h = requestHeaders({ baseUrl: "https://openrouter.ai/api/v1", apiKey: "sk-or-1", openRouter: true });
     expect(h.Authorization).toBe("Bearer sk-or-1");
-    expect(h["X-Title"]).toBe("CogNotive.ai");
+    expect(h["X-Title"]).toBe("Cognotive.ai");
     expect(requestHeaders({ baseUrl: "http://localhost:11434/v1" }).Authorization).toBeUndefined();
   });
 });

@@ -5,7 +5,7 @@ import { parseReply, systemPrompt, ToolCallFilter, transcript, type WireMessage,
 
 /**
  * The bridge: an OpenAI-compatible endpoint on this computer only
- * (127.0.0.1), so the CogNotive.ai page can use a Claude plan through Claude
+ * (127.0.0.1), so the Cognotive.ai page can use a Claude plan through Claude
  * Code. Three separate checks guard it: the Host header (against DNS
  * rebinding), the page's Origin (only the app's address and localhost), and
  * the pairing code (a bearer token only this user can read).

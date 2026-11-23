@@ -5,7 +5,7 @@ export const EMPTY_DRAWING = JSON.stringify(
   {
     type: "excalidraw",
     version: 2,
-    source: "CogNotive.ai",
+    source: "Cognotive.ai",
     elements: [],
     appState: { gridSize: null, viewBackgroundColor: "#ffffff" },
     files: {},

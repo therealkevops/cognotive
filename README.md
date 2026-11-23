@@ -1,4 +1,4 @@
-# CogNotive.ai
+# Cognotive.ai
 
 Markdown notes with links between them, Excalidraw drawings, canvases and (later) an LLM that
 can explore them. Each **repository** of notes lives in the browser, and can sync with a GitHub
@@ -149,7 +149,7 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 - **Quick capture**: jot something down without opening a note. *Quick capture* in the sidebar, the
   command palette, or the installed app's icon (long-press, *Quick note*) opens a box for text and
   photos or files; it's added to **today's daily note** (or an **inbox** note, in Settings → This
-  repository) under a *Captured* heading, as a list item with the time. **Share to CogNotive.ai** from
+  repository) under a *Captured* heading, as a list item with the time. **Share to Cognotive.ai** from
   other apps puts links, text and pictures in the same box to review first: links become
   `[title](url)`, pictures are saved as attachments and embedded. Sharing into the app works where
   the browser supports it (Android, and Chrome or Edge on desktop), but not on iPhone or iPad, where
@@ -228,7 +228,7 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 
   Set it up in **Settings → AI**:
   - **Claude plan**: your Claude subscription, through Claude Code on your computer and the
-    CogNotive.ai bridge (see [The companion](#the-companion-claude-plan-and-mcp)). No API key
+    Cognotive.ai bridge (see [The companion](#the-companion-claude-plan-and-mcp)). No API key
   - **OpenRouter** (one key, hundreds of models): the key is checked and shows its spend limit, and
     the model list is searchable, with prices and which models can use tools
   - **Local**: Ollama (`http://localhost:11434/v1`) or LM Studio (`http://localhost:1234/v1`), with a
@@ -266,7 +266,7 @@ CI (`.github/workflows/ci.yml`) runs all of the above on every push to `main` an
 
 ## How the AI agent works
 
-The AI in CogNotive.ai doesn't just answer from the note in front of it. It looks things up across your
+The AI in Cognotive.ai doesn't just answer from the note in front of it. It looks things up across your
 notes by itself, shows exactly what it read, and **proposes** changes rather than making them.
 
 ### How a question is answered
@@ -387,7 +387,7 @@ npm run bridge -- --origin https://your-cognotive.example
 ```
 
 It prints a pairing link: open it (or paste the pairing code into **Settings → AI → Claude plan**).
-Leave out `--origin` when you use CogNotive.ai at `http://localhost`.
+Leave out `--origin` when you use Cognotive.ai at `http://localhost`.
 
 - It listens on `127.0.0.1:41414` only, and answers only pages from the given origin (and
   localhost), with a matching Host header, that send the pairing code. The code is kept in
@@ -437,7 +437,7 @@ that can only reach your notes repository, with **Contents: Read and write**, an
 The browser talks to GitHub directly with it.
 
 - The token is saved in that browser only (IndexedDB), so each device needs it pasted once.
-- It can expire (90 days is a good balance). CogNotive.ai reminds you a week ahead, and asks for a
+- It can expire (90 days is a good balance). Cognotive.ai reminds you a week ahead, and asks for a
   new one if GitHub stops accepting it; *Edit → Replace token* swaps it any time.
 - Keep the token limited to your notes repository: anything that could run inside the app could
   read it.
@@ -450,8 +450,8 @@ The browser talks to GitHub directly with it.
   30 seconds (configurable) after you stop typing, when you leave the tab, and when you switch
   repositories; it also checks GitHub for changes when you come back to the tab and every 5 minutes.
   **Manual** sync commits only when you press the sync button.
-- All pending edits go up as one commit, e.g. `CogNotive.ai: update Groceries, Plan` (or
-  `CogNotive.ai: update 2 files` in an encrypted repository).
+- All pending edits go up as one commit, e.g. `Cognotive.ai: update Groceries, Plan` (or
+  `Cognotive.ai: update 2 files` in an encrypted repository).
 - Changes from elsewhere (Obsidian, GitHub's editor, another device) come down on the next sync.
   If the same note changed in both places, edits to different lines are merged. If the same lines
   changed, the note keeps everything that merged and shows GitHub's version of those lines for now,
@@ -466,7 +466,7 @@ The browser talks to GitHub directly with it.
 
 ### Encrypted repositories
 
-When you connect a **new, empty** repository, CogNotive.ai offers to encrypt it end to end. Notes,
+When you connect a **new, empty** repository, Cognotive.ai offers to encrypt it end to end. Notes,
 attachments and their names are encrypted in the browser before they reach GitHub, so GitHub
 (and anyone who gets into your GitHub account) sees only scrambled files under `encrypted/`.
 
@@ -476,7 +476,7 @@ attachments and their names are encrypted in the browser before they reach GitHu
   *Settings → Repositories & sync → Edit → Forget key* removes it from a device.
 - `.noted/encryption.json` holds the encryption settings and the repository key locked with your
   passphrase; it never holds the key itself. A README explains what the repository is.
-- Commit messages don't name notes (`CogNotive.ai: update 2 files`). Version history still works.
+- Commit messages don't name notes (`Cognotive.ai: update 2 files`). Version history still works.
 - Search, links, Connections and canvases work as usual: the browser works on its decrypted copy.
 - Encrypted files can't be read on GitHub's website or in Obsidian, and GitHub's diffs show nothing
   useful.

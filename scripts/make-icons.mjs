@@ -1,4 +1,4 @@
-// Draws the CogNotive.ai icons and renders them to the PNG sizes the web app manifest and iOS
+// Draws the Cognotive.ai icons and renders them to the PNG sizes the web app manifest and iOS
 // need. The logo is a cog (cognition), drawn from geometry so it looks the same everywhere;
 // the browser-tab version is bolder, to stay readable at 16px. Run with: node scripts/make-icons.mjs  (uses the Playwright browser)
 import { readFileSync, writeFileSync } from "node:fs";
@@ -37,7 +37,7 @@ function cog(cx, cy, { teeth, tip, root, hole }) {
 // The app icon, 512 × 512: a paper cog on ink.
 const icon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" rx="112" fill="${INK}"/>
-  <!-- CogNotive.ai: a cog. Drawn by scripts/make-icons.mjs. -->
+  <!-- Cognotive.ai: a cog. Drawn by scripts/make-icons.mjs. -->
   <path d="${cog(256, 256, { teeth: 8, tip: 176, root: 138, hole: 82 })}" fill="${PAPER}" fill-rule="evenodd" stroke="${PAPER}" stroke-width="10" stroke-linejoin="round"/>
 </svg>
 `;
@@ -46,7 +46,7 @@ writeFileSync(new URL("../public/icons/icon.svg", import.meta.url), icon);
 // The browser-tab icon, 64 × 64: the cog alone, bold enough for 16px. It flips to paper in
 // dark browser themes so it doesn't vanish on a dark tab bar.
 const favicon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- The CogNotive.ai cog, readable at 16px. Drawn by scripts/make-icons.mjs. -->
+  <!-- The Cognotive.ai cog, readable at 16px. Drawn by scripts/make-icons.mjs. -->
   <style>
     .bg { fill: ${INK}; }
     .cog { fill: ${PAPER}; stroke: ${PAPER}; }

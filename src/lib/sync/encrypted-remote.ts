@@ -71,7 +71,7 @@ export class EncryptedRemote implements RemoteRepo {
     );
     // The engine's message names the notes; that would leak them.
     const n = changes.length;
-    return this.inner.commit(parent, stored, `CogNotive.ai: update ${n} ${n === 1 ? "file" : "files"}`);
+    return this.inner.commit(parent, stored, `Cognotive.ai: update ${n} ${n === 1 ? "file" : "files"}`);
   }
 
   /** Where a plain repo path is stored. */

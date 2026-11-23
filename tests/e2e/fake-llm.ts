@@ -27,7 +27,7 @@ export class FakeLLM {
   localModels = ["llama3.2:latest", "qwen3:8b"];
   /** The local server refuses tools, as Ollama does for models without tool support. */
   localNoTools = false;
-  /** The CogNotive.ai bridge on 127.0.0.1:41414: whether it's running, and its pairing code. */
+  /** The Cognotive.ai bridge on 127.0.0.1:41414: whether it's running, and its pairing code. */
   bridgeRunning = false;
   bridgeCode = "c0de".repeat(12);
   /** Replies used in order before falling back to `reply`. */

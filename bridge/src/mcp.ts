@@ -14,7 +14,7 @@ import { NoteFolder } from "./folder";
  * git shows every change before it's committed and synced.
  */
 export const INSTRUCTIONS = [
-  "These tools work on a folder of markdown notes (a CogNotive.ai repository, Obsidian-compatible).",
+  "These tools work on a folder of markdown notes (a Cognotive.ai repository, Obsidian-compatible).",
   "Search and read before answering; cite notes as [[wikilinks]]. Read a note before changing it.",
   "Notes link with [[Note name]]; properties are YAML frontmatter; hubs are notes with hub: true.",
 ].join(" ");

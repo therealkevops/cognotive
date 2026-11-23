@@ -7,13 +7,13 @@ import { readOrCreateToken } from "./token";
 
 export const VERSION = "0.1.0";
 
-const HELP = `CogNotive.ai ${VERSION}: the CogNotive.ai companion
+const HELP = `Cognotive.ai ${VERSION}: the Cognotive.ai companion
 
 Usage:
   cognotive bridge [--origin URL]... [--port 41414] [--new-code]
-      Lets the CogNotive.ai app use your Claude plan through Claude Code (installed
+      Lets the Cognotive.ai app use your Claude plan through Claude Code (installed
       and signed in on this computer). Listens on 127.0.0.1 only. --origin is
-      the address you open CogNotive.ai at (http://localhost works without it).
+      the address you open Cognotive.ai at (http://localhost works without it).
 
   cognotive mcp <notes folder> [--read-only] [--markdown-links]
       An MCP server with the app's agent tools for a folder of notes (a clone
@@ -52,7 +52,7 @@ async function bridge(flags: Record<string, string[]>) {
   await b.start();
   const status = await runner.status();
   const log = (s = "") => process.stdout.write(s + "\n");
-  log(`CogNotive.ai bridge is running at ${b.url} (this computer only).`);
+  log(`Cognotive.ai bridge is running at ${b.url} (this computer only).`);
   log();
   if (!status.installed) log("Warning: Claude Code isn't installed: npm install -g @anthropic-ai/claude-code\n");
   else if (!status.signedIn) log("Warning: Claude Code is signed out: run `claude /login`\n");
@@ -60,7 +60,7 @@ async function bridge(flags: Record<string, string[]>) {
   log(`Pairing code: ${token}`);
   for (const o of origins) log(`Or open ${o}/#bridge=${token} to pair in one step.`);
   if (!origins.length) log("Only http://localhost can use it. Add --origin https://your-cognotive.example to allow your deployed app.");
-  log("\nIn CogNotive.ai: Settings → AI → Claude plan. Press Ctrl+C to stop.");
+  log("\nIn Cognotive.ai: Settings → AI → Claude plan. Press Ctrl+C to stop.");
   const stop = () => void b.close().then(() => process.exit(0));
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
@@ -71,7 +71,7 @@ async function mcp(positional: string[], flags: Record<string, string[]>) {
   if (!dir) throw new Error("Say which folder of notes, e.g. cognotive mcp ~/notes");
   const folder = new NoteFolder(path.resolve(dir));
   folder.scan();
-  process.stderr.write(`CogNotive.ai MCP server for ${folder.root} (${folder.files().length} files)${flags["read-only"] ? ", read-only" : ""}\n`);
+  process.stderr.write(`Cognotive.ai MCP server for ${folder.root} (${folder.files().length} files)${flags["read-only"] ? ", read-only" : ""}\n`);
   await mcpServer(folder, { readOnly: !!flags["read-only"], version: VERSION, linkFormat: flags["markdown-links"] ? "markdown" : "wikilink" }).listen();
 }
 
@@ -82,7 +82,7 @@ export async function main(argv = process.argv.slice(2)) {
     else if (command === "mcp") await mcp(positional, flags);
     else process.stdout.write(HELP);
   } catch (e) {
-    process.stderr.write(`CogNotive.ai: ${(e as Error).message}\n`);
+    process.stderr.write(`Cognotive.ai: ${(e as Error).message}\n`);
     process.exit(1);
   }
 }

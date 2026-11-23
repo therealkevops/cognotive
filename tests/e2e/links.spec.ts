@@ -98,7 +98,7 @@ test("Map as canvas lays out a note and its connections", async ({ page }) => {
   await page.getByRole("button", { name: "Map as canvas" }).click();
   await expect(title(page)).toHaveValue("Welcome map");
   const board = page.getByTestId("canvas");
-  await expect(board.locator(".react-flow__node", { hasText: "Welcome to CogNotive.ai" })).toBeVisible();
+  await expect(board.locator(".react-flow__node", { hasText: "Welcome to Cognotive.ai" })).toBeVisible();
   await expect(board.getByRole("button", { name: "Linking notes", exact: true })).toBeVisible(); // its card's title
   // Welcome and Linking notes link to each other: one arrow, both ways.
   await expect(board.locator(".react-flow__edge")).toHaveCount(1);
