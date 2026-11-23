@@ -86,6 +86,28 @@ export function placeBlock(view: EditorView, from: number, to: number, text: str
 }
 
 /** Removes what was typed, then runs an editor command at that spot. */
+/**
+ * After a line becomes a heading, quote or task, keeps the cursor after its marker
+ * ("- [ ] ", "## ", "> "), so typing carries straight on. (Typed on an empty line, the
+ * cursor would otherwise sit in front of the marker that was just inserted.)
+ */
+function afterMarker(view: EditorView) {
+  const head = view.state.selection.main.head;
+  const line = view.state.doc.lineAt(head);
+  const marker = /^\s*(?:#{1,6}\s+|>\s?|[-*+]\s+\[.\]\s+|[-*+]\s+|\d+[.)]\s+)/.exec(line.text);
+  const end = line.from + (marker?.[0].length ?? 0);
+  if (marker && head < end) view.dispatch({ selection: { anchor: end } });
+}
+
+/** Removes what was typed, then turns the line into a heading, quote or task. */
+function lineKind(command: (view: EditorView) => boolean): Apply {
+  return (view, from, to) => {
+    replaceTyped(view, from, to, "");
+    command(view);
+    afterMarker(view);
+  };
+}
+
 function thenRun(command: (view: EditorView) => boolean): Apply {
   return (view, from, to) => {
     replaceTyped(view, from, to, "");
@@ -219,7 +241,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
       label: `Heading ${level}`,
       info: `Makes this line a level ${level} heading`,
       section: "blocks",
-      run: thenRun((v) => setHeading(level)(v)),
+      run: lineKind((v) => setHeading(level)(v)),
     }),
   ),
   {
@@ -237,7 +259,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     label: "Quote",
     info: "Makes this line a quote",
     section: "blocks",
-    run: thenRun((v) => toggleLinePrefix("quote")(v)),
+    run: lineKind((v) => toggleLinePrefix("quote")(v)),
   },
   {
     name: "code",
@@ -375,6 +397,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     run: (view, from, to) => {
       replaceTyped(view, from, to, "");
       if (!hasTask(view, from)) toggleLinePrefix("task")(view);
+      afterMarker(view);
     },
   },
   { name: "due", aliases: ["deadline"], label: "Due date", info: "Sets a task's due date, e.g. /due this tue", section: "tasks", choices: dateField("due", "Due") },

@@ -128,3 +128,18 @@ test("/template opens the picker; /daily links a day's note; /priority sets a ta
   await page.getByRole("tab", { name: "Tasks" }).click();
   await expect(page.getByRole("region", { name: "Tasks" }).getByRole("listitem").filter({ hasText: "Book flights" })).toContainText("High priority");
 });
+
+test("after /h2 or /task, typing carries straight on after the marker", async ({ page }) => {
+  await page.keyboard.type("/h2");
+  await expect(menu(page).locator("[aria-selected=true]")).toContainText("Heading 2");
+  await acceptSuggestion(page);
+  await page.keyboard.type("Shopping");
+  await expect(editor(page).locator(".cm-line", { hasText: "Shopping" })).toHaveText("## Shopping");
+
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("/task");
+  await expect(menu(page).locator("[aria-selected=true]")).toContainText("Task");
+  await acceptSuggestion(page);
+  await page.keyboard.type("Buy milk");
+  await expect(editor(page).locator(".cm-line", { hasText: "Buy milk" })).toHaveText("- [ ] Buy milk");
+});

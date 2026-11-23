@@ -29,6 +29,19 @@ const labels = (doc: string) => complete(doc).result?.options.map((o) => o.label
 const views: EditorView[] = [];
 afterEach(() => views.splice(0).forEach((v) => v.destroy()));
 
+/** The document after choosing the option labelled `label`, with "‸" where the cursor ends up. */
+function chooseWithCursor(doc: string, label: string): string {
+  const { result, state, pos } = complete(doc);
+  const option = result?.options.find((o) => o.label === label);
+  if (!result || !option) throw new Error(`no "${label}"`);
+  const view = new EditorView({ state, parent: document.body });
+  views.push(view);
+  (option.apply as (v: EditorView, c: Completion, f: number, t: number) => void)(view, option, result.from, pos);
+  const head = view.state.selection.main.head;
+  const text = view.state.doc.toString();
+  return text.slice(0, head) + "‸" + text.slice(head);
+}
+
 /** The document after choosing the option labelled `label`. */
 function choose(doc: string, label: string): string {
   const { result, state, pos } = complete(doc);
@@ -82,6 +95,15 @@ describe("the / menu", () => {
 
   it("finishes the command name, ready for a date", () => {
     expect(choose("- [ ] Call Sam /du‸", "Due date")).toBe("- [ ] Call Sam /due ");
+  });
+
+  it("leaves the cursor after the marker, so typing carries on", () => {
+    expect(chooseWithCursor("/task‸", "Task")).toBe("- [ ] ‸");
+    expect(chooseWithCursor("Intro\n/task‸", "Task")).toBe("Intro\n- [ ] ‸");
+    expect(chooseWithCursor("  /task‸", "Task")).toBe("  - [ ] ‸");
+    expect(chooseWithCursor("/h2‸", "Heading 2")).toBe("## ‸");
+    expect(chooseWithCursor("/quote‸", "Quote")).toBe("> ‸");
+    expect(chooseWithCursor("Buy milk /task‸", "Task")).toBe("- [ ] Buy milk ‸");
   });
 
   it("turns lines into headings, quotes and tasks", () => {
