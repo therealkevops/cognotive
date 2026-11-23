@@ -539,6 +539,19 @@ mark {
 }
 .cm-tooltip-autocomplete ul {
   padding: 0.25rem !important;
+  /* CodeMirror's own list is monospace and about four items tall: the / menu needs more room. */
+  font-family: inherit !important;
+  max-height: min(22rem, 45vh) !important;
+}
+.cm-tooltip-autocomplete completion-section {
+  display: block;
+  padding: 0.45rem 0.6rem 0.2rem;
+  border-bottom: 0 !important;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 .cm-tooltip-autocomplete ul li {
   border-radius: 0.5rem;

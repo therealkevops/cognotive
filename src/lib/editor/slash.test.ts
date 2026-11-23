@@ -5,11 +5,18 @@ import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it } from "vitest";
 import { FrontmatterSyntax } from "./frontmatter-syntax";
 import { completeSlash } from "./slash";
-import { WikiLinkSyntax } from "./wikilinks";
+import { linkHost, WikiLinkSyntax, type LinkHost } from "./wikilinks";
 
 // Monday 23 November 2026.
 const NOW = new Date(2026, 10, 23, 9);
-const extensions = [markdown({ base: markdownLanguage, extensions: [FrontmatterSyntax, WikiLinkSyntax] })];
+const host = {
+  notes: () => [],
+  headings: () => [],
+  resolve: () => null,
+  open: () => {},
+  dailyNoteLink: (d: Date) => `[[Daily/${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}]]`,
+} as LinkHost;
+const extensions = [markdown({ base: markdownLanguage, extensions: [FrontmatterSyntax, WikiLinkSyntax] }), linkHost.of(host)];
 
 /** Completions with the cursor at "‸". */
 function complete(doc: string): { result: CompletionResult | null; state: EditorState; pos: number } {
@@ -35,10 +42,17 @@ function choose(doc: string, label: string): string {
 
 describe("the / menu", () => {
   it("lists the commands at the start of a line or after a space", () => {
-    expect(labels("/‸")).toEqual(["Due date", "Scheduled date", "Start date", "Date"]);
+    const all = complete("/‸").result!.options;
+    expect(new Set(all.map((o) => (typeof o.section === "object" ? o.section.name : o.section)))).toEqual(new Set(["Blocks", "Insert", "Tasks and dates"]));
+    // Commands that need the app (attachments, drawings, templates) are only offered when it can do them.
+    expect(all.map((o) => o.label)).toContain("Link a daily note");
+    expect(all.map((o) => o.label)).not.toContain("Attach a file or photo");
     expect(labels("- [ ] Call Sam /‸")).toContain("Due date");
-    expect(labels("/s‸")).toEqual(["Scheduled date", "Start date"]);
+    expect(labels("/sch‸")).toEqual(["Scheduled date"]);
+    expect(labels("/s‸")).toEqual(expect.arrayContaining(["Scheduled date", "Start date", "Code block", "Divider"]));
     expect(labels("/dead‸")).toEqual(["Due date"]);
+    expect(labels("/heading‸")).toEqual(["Heading 1", "Heading 2", "Heading 3"]);
+    expect(labels("/code‸")[0]).toBe("Code block");
   });
 
   it("stays shut where a slash is just a slash", () => {
@@ -68,5 +82,45 @@ describe("the / menu", () => {
 
   it("finishes the command name, ready for a date", () => {
     expect(choose("- [ ] Call Sam /du‸", "Due date")).toBe("- [ ] Call Sam /due ");
+  });
+
+  it("turns lines into headings, quotes and tasks", () => {
+    expect(choose("Shopping /h2‸", "Heading 2")).toBe("## Shopping ");
+    expect(choose("Ideas /quote‸", "Quote")).toBe("> Ideas ");
+    expect(choose("Buy milk /task‸", "Task")).toBe("- [ ] Buy milk ");
+    expect(choose("- [ ] Buy milk /task‸", "Task")).toBe("- [ ] Buy milk ");
+  });
+
+  it("puts blocks on their own lines", () => {
+    expect(choose("Intro\n/math‸", "Maths block")).toBe("Intro\n\n$$\n\n$$");
+    expect(choose("/divider‸", "Divider")).toBe("\n---\n");
+    expect(choose("Steps /diagram‸", "Diagram")).toBe("Steps\n\n```mermaid\ngraph LR\n  A --> B\n```");
+    expect(choose("/callout ti‸", "Tip")).toBe("> [!tip]\n> ");
+    expect(choose("/code py‸", "Python")).toBe("```python\n\n```");
+    expect(choose("/code rust‸", "rust")).toBe("```rust\n\n```");
+  });
+
+  it("makes tables by size, columns first", () => {
+    expect(labels("/table ‸")).toEqual(["Table, 2 × 2", "Table, 3 × 2", "Table, 3 × 3", "Table, 4 × 3", "Table, 4 × 4"]);
+    expect(labels("/table 5x3‸")).toEqual(["Table, 5 × 3"]);
+    const table = choose("/table 3x1‸", "Table, 3 × 1");
+    expect(table.split("\n")).toHaveLength(3);
+    expect(table.split("\n")[0].match(/\|/g)).toHaveLength(4);
+  });
+
+  it("sets and clears a task's priority", () => {
+    expect(labels("/priority h‸")).toEqual(["Highest priority", "High priority"]);
+    expect(choose("- [ ] Call Sam /priority high‸", "High priority")).toBe("- [ ] Call Sam [priority:: high]");
+    expect(choose("- [ ] Call Sam [priority:: low] /priority hi‸", "Highest priority")).toBe("- [ ] Call Sam [priority:: highest]");
+    expect(choose("- [ ] Call Sam [priority:: low] /priority no‸", "No priority")).toBe("- [ ] Call Sam");
+  });
+
+  it("links the daily note for a date in words", () => {
+    expect(choose("Discuss on /daily this fri‸", "Daily note Fri 27 Nov")).toBe("Discuss on [[Daily/2026-11-27]]");
+  });
+
+  it("starts a link or an embed and opens the note suggestions", () => {
+    expect(choose("See /link‸", "Link to a note")).toBe("See [[]]");
+    expect(choose("/embed‸", "Embed a note or image")).toBe("![[]]");
   });
 });

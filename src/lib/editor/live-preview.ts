@@ -85,7 +85,7 @@ class EmbedWidget extends WidgetType {
   }
 }
 
-/** A task's date field ("[due:: 2026-11-27]") shown as "Due Fri 27 Nov". */
+/** A task's date or priority field ("[due:: 2026-11-27]") shown as "Due Fri 27 Nov" or "High priority". */
 class TaskDateWidget extends WidgetType {
   constructor(
     readonly field: string,
@@ -99,10 +99,14 @@ class TaskDateWidget extends WidgetType {
   toDOM() {
     const span = document.createElement("span");
     span.className = `cm-task-date cm-task-date-${this.field}`;
-    const [y, m, d] = this.iso.split("-").map(Number);
-    const date = new Date(y, m - 1, d);
     const label = TASK_FIELD_LABELS[this.field] ?? this.field;
-    span.textContent = Number.isNaN(date.getTime()) ? `${label} ${this.iso}` : `${label} ${describeDate(date)}`;
+    if (this.field === "priority") {
+      span.textContent = `${this.iso.charAt(0).toUpperCase()}${this.iso.slice(1)} priority`;
+    } else {
+      const [y, m, d] = this.iso.split("-").map(Number);
+      const date = new Date(y, m - 1, d);
+      span.textContent = Number.isNaN(date.getTime()) ? `${label} ${this.iso}` : `${label} ${describeDate(date)}`;
+    }
     span.title = `${this.field}:: ${this.iso}`;
     return span;
   }
@@ -112,7 +116,7 @@ class TaskDateWidget extends WidgetType {
 }
 
 const TASK_FIELD_LABELS: Record<string, string> = { due: "Due", scheduled: "Scheduled", start: "Starts", completion: "Done" };
-const TASK_FIELD = /^\[(due|scheduled|start|completion)::\s*(\d{4}-\d{2}-\d{2})\]$/;
+const TASK_FIELD = /^\[(?:(due|scheduled|start|completion)::\s*(\d{4}-\d{2}-\d{2})|(priority)::\s*(highest|high|medium|low|lowest))\s*\]$/i;
 
 const hidden = Decoration.replace({});
 const bullet = Decoration.replace({ widget: new BulletWidget() });
@@ -160,7 +164,8 @@ function build(view: EditorView): DecorationSet {
             if (touches(state, node.from, node.to)) return false;
             const field = TASK_FIELD.exec(state.sliceDoc(node.from, node.to));
             if (field) {
-              decos.push(Decoration.replace({ widget: new TaskDateWidget(field[1], field[2]) }).range(node.from, node.to));
+              const [name, value] = field[1] ? [field[1], field[2]] : ["priority", field[4].toLowerCase()];
+              decos.push(Decoration.replace({ widget: new TaskDateWidget(name, value) }).range(node.from, node.to));
               return false;
             }
             // Hide "[", "](url \"title\")" and keep the label. Reference-style

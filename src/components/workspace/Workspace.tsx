@@ -64,6 +64,7 @@ import { EmptyState, SaveIndicator, TitleInput, Toasts } from "./WorkspaceParts"
 import { captureTarget, dailyNote, deletePropertyEverywhere, exportZip, importZip, mapAsCanvas, renamePropertyEverywhere, saveCapture } from "./vault-actions";
 import { useEditorHosts } from "./useEditorHosts";
 import { ErrorBoundary } from "../ErrorBoundary";
+import { placeBlock, QUERY_BLOCK } from "@/lib/editor/slash";
 
 const MarkdownEditor = dynamic(() => reloadOnChunkError(() => import("./MarkdownEditor"))(), { ssr: false });
 // Excalidraw is about 1 MB: loaded only when a drawing is opened.
@@ -515,7 +516,8 @@ export function Workspace() {
 
 
   const onLinkSelection = useCallback(() => setLinkPickerOpen(true), []);
-  const { inbound, propertyInfo, linkHost, linkContext, drawingVault, canvasVault } = useEditorHosts({ openLink, recent, onLinkSelection, askRef });
+  const onInsertTemplate = useCallback(() => setTemplatePicker("insert"), []);
+  const { inbound, propertyInfo, linkHost, linkContext, drawingVault, canvasVault } = useEditorHosts({ openLink, recent, onLinkSelection, onInsertTemplate, askRef });
 
   const activePathNow = vault.active?.path ?? null;
   const kind = !activePathNow
@@ -930,11 +932,10 @@ export function Workspace() {
     "insert-query": () => {
       if (!view) return;
       const { from } = view.state.selection.main;
-      const line = view.state.doc.lineAt(from);
-      const before = line.text.trim() ? "\n\n" : "";
-      const block = `${before}\`\`\`query\n#tag [status:active]\nshow: table status, due\nsort: due\n\`\`\`\n`;
-      const at = line.text.trim() ? line.to : line.from;
-      view.dispatch({ changes: { from: at, insert: block }, selection: { anchor: at + before.length + 9, head: at + before.length + 13 }, userEvent: "input" });
+      placeBlock(view, from, from, QUERY_BLOCK, "```query\n".length);
+      // Select the example tag, ready to type over.
+      const at = view.state.selection.main.head;
+      view.dispatch({ selection: { anchor: at, head: at + 4 } });
       view.focus();
     },
     "ai-summarise": () => activePathNow && runAction({ kind: "summarise", path: activePathNow }),

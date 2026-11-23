@@ -38,6 +38,10 @@ describe("parseTasks", () => {
     expect(tasks[4]).toMatchObject({ done: true, cancelled: true });
     expect(tasks[5].due).toBe("2026-11-20");
   });
+  it("reads a priority written as a field, as the / menu writes it", () => {
+    const [t] = parseTasks("a.md", "- [ ] Call Sam [priority:: high] [due:: 2026-11-24]");
+    expect(t).toMatchObject({ text: "Call Sam", priority: "high", due: "2026-11-24" });
+  });
 });
 
 describe("toggleTask", () => {

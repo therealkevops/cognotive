@@ -5,7 +5,7 @@ import { splitFrontmatter } from "../markdown/frontmatter";
  * read the way Obsidian's Tasks and Dataview plugins write them, so a
  * repository that already uses them shows the same tasks here:
  * "📅 2026-11-20" or "[due:: 2026-11-20]", "⏳"/"🛫" for scheduled/start,
- * "✅ 2026-11-20" for done, and ⏫ 🔼 🔽 (or 🔺 ⏬) for priority.
+ * "✅ 2026-11-20" for done, and ⏫ 🔼 🔽 (or 🔺 ⏬) for priority, or "[priority:: high]".
  */
 export interface Task {
   path: string;
@@ -105,13 +105,19 @@ export function parseTasks(path: string, content: string): Task[] {
         }
       }
     }
-    for (const [sym, p] of PRIORITIES) {
-      if (text.includes(sym)) {
-        task.priority = p;
-        text = text.replace(sym, "");
-        break;
+    // "[priority:: high]" (what the app writes, as Dataview does), or the Tasks plugin's markers.
+    const field = /\s?\[priority::\s*(highest|high|medium|low|lowest|none)\s*\]/i.exec(text);
+    if (field) {
+      task.priority = field[1].toLowerCase() as Priority;
+      text = text.replace(field[0], "");
+    } else
+      for (const [sym, p] of PRIORITIES) {
+        if (text.includes(sym)) {
+          task.priority = p;
+          text = text.replace(sym, "");
+          break;
+        }
       }
-    }
     // Other Tasks-plugin markers (recurrence 🔁 …, created ➕ date) are left out of the text.
     task.text = text
       .replace(/🔁[^📅⏳🛫✅➕]*/u, "")

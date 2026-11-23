@@ -58,6 +58,12 @@ export interface LinkHost {
   linkSelection?(): void;
   /** A live query block's results, as markdown (see src/lib/query). */
   queryMarkdown?(source: string, lang: "query" | "dataview"): string;
+  /** Makes an empty drawing (not opened) for the "/drawing" command; returns its link text. */
+  newDrawing?(): Promise<string | null>;
+  /** Opens the template picker to insert one at the cursor ("/template"). */
+  insertTemplate?(): void;
+  /** The link to the daily note for a date, in the repository's link format ("/daily"). */
+  dailyNoteLink?(date: Date): string;
   /** Asks the AI about the selection (Ctrl/Cmd+Shift+Enter; Ctrl+Shift+A is taken by Chrome's tab search). */
   askSelection?(): void;
   headings(path: string): string[];

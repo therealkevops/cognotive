@@ -15,10 +15,12 @@ import { queryToMarkdown } from "@/lib/query/query";
 import { blockIdChange, listBlocks } from "@/lib/markdown/blocks";
 import { previewMarkdown } from "@/lib/markdown/preview";
 import { sectionUnder } from "@/lib/markdown/remark-links";
-import { basename, canvasName, dirname, displayName, drawingName, isCanvas, isDrawing, isImage, isNote, noteTitle } from "@/lib/vault/paths";
+import { basename, canvasName, dirname, displayName, drawingName, isCanvas, isDrawing, isImage, isNote, joinPath, noteTitle, uniquePath } from "@/lib/vault/paths";
 import type { CanvasVault } from "./CanvasView";
 import type { DrawingVault } from "./DrawingView";
 import { useVault } from "../vault/useVault";
+import { EMPTY_DRAWING } from "@/lib/drawing/parse";
+import { formatDate } from "@/lib/vault/settings";
 
 const prefersDark = isDark;
 
@@ -31,12 +33,15 @@ export function useEditorHosts({
   openLink,
   recent,
   onLinkSelection,
+  onInsertTemplate,
   askRef,
 }: {
   openLink(target: string, heading?: string, how?: OpenHow): Promise<void> | void;
   recent: string[];
   /** Opens the picker that links the editor's selection to a note. */
   onLinkSelection(): void;
+  /** Opens the template picker to insert one at the cursor. */
+  onInsertTemplate(): void;
   /** Opens "Ask" on the editor's selection (a ref, so the host needn't change with it). */
   askRef: RefObject<() => void>;
 }) {
@@ -103,6 +108,22 @@ export function useEditorHosts({
       linkText: (p) => (vault.entries.some((e) => e.path === p && e.kind === "file") ? vault.links.linkText(p) : null),
       linkSelection: () => onLinkSelection(),
       askSelection: () => askRef.current(),
+      insertTemplate: () => onInsertTemplate(),
+      newDrawing: async () => {
+        const path = uniquePath(joinPath(vault.settings.attachmentFolder, "Drawing.excalidraw"), vault.exists);
+        await vault.writeFile(path, EMPTY_DRAWING);
+        return vault.links.linkText(path);
+      },
+      dailyNoteLink: (date) => {
+        const s = vault.settings;
+        const name = formatDate(date, s.dailyFormat || "YYYY-MM-DD");
+        const path = joinPath(s.dailyFolder, `${name}.md`);
+        // An existing note by its usual link; one still to come by its path, so it's made in the right folder.
+        const inner = vault.exists(path) ? vault.links.linkText(path) : joinPath(s.dailyFolder, name);
+        const from = vault.active?.path;
+        if (s.linkFormat === "markdown" && from) return markdownLink(from, { path, target: inner });
+        return `[[${inner}]]`;
+      },
       queryMarkdown: (src, lang) => runQueryBlock(src, lang),
       currentPath: () => vault.active?.path ?? null,
       formatLink: (inner, embed) => {
@@ -163,7 +184,7 @@ export function useEditorHosts({
       },
       propertyInfo,
     }),
-    [vault, openLink, recent, inbound, propertyInfo, runQueryBlock, onLinkSelection, askRef],
+    [vault, openLink, recent, inbound, propertyInfo, runQueryBlock, onLinkSelection, onInsertTemplate, askRef],
   );
 
   // What a drawing needs to link to notes and place vault pictures, as in Obsidian.

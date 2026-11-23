@@ -14,6 +14,7 @@ import {
 } from "@/lib/editor/setup";
 import { refreshBlocks } from "@/lib/editor/live-blocks";
 import type { LinkHost } from "@/lib/editor/wikilinks";
+import { isoDate } from "@/lib/dates/natural";
 
 export interface MarkdownEditorProps {
   /** Identifies the document; when it changes the editor reloads `initial`. */
@@ -58,6 +59,9 @@ export default function MarkdownEditor({
       linkText: (p) => (linksRef.current?.linkText ? linksRef.current.linkText(p) : p.replace(/\.md$/i, "")),
       linkSelection: () => linksRef.current?.linkSelection?.(),
       askSelection: () => linksRef.current?.askSelection?.(),
+      newDrawing: async () => (await linksRef.current?.newDrawing?.()) ?? null,
+      insertTemplate: () => linksRef.current?.insertTemplate?.(),
+      dailyNoteLink: (date) => linksRef.current?.dailyNoteLink?.(date) ?? `[[${isoDate(date)}]]`,
       queryMarkdown: (src, lang) => linksRef.current?.queryMarkdown?.(src, lang) ?? "",
       currentPath: () => linksRef.current?.currentPath?.() ?? null,
       formatLink: (inner, embed) => linksRef.current?.formatLink?.(inner, embed) ?? null,

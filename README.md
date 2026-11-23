@@ -168,11 +168,19 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   Dataview plugins write them (`📅 2026-12-01`, `[due:: 2026-12-01]`, `⏳` scheduled, `⏫ 🔼 🔽`),
   (the app reads these markers but never writes emoji itself). The AI agent can list tasks too
   ("what's due this week?"), and the weekly review mentions overdue ones
-- **The `/` menu**: type `/` at the start of a line or after a space for commands. `/due`,
-  `/scheduled` and `/start` take a date in words (`/due this tue`, `/due next friday`,
-  `/due in 3 days`, `/due 24 nov`, `/due end of month`) and show the date it means before writing
-  `[due:: 2026-11-24]`; `/date` inserts a plain date. "next tue" means Tuesday of next week. In live
-  preview the fields read as dates ("Due Tue 24 Nov"). A slash in "24/11" or "and/or" is left alone
+- **The `/` menu**: type `/` at the start of a line or after a space for commands, in sections:
+  - *Blocks*: `/h1`–`/h3`, `/callout tip` (note, tip, warning, question…), `/quote`,
+    `/code python`, `/table 3x4` (columns × rows, edited as a grid), `/math`, `/diagram`
+    (Mermaid), `/query` (a live query) and `/divider`
+  - *Insert*: `/link` and `/embed` (start a link and suggest notes), `/attach` (files, or a photo
+    from a phone's camera, embedded where you type), `/drawing` (a new drawing, embedded),
+    `/template` and `/property`
+  - *Tasks and dates*: `/task`, `/priority high` (writes `[priority:: high]`), and `/due`,
+    `/scheduled`, `/start`, which take a date in words (`/due this tue`, `/due next friday`,
+    `/due in 3 days`, `/due 24 nov`, `/due end of month`) and show the date it means before writing
+    `[due:: 2026-11-24]`; `/date` inserts a plain date and `/daily this fri` links that day's
+    daily note. "next tue" means Tuesday of next week. In live preview task fields read as
+    "Due Tue 24 Nov" and "High priority". A slash in "24/11" or "and/or" is left alone
 - Tabs for open files (the button at the end of the tab bar, or the command *Close all tabs*, closes them all), and a side pane to read one note while writing another (the columns
   button in the file tree, or Shift+Enter in the quick switcher)
 - Version history for repositories synced with GitHub: see how a note changed and restore an older version
