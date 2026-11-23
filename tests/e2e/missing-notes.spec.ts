@@ -237,7 +237,7 @@ test("the Connections panel shows a note's hubs and suggests one to join", async
   const suggested = inHubs.getByRole("list", { name: "Suggested hubs" });
   await expect(suggested).toContainText("mentions Cooking");
   await suggested.getByRole("button", { name: "Add to Cooking" }).click();
-  await expect(inHubs).toContainText("Cookinglists this note");
+  await expect(inHubs).toContainText("CookingLists this note");
 
   await inHubs.getByRole("button", { name: "Cooking", exact: true }).click();
   await expect(title(page)).toHaveValue("Cooking");

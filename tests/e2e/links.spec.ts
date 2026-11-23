@@ -28,7 +28,8 @@ test("typing [[ suggests notes, and links can be followed", async ({ page }) => 
   // Welcome now shows the backlink.
   const backlinks = page.getByRole("region", { name: "Backlinks" });
   await expect(backlinks.getByRole("button", { name: "Daily" })).toBeVisible();
-  await expect(backlinks).toContainText("Read [[Welcome]] today.");
+  // The line, with the link shown as its words.
+  await expect(backlinks).toContainText("Read Welcome today.");
 });
 
 test("clicking a link to a missing note creates it", async ({ page }) => {
