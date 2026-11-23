@@ -139,10 +139,11 @@ export function FileTree() {
   });
 
   return (
-    <nav aria-label="Files" className="flex h-full flex-col">
+    <nav aria-label="Files" className="@container flex h-full flex-col">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="px-2 text-xs font-medium text-muted">Files</h2>
-        <div className="flex gap-0.5">
+        {/* In a narrow sidebar the buttons need the room; the heading stays for screen readers. */}
+        <h2 className="px-2 text-xs font-medium text-muted @max-[13.5rem]:sr-only">Files</h2>
+        <div className="flex shrink-0 gap-0.5">
           <button
             type="button"
             className="icon-button"

@@ -55,3 +55,37 @@ test("a collapsed side has no resize handle", async ({ page }) => {
   await expect(page.getByRole("separator", { name: "Resize the side panel" })).toHaveCount(0);
   await expect(page.getByRole("separator", { name: "Resize the sidebar" })).toBeVisible();
 });
+
+test("at their narrowest, the sides' headers still fit: icons for the panel's tabs, nothing pushed out", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".cm-content")).toBeVisible();
+  const tabs = page.getByRole("tablist", { name: "Note panels" });
+  // Named at the default width.
+  await expect(tabs.getByRole("tab", { name: "Connections" })).toContainText("Connections");
+  await expect(tabs.locator("svg").first()).toBeHidden();
+
+  for (const name of ["Resize the sidebar", "Resize the side panel"]) {
+    await page.getByRole("separator", { name }).focus();
+    await page.keyboard.press("Home");
+  }
+  await expect.poll(() => width(page, "right")).toBe(200);
+  await expect(tabs.locator("svg").first()).toBeVisible();
+  await expect(tabs.getByRole("tab", { name: "Connections" })).toBeVisible();
+
+  // Every button stays inside its column, and the collapse buttons can be reached.
+  const spills = await page.evaluate(() =>
+    ["Repository", "Context"].flatMap((side) => {
+      const aside = document.querySelector(`aside[aria-label="${side}"]`)!;
+      const box = aside.getBoundingClientRect();
+      return [...aside.querySelectorAll("button")].flatMap((b) => {
+        const r = b.getBoundingClientRect();
+        return r.width && (r.right > box.right + 0.5 || r.left < box.left - 0.5) ? [`${side}: ${b.getAttribute("aria-label") ?? b.textContent}`] : [];
+      });
+    }),
+  );
+  expect(spills).toEqual([]);
+  await page.getByRole("button", { name: "Collapse panel" }).click();
+  await expect(page.getByRole("navigation", { name: "Context rail" })).toBeVisible();
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(page.getByRole("navigation", { name: "Repository rail" })).toBeVisible();
+});

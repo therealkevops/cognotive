@@ -610,7 +610,7 @@ export function Workspace() {
         </div>
         <button
           type="button"
-          className="icon-button hidden md:inline-flex"
+          className="icon-button hidden shrink-0 md:inline-flex"
           aria-label="Collapse sidebar"
           title="Collapse sidebar (Ctrl/Cmd+\)"
           onClick={() => setLeftCollapsed(true)}
@@ -619,7 +619,7 @@ export function Workspace() {
         </button>
       </div>
       <div className="mb-3 flex items-center gap-1 px-0.5">
-      <div role="tablist" aria-label="Sidebar" className="segmented min-w-0 flex-1">
+      <div role="tablist" aria-label="Sidebar" className="segmented segmented-icons min-w-0 flex-1">
         {(
           [
             ["files", "Files", Files],
@@ -1008,29 +1008,32 @@ export function Workspace() {
           panel={
             vault.active ? (
               <>
-                <div className="sticky top-0 z-10 -mx-4 mb-3 flex h-12 items-center gap-1 bg-background px-4">
-                <div role="tablist" aria-label="Note panels" className="segmented flex flex-1">
+                {/* A narrow panel shows its tabs as icons (named in their tooltips), so they fit. */}
+                <div className="@container sticky top-0 z-10 -mx-4 mb-3 flex h-12 items-center gap-1 bg-background px-4">
+                <div role="tablist" aria-label="Note panels" className="segmented segmented-tight flex min-w-0 flex-1">
                   {(
                     [
-                      ["links", "Connections"],
-                      ["outline", "Outline"],
-                      ["chat", "Chat"],
+                      ["links", "Connections", Link2],
+                      ["outline", "Outline", ListTree],
+                      ["chat", "Chat", Sparkles],
                     ] as const
-                  ).map(([id, label]) => (
+                  ).map(([id, label, Icon]) => (
                     <button
                       key={id}
                       type="button"
                       role="tab"
                       aria-selected={panelTab === id}
+                      title={label}
                       onClick={() => setPanelTab(id)}
                     >
-                      {label}
+                      <Icon size={15} aria-hidden className="hidden shrink-0 @max-[15.5rem]:block" />
+                      <span className="truncate @max-[15.5rem]:sr-only">{label}</span>
                     </button>
                   ))}
                 </div>
                   <button
                     type="button"
-                    className="icon-button"
+                    className="icon-button shrink-0"
                     aria-label="Collapse panel"
                     title="Collapse panel (Ctrl/Cmd+Shift+\)"
                     onClick={() => setRightCollapsed(true)}
