@@ -5,7 +5,6 @@ import {
   Background,
   BaseEdge,
   ConnectionMode,
-  Controls,
   EdgeLabelRenderer,
   Handle,
   NodeResizer,
@@ -33,15 +32,15 @@ import {
   Group,
   Image as ImageIcon,
   LayoutDashboard,
+  PanelRight,
   SlidersHorizontal,
-  StickyNote,
+  Type,
   Tag,
   Trash2,
 } from "lucide-react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { isDark } from "@/lib/appearance";
 import {
-  CANVAS_COLORS,
   colorValue,
   newCanvasId,
   parseCanvas,
@@ -51,6 +50,7 @@ import {
   type CanvasNode,
   type Side,
 } from "@/lib/canvas/format";
+import { withoutTitle } from "@/lib/canvas/card-text";
 import { openHow, type OpenHow } from "@/lib/links/open";
 import { splitLinkText } from "@/lib/links/parse";
 import { renderMarkdown } from "@/lib/markdown/render";
@@ -61,6 +61,7 @@ import type { PropertyInfo } from "@/lib/editor/properties";
 import { Modal } from "./Modal";
 import { PropertiesEditor } from "./PropertiesEditor";
 import { Picker } from "./Picker";
+import { BarButton, BarDivider, ColourPicker, FIT, SelectionBar, ZoomPill } from "./CanvasChrome";
 
 /** What a canvas needs from the vault. */
 export interface CanvasVault {
@@ -160,6 +161,8 @@ interface CanvasCtx {
   editing: string | null;
   setEditing(id: string | null): void;
   update(id: string, patch: Partial<CanvasNode>): void;
+  /** Makes a card at least this tall (a text card growing with its text). */
+  growTo(id: string, height: number): void;
   openLink(target: string, sub: string | undefined, how: OpenHow): void;
   openFile(path: string, how: OpenHow): void;
 }
@@ -225,6 +228,8 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
   const [nodes, setNodes] = useState<CardNode[]>(start?.nodes ?? []);
   const [edges, setEdges] = useState<ArrowEdge[]>(start?.edges ?? []);
   const [editing, setEditing] = useState<string | null>(null);
+  // Fit the cards in view when the canvas opens, not when the first card is added to an empty one.
+  const [fitOnOpen] = useState(() => (start?.nodes.length ?? 0) > 0);
   const [picker, setPicker] = useState<null | "note" | "file">(null);
   const [asking, setAsking] = useState<null | { kind: "link" } | { kind: "label"; edge: string }>(null);
   const busy = useRef(false);
@@ -250,6 +255,11 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
 
   const update = useCallback((id: string, patch: Partial<CanvasNode>) => {
     setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, data: { c: { ...n.data.c, ...patch } as CanvasNode } } : n)));
+  }, []);
+  const growTo = useCallback((id: string, height: number) => {
+    setNodes((ns) =>
+      ns.map((n) => (n.id === id && height > (n.height ?? n.data.c.height) ? { ...n, height: Math.ceil(height) } : n)),
+    );
   }, []);
 
   /** Where a new card goes: centred on `at`, or the middle of the view. */
@@ -382,6 +392,54 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
     setEdges((es) => es.filter((e) => !e.selected && !ids.has(e.source) && !ids.has(e.target)));
   };
 
+  /** The selection's colour: one they all share, undefined for none, null when they differ. */
+  const selectionColor = (() => {
+    const all = [...selectedNodes.map((n) => n.data.c.color), ...selectedEdges.map((e) => e.data?.c.color)];
+    return all.every((c) => c === all[0]) ? all[0] : null;
+  })();
+
+  // Single keys for the add bar and zoom, while the board (not a text box or dialog) has the keyboard.
+  const keys = useRef<(e: KeyboardEvent) => void>(() => {});
+  useEffect(() => {
+    keys.current = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
+      const active = document.activeElement as HTMLElement | null;
+      const onBoard = !active || active === document.body || !!wrapper.current?.contains(active);
+      if (!onBoard || active?.closest("input, textarea, select, [contenteditable], [role=dialog], [role=menu]")) return;
+      if (document.querySelector("[role=dialog][aria-modal=true]")) return;
+      const k = e.key;
+      const act: Record<string, () => void> = {
+        t: () => addText(),
+        n: () => setPicker("note"),
+        f: () => setPicker("file"),
+        w: () => setAsking({ kind: "link" }),
+        g: () => addGroup(),
+        "+": () => void rf.zoomIn({ duration: 180 }),
+        "=": () => void rf.zoomIn({ duration: 180 }),
+        "-": () => void rf.zoomOut({ duration: 180 }),
+        "!": () => void rf.fitView(FIT),
+      };
+      if (e.shiftKey && /^[a-z]$/i.test(k)) return;
+      const run = act[k.toLowerCase()];
+      if (!run) return;
+      e.preventDefault();
+      run();
+    };
+  });
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => keys.current(e);
+    window.addEventListener("keydown", on);
+    return () => window.removeEventListener("keydown", on);
+  }, []);
+
+  const single = selectedNodes.length === 1 && selectedEdges.length === 0 ? selectedNodes[0].data.c : null;
+  const singleFile = single?.type === "file" && vault.exists(single.file) ? single : null;
+  const openCard = (how: OpenHow) => {
+    if (!singleFile) return;
+    if (singleFile.subpath) onOpenLink(singleFile.file, singleFile.subpath.replace(/^#/, ""), how);
+    else onOpenFile(singleFile.file, how);
+  };
+
   const ctx = useMemo<CanvasCtx>(
     () => ({
       vault,
@@ -389,10 +447,11 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
       editing,
       setEditing,
       update,
+      growTo,
       openLink: (t, sub, how) => onOpenLink(t, sub, how),
       openFile: (p, how) => onOpenFile(p, how),
     }),
-    [vault, dark, editing, update, onOpenLink, onOpenFile],
+    [vault, dark, editing, update, growTo, onOpenLink, onOpenFile],
   );
 
   const nodeTypes = useMemo(() => ({ text: TextCard, file: FileCard, link: LinkCard, group: GroupCard }), []);
@@ -458,74 +517,75 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
           deleteKeyCode={["Backspace", "Delete"]}
           minZoom={0.1}
           maxZoom={2.5}
-          fitView={nodes.length > 0}
+          fitView={fitOnOpen}
           fitViewOptions={{ maxZoom: 1, padding: 0.15 }}
           colorMode={dark ? "dark" : "light"}
           proOptions={{ hideAttribution: true }}
         >
           <Background gap={22} size={1.4} />
-          <Controls showInteractive={false} position="bottom-right" />
         </ReactFlow>
 
+        {/* Adding things: a dock at the bottom, clear of the cards. */}
         <div
           role="toolbar"
           aria-label="Canvas tools"
-          className="menu-panel absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 p-1"
+          className="menu-panel absolute bottom-3 left-3 z-10 flex items-center gap-0.5 p-1 sm:left-1/2 sm:-translate-x-1/2"
         >
-          <ToolButton label="Add text card" onClick={() => addText()}>
-            <StickyNote size={16} aria-hidden />
+          <ToolButton label="Add text card" shortcut="T" onClick={() => addText()}>
+            <Type size={16} aria-hidden />
           </ToolButton>
-          <ToolButton label="Add note" onClick={() => setPicker("note")}>
+          <ToolButton label="Add note" shortcut="N" onClick={() => setPicker("note")}>
             <FileText size={16} aria-hidden />
           </ToolButton>
-          <ToolButton label="Add image or file" onClick={() => setPicker("file")}>
+          <ToolButton label="Add image or file" shortcut="F" onClick={() => setPicker("file")}>
             <ImageIcon size={16} aria-hidden />
           </ToolButton>
-          <ToolButton label="Add web page" onClick={() => setAsking({ kind: "link" })}>
+          <ToolButton label="Add web page" shortcut="W" onClick={() => setAsking({ kind: "link" })}>
             <Globe size={16} aria-hidden />
           </ToolButton>
-          <ToolButton label={selectedNodes.length ? "Group the selected cards" : "Add group"} onClick={addGroup}>
+          <ToolButton label="Add group" shortcut="G" onClick={addGroup}>
             <Group size={16} aria-hidden />
           </ToolButton>
           {propertyInfo && (
-            <ToolButton label="Canvas properties" onClick={() => setShowProps((v) => !v)}>
-              <SlidersHorizontal size={16} aria-hidden />
-            </ToolButton>
-          )}
-          {hasSelection && (
             <>
-              <span className="mx-1 h-5 w-px bg-border" aria-hidden />
-              <div role="group" aria-label="Colour" className="flex items-center gap-1 px-1">
-                <button
-                  type="button"
-                  aria-label="No colour"
-                  title="No colour"
-                  className="h-4.5 w-4.5 rounded-full border border-border-strong bg-raised"
-                  onClick={() => setColor(undefined)}
-                />
-                {Object.entries(CANVAS_COLORS).map(([id, { name, hex }]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    aria-label={name}
-                    title={name}
-                    className="h-4.5 w-4.5 rounded-full"
-                    style={{ background: hex }}
-                    onClick={() => setColor(id)}
-                  />
-                ))}
-              </div>
-              {selectedEdges.length === 1 && selectedNodes.length === 0 && (
-                <ToolButton label="Label arrow" onClick={() => setAsking({ kind: "label", edge: selectedEdges[0].id })}>
-                  <Tag size={16} aria-hidden />
-                </ToolButton>
-              )}
-              <ToolButton label="Delete" onClick={removeSelected}>
-                <Trash2 size={16} aria-hidden />
+              <BarDivider />
+              <ToolButton label="Canvas properties" onClick={() => setShowProps((v) => !v)}>
+                <SlidersHorizontal size={16} aria-hidden />
               </ToolButton>
             </>
           )}
         </div>
+        <ZoomPill />
+
+        {hasSelection && !editing && (
+          <SelectionBar nodes={selectedNodes} edges={selectedEdges}>
+            <ColourPicker key={[...selectedNodes, ...selectedEdges].map((x) => x.id).join()} current={selectionColor} onPick={setColor} />
+            {singleFile && (
+              <>
+                <BarButton label="Open" onClick={() => openCard("here")}>
+                  <ExternalLink size={15} aria-hidden />
+                </BarButton>
+                <BarButton label="Open to the side" onClick={() => openCard("side")}>
+                  <PanelRight size={15} aria-hidden />
+                </BarButton>
+              </>
+            )}
+            {selectedEdges.length === 1 && selectedNodes.length === 0 && (
+              <BarButton label="Label arrow" onClick={() => setAsking({ kind: "label", edge: selectedEdges[0].id })}>
+                <Tag size={15} aria-hidden />
+              </BarButton>
+            )}
+            {selectedNodes.some((n) => n.type !== "group") && (
+              <BarButton label="Group the selected cards" onClick={addGroup}>
+                <Group size={15} aria-hidden />
+              </BarButton>
+            )}
+            <BarDivider />
+            <BarButton label="Delete" onClick={removeSelected}>
+              <Trash2 size={15} aria-hidden />
+            </BarButton>
+          </SelectionBar>
+        )}
 
         {propertyInfo && showProps && (
           <div
@@ -594,9 +654,16 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
   );
 }
 
-function ToolButton({ label, onClick, children }: { label: string; onClick(): void; children: React.ReactNode }) {
+function ToolButton({ label, shortcut, onClick, children }: { label: string; shortcut?: string; onClick(): void; children: React.ReactNode }) {
   return (
-    <button type="button" className="icon-button" aria-label={label} title={label} onClick={onClick}>
+    <button
+      type="button"
+      className="icon-button h-8 w-8 sm:h-9 sm:w-9"
+      aria-label={label}
+      aria-keyshortcuts={shortcut}
+      title={shortcut ? `${label} (${shortcut})` : label}
+      onClick={onClick}
+    >
       {children}
     </button>
   );
@@ -718,14 +785,32 @@ function useAssets(ref: React.RefObject<HTMLElement | null>, html: string) {
   }, [html, ref, vault]);
 }
 
+/** Marks a card's body while more of it is hidden below, so it fades out instead of being cut off. */
+function useFade(ref: React.RefObject<HTMLElement | null>, html: string) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => el.toggleAttribute("data-more", el.scrollHeight - el.scrollTop - el.clientHeight > 2);
+    check();
+    el.addEventListener("scroll", check, { passive: true });
+    const seen = new ResizeObserver(check);
+    seen.observe(el);
+    return () => {
+      el.removeEventListener("scroll", check);
+      seen.disconnect();
+    };
+  }, [ref, html]);
+}
+
 function TextCard({ id, data, selected }: NodeProps<CardNode>) {
   const c = data.c as Extract<CanvasNode, { type: "text" }>;
-  const { editing, setEditing, update, vault } = useCanvas();
+  const { editing, setEditing, update, growTo, vault } = useCanvas();
   const isEditing = editing === id;
   const [draft, setDraft] = useState(c.text);
   const html = useMemo(() => (isEditing ? "" : renderMarkdown(c.text, vault.links)), [c.text, isEditing, vault.links]);
   const ref = useRef<HTMLDivElement>(null);
   useAssets(ref, html);
+  useFade(ref, html);
   const onClick = useLinkClicks();
   return (
     <Card id={id} selected={!!selected} color={c.color}>
@@ -736,7 +821,12 @@ function TextCard({ id, data, selected }: NodeProps<CardNode>) {
           value={draft}
           autoFocus
           placeholder="Write here… [[links]] and markdown work."
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            // Grow with the text rather than scroll inside a small card (borders included).
+            const t = e.currentTarget;
+            if (t.scrollHeight > t.clientHeight) growTo(id, t.scrollHeight + 4);
+          }}
           onBlur={() => {
             update(id, { text: draft });
             setEditing(null);
@@ -772,7 +862,8 @@ function FileCard({ id, data, selected }: NodeProps<CardNode>) {
     // Re-read when other notes change: vault.links changes identity with the index.
     [exists, c.file, c.subpath, vault],
   );
-  const html = useMemo(() => (preview ? renderMarkdown(preview.markdown, vault.links) : ""), [preview, vault.links]);
+  // The card's header already shows the title: leave out a first heading that only repeats it.
+  const html = useMemo(() => (preview ? renderMarkdown(withoutTitle(preview.markdown, preview.title), vault.links) : ""), [preview, vault.links]);
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     if (!exists || !picture) return;
@@ -784,6 +875,7 @@ function FileCard({ id, data, selected }: NodeProps<CardNode>) {
   }, [exists, picture, c.file, vault]);
   const ref = useRef<HTMLDivElement>(null);
   useAssets(ref, html);
+  useFade(ref, html);
   const onClick = useLinkClicks();
   const title = preview?.title ?? basename(c.file);
   const Icon = isCanvas(c.file) ? LayoutDashboard : picture ? ImageIcon : FileText;
@@ -795,10 +887,10 @@ function FileCard({ id, data, selected }: NodeProps<CardNode>) {
 
   return (
     <Card id={id} selected={!!selected} color={c.color} className="flex flex-col">
-      <div className="flex shrink-0 items-center border-b border-border">
+      <div className="canvas-card-head flex shrink-0 items-center">
         <button
           type="button"
-          className="nodrag flex min-w-0 flex-1 items-center gap-1.5 px-3 py-1.5 text-left text-xs font-medium text-muted hover:text-accent"
+          className="nodrag flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-sm font-medium hover:text-accent"
           title="Open (Ctrl/Cmd-click: new tab)"
           onClick={(e) => {
             if (!exists) return;
@@ -807,7 +899,7 @@ function FileCard({ id, data, selected }: NodeProps<CardNode>) {
             else openFile(c.file, how);
           }}
         >
-          <Icon size={13} aria-hidden className="shrink-0" />
+          <Icon size={14} aria-hidden className="shrink-0 text-muted" />
           <span className="truncate">{title}</span>
         </button>
         {props && (
@@ -942,7 +1034,8 @@ function CanvasArrow({
   selected,
 }: EdgeProps<ArrowEdge>) {
   const c = data?.c;
-  const color = colorValue(c?.color) ?? "var(--canvas-arrow)";
+  const own = colorValue(c?.color);
+  const color = selected ? (own ?? "var(--accent)") : (own ?? "var(--canvas-arrow)");
   const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
   const markerId = `arrow-${id}`;
   const end = c?.toEnd !== "none";
@@ -950,8 +1043,8 @@ function CanvasArrow({
   return (
     <>
       <defs>
-        <marker id={markerId} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M0,0 L10,5 L0,10 z" fill={color} />
+        <marker id={markerId} viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M1,1 L9,5 L1,9 z" fill={color} stroke={color} strokeWidth="1" strokeLinejoin="round" />
         </marker>
       </defs>
       <BaseEdge
@@ -959,13 +1052,13 @@ function CanvasArrow({
         path={path}
         markerEnd={end ? `url(#${markerId})` : undefined}
         markerStart={startArrow ? `url(#${markerId})` : undefined}
-        style={{ stroke: color, strokeWidth: selected ? 3 : 2 }}
+        style={{ stroke: color, strokeWidth: selected ? 2.25 : 1.75 }}
         interactionWidth={18}
       />
       {c?.label && (
         <EdgeLabelRenderer>
           <div
-            className="canvas-edge-label nodrag nopan absolute rounded-md px-2 py-0.5 text-xs font-medium"
+            className="canvas-edge-label nodrag nopan absolute rounded-full px-2.5 py-0.5 text-xs font-medium"
             style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`, color: colorValue(c.color) }}
           >
             {c.label}

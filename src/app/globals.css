@@ -1156,7 +1156,7 @@ mark {
 /* ---------- Canvas ---------- */
 
 .canvas-board {
-  --canvas-arrow: color-mix(in srgb, var(--foreground) 45%, transparent);
+  --canvas-arrow: color-mix(in srgb, var(--foreground) 38%, transparent);
 }
 .canvas-board .react-flow {
   --xy-background-color: var(--background);
@@ -1166,18 +1166,7 @@ mark {
   --xy-node-boxshadow-selected: none;
   --xy-selection-background-color: color-mix(in srgb, var(--accent) 8%, transparent);
   --xy-selection-border: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent);
-  --xy-controls-button-background-color: var(--raised);
-  --xy-controls-button-background-color-hover: color-mix(in srgb, var(--foreground) 6%, var(--raised));
-  --xy-controls-button-color: var(--muted);
-  --xy-controls-button-color-hover: var(--foreground);
-  --xy-controls-button-border-color: var(--border);
-  --xy-controls-box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 28px -6px rgb(0 0 0 / 0.18);
   --xy-edge-label-background-color: var(--raised);
-}
-.canvas-board .react-flow__controls {
-  border-radius: 0.75rem;
-  overflow: hidden;
-  border: 1px solid var(--border);
 }
 .canvas-board .react-flow__node {
   font-family: var(--font-sans), system-ui, sans-serif;
@@ -1191,10 +1180,18 @@ mark {
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 6px 18px -8px rgb(0 0 0 / 0.18);
 }
 .canvas-card.is-selected {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 6px 18px -8px rgb(0 0 0 / 0.22);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 6px 18px -8px rgb(0 0 0 / 0.22);
+}
+.canvas-card-head {
+  border-bottom: 1px solid color-mix(in srgb, var(--card-color) 55%, var(--border));
 }
 .canvas-card-body > :first-child {
   margin-top: 0;
+}
+/* More below: fade out rather than cut a line in half. */
+.canvas-card-body[data-more] {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 3.5rem), transparent);
 }
 .canvas-group {
   --card-color: var(--border-strong);
@@ -1218,17 +1215,24 @@ mark {
   opacity: 0;
   transition: opacity 120ms;
 }
+/* Connection dots only when pointing at a card (or while drawing an arrow). */
 .react-flow__node:hover .canvas-handle,
-.react-flow__node.selected .canvas-handle,
 .react-flow.connecting .canvas-handle {
   opacity: 1;
 }
 .canvas-resize-line {
   border-color: transparent !important;
 }
+/* Every edge and corner still resizes; only the bottom-right corner is drawn. */
 .canvas-resize-handle {
-  width: 9px !important;
-  height: 9px !important;
+  width: 12px !important;
+  height: 12px !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+.canvas-resize-handle.bottom.right {
+  width: 10px !important;
+  height: 10px !important;
   border-radius: 3px;
   border: 1.5px solid var(--accent) !important;
   background: var(--raised) !important;
@@ -1236,6 +1240,8 @@ mark {
 .canvas-edge-label {
   background: var(--raised);
   border: 1px solid var(--border);
+  color: var(--muted);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
   pointer-events: all;
 }
 

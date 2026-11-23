@@ -54,7 +54,7 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   use it and its common values; rename or delete one everywhere, give your own properties a type
   (text, list, number, date, checkbox: kept in `.noted/settings.json`), or click a value to find
   the files. Search finds files by property with `[status]` or `[status:draft]`, alone or with
-  words. Canvases have properties too (the sliders button in the canvas toolbar)
+  words. Canvases have properties too (the sliders button in the canvas's add bar)
 - Editing many files' properties at once: **Edit properties** on search results (or *Edit as
   table* in the Properties tab) opens a table with a row per file and a column per property. Edit
   any cell (lists as `a, b`; an empty cell removes the property), add a column, or set or remove a
@@ -84,7 +84,9 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   note (kept in `.noted/settings.json`); the score updates as you go, with a count of what you fixed
   today
 - Canvases (`.canvas`, the JSON Canvas format Obsidian uses): cards for text, notes, images,
-  drawings and web links, groups, and labelled arrows, which become typed relations. A canvas
+  drawings and web links, groups, and labelled arrows, which become typed relations. An add bar at
+  the bottom (keys T, N, F, W, G), a zoom pill (- 100% +, with zoom to fit and to the selection), and
+  a bar above whatever is selected (colour, open, label, group, delete). A canvas
   file that isn't valid JSON opens with an explanation and *Edit as text*, rather than an empty board
 - Excalidraw drawings (`.excalidraw` files): create with the pen button in the file tree, edit
   full-screen, embed with `![[Drawing.excalidraw]]` (rendered as SVG, click to open). Element

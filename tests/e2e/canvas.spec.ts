@@ -191,3 +191,64 @@ test("a note card's properties can be edited from the canvas", async ({ page }) 
   await page.getByRole("radio", { name: "Source" }).click();
   await expect(page.locator(".cm-content")).toContainText("tags: [guide, area]");
 });
+
+test("the add bar's shortcuts, the selection bar and the zoom pill", async ({ page }) => {
+  await newCanvas(page);
+  const pane = board(page).locator(".react-flow__pane");
+  const box = (await pane.boundingBox())!;
+  // T adds a text card while the board has the keyboard (not while typing in it).
+  await page.mouse.click(box.x + 40, box.y + 40);
+  await page.keyboard.press("t");
+  const text = page.getByRole("textbox", { name: "Card text" });
+  await expect(text).toBeFocused();
+  await page.keyboard.type("Plan t");
+  await expect(text).toHaveValue("Plan t");
+  await expect(board(page).locator(".react-flow__node")).toHaveCount(1);
+
+  // Writing more than fits makes the card taller instead of scrolling inside it.
+  const node = board(page).locator(".react-flow__node").first();
+  const before = (await node.boundingBox())!.height;
+  for (let i = 0; i < 8; i++) await page.keyboard.press("Enter");
+  await expect.poll(async () => (await node.boundingBox())!.height).toBeGreaterThan(before);
+
+  // Finish editing; the card stays selected, with its bar above it.
+  await page.keyboard.press("Escape");
+  await node.click();
+  const bar = page.getByRole("toolbar", { name: "Selection" });
+  await expect(bar).toBeVisible();
+  expect((await bar.boundingBox())!.y).toBeLessThan((await node.boundingBox())!.y);
+  await bar.getByRole("button", { name: "Colour" }).click();
+  await bar.getByRole("button", { name: "Green" }).click();
+  await expect(node.locator(".canvas-card")).toHaveAttribute("style", /--card-color: #3fa05a/);
+  await expect(bar.getByRole("button", { name: "Green" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("status")).toHaveText("Saved");
+
+  // Zoom: the pill shows the level and changes it.
+  const zoom = page.getByRole("group", { name: "Zoom" });
+  const level = zoom.getByRole("button", { name: "Zoom options" });
+  await expect(level).toHaveText("100%");
+  await zoom.getByRole("button", { name: "Zoom out" }).click();
+  await expect(level).not.toHaveText("100%");
+  await level.click();
+  await page.getByRole("menuitem", { name: "200%" }).click();
+  await expect(level).toHaveText("200%");
+  await level.click();
+  await page.getByRole("menuitem", { name: "Zoom to fit" }).click();
+  await expect(level).toHaveText("100%");
+
+  // Delete from the bar.
+  await node.click();
+  await bar.getByRole("button", { name: "Delete" }).click();
+  await expect(board(page).locator(".react-flow__node")).toHaveCount(0);
+  await expect(bar).toBeHidden();
+});
+
+test("a note card opens from the selection bar, without repeating its title", async ({ page }) => {
+  await newCanvas(page);
+  await addNote(page, "Linking notes");
+  const noteCard = card(page, "Type [[");
+  await expect(noteCard).toBeVisible();
+  await expect(noteCard.locator("h1", { hasText: "Linking notes" })).toHaveCount(0);
+  await page.getByRole("toolbar", { name: "Selection" }).getByRole("button", { name: "Open", exact: true }).click();
+  await expect(title(page)).toHaveValue("Linking notes");
+});

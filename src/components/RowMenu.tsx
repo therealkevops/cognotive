@@ -1,7 +1,7 @@
 "use client";
 
 import { MoreHorizontal, type LucideIcon } from "lucide-react";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 export type RowMenuItem =
@@ -27,8 +27,18 @@ const MENU_WIDTH = 200;
  * `group` class), and while the menu is open. Keyboard: Enter, Space or Down opens it;
  * arrow keys, Home and End move; Escape closes it and returns to the button.
  */
-export const RowMenu = forwardRef<RowMenuHandle, { label: string; items: RowMenuItem[]; className?: string; alwaysVisible?: boolean }>(
-  function RowMenu({ label, items, className = "", alwaysVisible = false }, ref) {
+export const RowMenu = forwardRef<
+  RowMenuHandle,
+  {
+    label: string;
+    items: RowMenuItem[];
+    className?: string;
+    alwaysVisible?: boolean;
+    /** The button's own content and look instead of the three dots (it's then always shown). */
+    button?: { content: ReactNode; className: string; title: string };
+  }
+>(
+  function RowMenu({ label, items, className = "", alwaysVisible = false, button: custom }, ref) {
     const button = useRef<HTMLButtonElement>(null);
     const panel = useRef<HTMLDivElement>(null);
     const [at, setAt] = useState<{ x: number; y: number; fromButton: boolean } | null>(null);
@@ -102,11 +112,15 @@ export const RowMenu = forwardRef<RowMenuHandle, { label: string; items: RowMenu
         <button
           ref={button}
           type="button"
-          className={`icon-button h-6 w-6 shrink-0 ${open || alwaysVisible ? "" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"} ${className}`}
+          className={
+            custom
+              ? custom.className
+              : `icon-button h-6 w-6 shrink-0 ${open || alwaysVisible ? "" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"} ${className}`
+          }
           aria-label={label}
           aria-haspopup="menu"
           aria-expanded={open}
-          title="More"
+          title={custom?.title ?? "More"}
           onClick={(e) => {
             e.stopPropagation();
             if (open) close(false);
@@ -122,7 +136,7 @@ export const RowMenu = forwardRef<RowMenuHandle, { label: string; items: RowMenu
           }}
           onDoubleClick={(e) => e.stopPropagation()}
         >
-          <MoreHorizontal size={15} aria-hidden />
+          {custom ? custom.content : <MoreHorizontal size={15} aria-hidden />}
         </button>
         {open &&
           createPortal(
