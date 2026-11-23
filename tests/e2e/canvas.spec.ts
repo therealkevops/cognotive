@@ -302,3 +302,122 @@ test("the view menu: titles only, grid, snapping and the mini-map, kept on this 
   await expect(card(page, "Linking notes").locator(".canvas-card-body")).toBeVisible();
   expect(Math.abs((await card(page, "Linking notes").boundingBox())!.height - full)).toBeLessThan(4);
 });
+
+test("right-click menus, aligning, spacing, duplicating, layering and title only", async ({ page }) => {
+  await newCanvas(page);
+  const pane = board(page).locator(".react-flow__pane");
+  const box = (await pane.boundingBox())!;
+  const nodes = board(page).locator(".react-flow__node");
+  // Three text cards from the empty-space menu, at different heights.
+  const spots: Array<[number, number, string]> = [
+    [box.x + 150, box.y + 140, "Alpha"],
+    [box.x + 360, box.y + 230, "Beta"],
+    [box.x + 640, box.y + 180, "Gamma"],
+  ];
+  for (const [x, y, text] of spots) {
+    await page.mouse.click(x, y, { button: "right" });
+    await page.getByRole("menuitem", { name: "Add text card here" }).click();
+    await page.keyboard.type(text);
+    await page.keyboard.press("Escape");
+  }
+  await expect(nodes).toHaveCount(3);
+  const pos = async () =>
+    nodes.evaluateAll((els) =>
+      els.map((el) => {
+        const m = /translate\(([-\d.]+)px, ?([-\d.]+)px\)/.exec((el as HTMLElement).style.transform)!;
+        return { text: el.textContent ?? "", x: Number(m[1]), y: Number(m[2]), w: (el as HTMLElement).offsetWidth };
+      }),
+    );
+
+  await page.mouse.click(box.x + 40, box.y + box.height - 120, { button: "right" });
+  await page.getByRole("menuitem", { name: "Select all" }).click();
+  const bar = page.getByRole("toolbar", { name: "Selection" });
+  await bar.getByRole("button", { name: "Align" }).click();
+  await page.getByRole("menuitem", { name: "Align top" }).click();
+  await expect.poll(async () => new Set((await pos()).map((p) => p.y)).size).toBe(1);
+  await bar.getByRole("button", { name: "Align" }).click();
+  await page.getByRole("menuitem", { name: "Space evenly across" }).click();
+  await expect
+    .poll(async () => {
+      const [a, b, c] = (await pos()).sort((p, q) => p.x - q.x);
+      return Math.abs(b.x - (a.x + a.w) - (c.x - (b.x + b.w)));
+    })
+    .toBeLessThan(2);
+
+  // Ctrl/Cmd+D copies them; the copies are selected.
+  await page.keyboard.press("ControlOrMeta+d");
+  await expect(nodes).toHaveCount(6);
+  await expect(board(page).locator(".react-flow__node.selected")).toHaveCount(3);
+
+  // Right-click a card: it's selected alone, and can be sent to the back (drawn first).
+  await page.mouse.click(box.x + 40, box.y + box.height - 120);
+  const gamma = nodes.filter({ hasText: "Gamma" }).last();
+  await gamma.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Send to back" }).click();
+  await expect(nodes.first()).toContainText("Gamma");
+  await gamma.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Bring to front" }).click();
+  await expect(nodes.last()).toContainText("Gamma");
+
+  // Title only, for one card.
+  await gamma.click();
+  const before = (await gamma.boundingBox())!.height;
+  await bar.getByRole("button", { name: "Title only" }).click();
+  await expect(bar.getByRole("button", { name: "Title only" })).toHaveAttribute("aria-pressed", "true");
+  expect((await gamma.boundingBox())!.height).toBeLessThan(before);
+  await expect(page.getByRole("status")).toHaveText("Saved");
+});
+
+test("arrow styles: route, arrowheads and dashes", async ({ page }) => {
+  await newCanvas(page);
+  await addNote(page, "Welcome");
+  const first = card(page, "Welcome to Cognotive.ai");
+  const fb = (await first.boundingBox())!;
+  await page.mouse.move(fb.x + fb.width / 2, fb.y + 80);
+  await page.mouse.down();
+  await page.mouse.move(fb.x + fb.width / 2 - 260, fb.y + 80, { steps: 8 });
+  await page.mouse.up();
+  await addNote(page, "Linking notes");
+  const second = card(page, "Type [[");
+  const sb = (await second.boundingBox())!;
+  await page.mouse.move(sb.x + sb.width / 2, sb.y + 80);
+  await page.mouse.down();
+  await page.mouse.move(sb.x + sb.width / 2 + 260, sb.y + 140, { steps: 8 });
+  await page.mouse.up();
+  await first.hover();
+  const from = (await first.locator('.react-flow__handle[data-handleid="right"]').boundingBox())!;
+  await second.hover();
+  const to = (await second.locator('.react-flow__handle[data-handleid="left"]').boundingBox())!;
+  await first.hover();
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 });
+  await page.mouse.up();
+  const arrow = board(page).locator(".react-flow__edge");
+  await expect(arrow).toHaveCount(1);
+  const line = arrow.locator(".react-flow__edge-path");
+  await expect(line).toHaveAttribute("marker-end", /url/);
+  const curved = await line.getAttribute("d");
+
+  await arrow.click({ button: "right" });
+  await expect(page.getByRole("menuitem", { name: "Label arrow" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  const bar = page.getByRole("toolbar", { name: "Selection" });
+  await bar.getByRole("button", { name: "Arrow style" }).click();
+  const menu = page.getByRole("menu", { name: "Arrow style" });
+  await expect(menu.getByRole("menuitemradio", { name: "Curved" })).toHaveAttribute("aria-checked", "true");
+  await menu.getByRole("menuitemradio", { name: "Elbow" }).click();
+  await menu.getByRole("menuitemradio", { name: "Both ends" }).click();
+  await menu.getByRole("menuitemradio", { name: "Dashed" }).click();
+  await page.keyboard.press("Escape");
+  expect(await line.getAttribute("d")).not.toBe(curved);
+  await expect(line).toHaveAttribute("marker-start", /url/);
+  await expect(line).toHaveCSS("stroke-dasharray", /9(px)?,? 6/);
+  await expect(page.getByRole("status")).toHaveText("Saved");
+
+  // Kept in the file, so it comes back after a reload.
+  await page.reload();
+  await tree(page).getByRole("treeitem", { name: "Canvas" }).click();
+  await expect(board(page).locator(".react-flow__edge-path")).toHaveAttribute("marker-start", /url/);
+  await expect(board(page).locator(".react-flow__edge-path")).toHaveCSS("stroke-dasharray", /9(px)?,? 6/);
+});

@@ -18,6 +18,8 @@ import {
   applyEdgeChanges,
   applyNodeChanges,
   getBezierPath,
+  getSmoothStepPath,
+  getStraightPath,
   useReactFlow,
   type Connection,
   type Edge,
@@ -28,8 +30,24 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import {
+  AlignCenterHorizontal,
+  AlignCenterVertical,
+  AlignEndHorizontal,
+  AlignEndVertical,
+  AlignHorizontalSpaceAround,
+  AlignStartHorizontal,
+  AlignStartVertical,
+  AlignVerticalSpaceAround,
+  ArrowDownToLine,
+  ArrowUpToLine,
+  ChevronsDownUp,
+  Copy,
   Eye,
   ExternalLink,
+  LayoutGrid,
+  MoreHorizontal as MoreIcon,
+  MousePointer2,
+  Spline,
   FileText,
   Globe,
   Group,
@@ -53,6 +71,8 @@ import {
   type CanvasNode,
   type Side,
 } from "@/lib/canvas/format";
+import { align, distribute, duplicate, restack, type Alignment } from "@/lib/canvas/arrange";
+import { arrowEnds, arrowLine, arrowRoute, dashPattern, withArrowStyle, type ArrowEnds, type ArrowLine, type ArrowRoute } from "@/lib/canvas/arrow-style";
 import { firstLine, withoutTitle } from "@/lib/canvas/card-text";
 import { CANVAS_VIEW_EVENT, GRID_GAP, loadCanvasView, saveCanvasView, type CanvasViewPrefs } from "@/lib/canvas/view-prefs";
 import { openHow, type OpenHow } from "@/lib/links/open";
@@ -65,7 +85,7 @@ import type { PropertyInfo } from "@/lib/editor/properties";
 import { Modal } from "./Modal";
 import { PropertiesEditor } from "./PropertiesEditor";
 import { Picker } from "./Picker";
-import { RowMenu } from "../RowMenu";
+import { RowMenu, type RowMenuHandle, type RowMenuItem } from "../RowMenu";
 import { BarButton, BarDivider, ColourPicker, FIT, SelectionBar, ZoomPill } from "./CanvasChrome";
 
 /** What a canvas needs from the vault. */
@@ -140,6 +160,9 @@ function toArrow(c: CanvasEdge): ArrowEdge {
 
 /** Height of a card shown by its title only. */
 const TITLE_ONLY_HEIGHT = 42;
+
+/** A card set to show its title only, whatever the view (kept in the canvas file). */
+const titleOnly = (c: CanvasNode) => c.titleOnly === true;
 
 /** Cards that shrink to their title when the view shows titles only (pictures and groups don't). */
 function hasTitleView(c: CanvasNode): boolean {
@@ -255,9 +278,9 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
   // What the board draws: with titles only, cards are shorter on screen but keep their size in the file.
   const shown = useMemo(
     () =>
-      compact
-        ? nodes.map((n) => (n.id !== editing && hasTitleView(n.data.c) ? { ...n, height: TITLE_ONLY_HEIGHT } : n))
-        : nodes,
+      nodes.map((n) =>
+        n.id !== editing && hasTitleView(n.data.c) && (compact || titleOnly(n.data.c)) ? { ...n, height: TITLE_ONLY_HEIGHT } : n,
+      ),
     [nodes, compact, editing],
   );
   // Fit the cards in view when the canvas opens, not when the first card is added to an empty one.
@@ -430,16 +453,64 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
     return all.every((c) => c === all[0]) ? all[0] : null;
   })();
 
+  /** The selected cards as they'd be saved (current place and size). */
+  const selectedCards = (): CanvasNode[] => toCanvas(selectedNodes, [], {}).nodes;
+
+  const duplicateSelected = () => {
+    const ids = new Set(selectedNodes.map((n) => n.id));
+    const copy = duplicate(
+      selectedCards(),
+      edges.filter((e) => ids.has(e.source) && ids.has(e.target)).map((e) => e.data!.c),
+      newCanvasId,
+    );
+    setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), ...copy.nodes.map((c) => ({ ...toCard(c), selected: true }))]);
+    setEdges((es) => [...es.map((e) => ({ ...e, selected: false })), ...copy.edges.map(toArrow)]);
+  };
+
+  const restackSelected = (to: "front" | "back") => {
+    const ids = new Set(selectedNodes.map((n) => n.id));
+    setNodes((ns) => restack(ns, ids, to));
+  };
+
+  const moveTo = (places: Map<string, { x: number; y: number }>) =>
+    setNodes((ns) => ns.map((n) => (places.has(n.id) ? { ...n, position: places.get(n.id)! } : n)));
+  const alignSelected = (how: Alignment) => moveTo(align(selectedCards(), how));
+  const distributeSelected = (axis: "horizontal" | "vertical") => moveTo(distribute(selectedCards(), axis));
+
+  const styleArrows = (change: { route?: ArrowRoute; ends?: ArrowEnds; line?: ArrowLine }) => {
+    const ids = new Set(selectedEdges.map((e) => e.id));
+    setEdges((es) => es.map((e) => (ids.has(e.id) ? { ...e, data: { c: withArrowStyle(e.data!.c, change) } } : e)));
+  };
+
+  const selectOnly = (nodeIds: string[], edgeIds: string[] = []) => {
+    setNodes((ns) => ns.map((n) => ({ ...n, selected: nodeIds.includes(n.id) })));
+    setEdges((es) => es.map((e) => ({ ...e, selected: edgeIds.includes(e.id) })));
+  };
+
   // Single keys for the add bar and zoom, while the board (not a text box or dialog) has the keyboard.
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
   useEffect(() => {
     keys.current = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
+      if (e.altKey || e.defaultPrevented) return;
       const active = document.activeElement as HTMLElement | null;
       const onBoard = !active || active === document.body || !!wrapper.current?.contains(active);
       if (!onBoard || active?.closest("input, textarea, select, [contenteditable], [role=dialog], [role=menu]")) return;
       if (document.querySelector("[role=dialog][aria-modal=true]")) return;
       const k = e.key;
+      if (e.ctrlKey || e.metaKey) {
+        // Ctrl/Cmd+D duplicates; Ctrl/Cmd+] and [ bring to the front and send to the back.
+        const mod: Record<string, () => void> = {
+          d: duplicateSelected,
+          "]": () => restackSelected("front"),
+          "[": () => restackSelected("back"),
+        };
+        const run = mod[k.toLowerCase()];
+        if (run && selectedNodes.length) {
+          e.preventDefault();
+          run();
+        }
+        return;
+      }
       const act: Record<string, () => void> = {
         t: () => addText(),
         n: () => setPicker("note"),
@@ -471,6 +542,100 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
     if (singleFile.subpath) onOpenLink(singleFile.file, singleFile.subpath.replace(/^#/, ""), how);
     else onOpenFile(singleFile.file, how);
   };
+  const singleTitleView = single && hasTitleView(single) && !compact ? single : null;
+
+  const ALIGN: Array<[Alignment, string, typeof AlignStartVertical]> = [
+    ["left", "Align left", AlignStartVertical],
+    ["centre", "Align centres", AlignCenterVertical],
+    ["right", "Align right", AlignEndVertical],
+    ["top", "Align top", AlignStartHorizontal],
+    ["middle", "Align middles", AlignCenterHorizontal],
+    ["bottom", "Align bottom", AlignEndHorizontal],
+  ];
+  const alignItems: RowMenuItem[] = [
+    ...ALIGN.map(([how, label, icon]) => ({ label, icon, onSelect: () => alignSelected(how) })),
+    ...(selectedNodes.length > 2
+      ? [
+          "separator" as const,
+          { label: "Space evenly across", icon: AlignHorizontalSpaceAround, onSelect: () => distributeSelected("horizontal") },
+          { label: "Space evenly down", icon: AlignVerticalSpaceAround, onSelect: () => distributeSelected("vertical") },
+        ]
+      : []),
+  ];
+  const first = selectedEdges[0]?.data?.c;
+  const arrowItems: RowMenuItem[] = first
+    ? [
+        { heading: "Line" },
+        ...(["curved", "straight", "elbow"] as const).map((r) => ({
+          label: r === "curved" ? "Curved" : r === "straight" ? "Straight" : "Elbow",
+          radio: true,
+          checked: arrowRoute(first) === r,
+          onSelect: () => styleArrows({ route: r }),
+        })),
+        { heading: "Arrowheads" },
+        ...(["none", "end", "both"] as const).map((x) => ({
+          label: x === "none" ? "None" : x === "end" ? "At the end" : "Both ends",
+          radio: true,
+          checked: arrowEnds(first) === x,
+          onSelect: () => styleArrows({ ends: x }),
+        })),
+        { heading: "Style" },
+        ...(["solid", "dashed", "dotted"] as const).map((l) => ({
+          label: l === "solid" ? "Solid" : l === "dashed" ? "Dashed" : "Dotted",
+          radio: true,
+          checked: arrowLine(first) === l,
+          onSelect: () => styleArrows({ line: l }),
+        })),
+      ]
+    : [];
+  /** What the "More" menu and a right-click on the selection offer. */
+  const selectionItems: RowMenuItem[] = [
+    ...(singleFile
+      ? [
+          { label: "Open", icon: ExternalLink, onSelect: () => openCard("here") },
+          { label: "Open to the side", icon: PanelRight, onSelect: () => openCard("side") },
+          "separator" as const,
+        ]
+      : []),
+    ...(selectedEdges.length === 1 && !selectedNodes.length
+      ? [{ label: "Label arrow", icon: Tag, onSelect: () => setAsking({ kind: "label", edge: selectedEdges[0].id }) }]
+      : []),
+    ...(selectedNodes.length
+      ? [
+          { label: "Duplicate", icon: Copy, onSelect: duplicateSelected },
+          { label: "Bring to front", icon: ArrowUpToLine, onSelect: () => restackSelected("front") },
+          { label: "Send to back", icon: ArrowDownToLine, onSelect: () => restackSelected("back") },
+        ]
+      : []),
+    ...(selectedNodes.length > 1 ? ["separator" as const, ...alignItems] : []),
+    "separator",
+    { label: selectedNodes.length + selectedEdges.length > 1 ? "Delete them" : "Delete", icon: Trash2, danger: true, onSelect: removeSelected },
+  ];
+
+  // Right-click menus: on the selection, or on empty board space (with where it was).
+  const contextMenu = useRef<RowMenuHandle>(null);
+  // The selection's items follow it as it changes; empty space's are made when it's right-clicked.
+  const [menuFor, setMenuFor] = useState<null | { kind: "selection" } | { kind: "pane"; items: RowMenuItem[] }>(null);
+  const [pickAt, setPickAt] = useState<{ x: number; y: number } | undefined>(undefined);
+  const openMenu = (e: React.MouseEvent | MouseEvent, kind: NonNullable<typeof menuFor>) => {
+    e.preventDefault();
+    setMenuFor(kind);
+    contextMenu.current?.openAt(e.clientX, e.clientY);
+  };
+  const paneItems = (at: { x: number; y: number }): RowMenuItem[] => [
+    { label: "Add text card here", icon: Type, onSelect: () => addText(at) },
+    {
+      label: "Add note here",
+      icon: FileText,
+      onSelect: () => {
+        setPickAt(at);
+        setPicker("note");
+      },
+    },
+    "separator",
+    { label: "Select all", icon: MousePointer2, onSelect: () => selectOnly(nodes.map((n) => n.id)) },
+    { label: "Zoom to fit", icon: LayoutGrid, onSelect: () => void rf.fitView(FIT) },
+  ];
 
   const ctx = useMemo<CanvasCtx>(
     () => ({
@@ -544,6 +709,16 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
           onNodeDrag={onNodeDrag}
           onNodeDragStop={onNodeDragStop}
           onEdgeDoubleClick={(_e, edge) => setAsking({ kind: "label", edge: edge.id })}
+          onNodeContextMenu={(e, node) => {
+            if (!node.selected) selectOnly([node.id]);
+            openMenu(e, { kind: "selection" });
+          }}
+          onEdgeContextMenu={(e, edge) => {
+            if (!edge.selected) selectOnly([], [edge.id]);
+            openMenu(e, { kind: "selection" });
+          }}
+          onSelectionContextMenu={(e) => openMenu(e, { kind: "selection" })}
+          onPaneContextMenu={(e) => openMenu(e, { kind: "pane", items: paneItems(rf.screenToFlowPosition({ x: e.clientX, y: e.clientY })) })}
           connectionMode={ConnectionMode.Loose}
           elevateNodesOnSelect={false}
           zoomOnDoubleClick={false}
@@ -650,10 +825,33 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
                 </BarButton>
               </>
             )}
+            {singleTitleView && (
+              <BarButton
+                label="Title only"
+                pressed={titleOnly(singleTitleView)}
+                onClick={() => update(singleTitleView.id, { titleOnly: titleOnly(singleTitleView) ? undefined : true })}
+              >
+                <ChevronsDownUp size={15} aria-hidden />
+              </BarButton>
+            )}
             {selectedEdges.length === 1 && selectedNodes.length === 0 && (
               <BarButton label="Label arrow" onClick={() => setAsking({ kind: "label", edge: selectedEdges[0].id })}>
                 <Tag size={15} aria-hidden />
               </BarButton>
+            )}
+            {selectedEdges.length > 0 && selectedNodes.length === 0 && (
+              <RowMenu
+                label="Arrow style"
+                items={arrowItems}
+                button={{ content: <Spline size={15} aria-hidden />, className: "icon-button h-8 w-8", title: "Arrow style" }}
+              />
+            )}
+            {selectedNodes.length > 1 && (
+              <RowMenu
+                label="Align"
+                items={alignItems}
+                button={{ content: <AlignStartVertical size={15} aria-hidden />, className: "icon-button h-8 w-8", title: "Align" }}
+              />
             )}
             {selectedNodes.some((n) => n.type !== "group") && (
               <BarButton label="Group the selected cards" onClick={addGroup}>
@@ -661,11 +859,23 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
               </BarButton>
             )}
             <BarDivider />
+            <RowMenu
+              label="More"
+              items={selectionItems}
+              button={{ content: <MoreIcon size={15} aria-hidden />, className: "icon-button h-8 w-8", title: "More" }}
+            />
             <BarButton label="Delete" onClick={removeSelected}>
               <Trash2 size={15} aria-hidden />
             </BarButton>
           </SelectionBar>
         )}
+
+        <RowMenu
+          ref={contextMenu}
+          hideButton
+          label={menuFor?.kind === "pane" ? "Canvas" : "Selection"}
+          items={menuFor?.kind === "pane" ? menuFor.items : menuFor ? selectionItems : []}
+        />
 
         {propertyInfo && showProps && (
           <div
@@ -697,8 +907,11 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
             .filter((f) => (picker === "note" ? isNote(f.path) : !isNote(f.path)))
             .map((f) => ({ id: f.path, label: f.title, hint: f.folder }))}
           empty="Nothing to add yet."
-          onPick={(item) => addFile(item.id)}
-          onClose={() => setPicker(null)}
+          onPick={(item) => addFile(item.id, pickAt)}
+          onClose={() => {
+            setPickAt(undefined);
+            setPicker(null);
+          }}
         />
       )}
       {asking?.kind === "link" && (
@@ -889,7 +1102,7 @@ function TextCard({ id, data, selected }: NodeProps<CardNode>) {
   const c = data.c as Extract<CanvasNode, { type: "text" }>;
   const { editing, setEditing, update, growTo, vault, compact } = useCanvas();
   const isEditing = editing === id;
-  const short = compact && !isEditing;
+  const short = (compact || titleOnly(c)) && !isEditing;
   const [draft, setDraft] = useState(c.text);
   const html = useMemo(() => (isEditing || short ? "" : renderMarkdown(c.text, vault.links)), [c.text, isEditing, short, vault.links]);
   const ref = useRef<HTMLDivElement>(null);
@@ -958,7 +1171,7 @@ function FileCard({ id, data, selected }: NodeProps<CardNode>) {
     [exists, c.file, c.subpath, vault],
   );
   // The card's header already shows the title: leave out a first heading that only repeats it.
-  const short = compact && !picture;
+  const short = (compact || titleOnly(c)) && !picture;
   const html = useMemo(
     () => (preview && !short ? renderMarkdown(withoutTitle(preview.markdown, preview.title), vault.links) : ""),
     [preview, short, vault.links],
@@ -1079,7 +1292,7 @@ function LinkCard({ id, data, selected }: NodeProps<CardNode>) {
     // keep the raw text
   }
   const { compact } = useCanvas();
-  if (compact) {
+  if (compact || titleOnly(c)) {
     return (
       <Card id={id} selected={!!selected} color={c.color} className="flex items-center gap-2 px-3" resizable={false}>
         <Globe size={14} aria-hidden className="shrink-0 text-muted" />
@@ -1162,7 +1375,10 @@ function CanvasArrow({
   const c = data?.c;
   const own = colorValue(c?.color);
   const color = selected ? (own ?? "var(--accent)") : (own ?? "var(--canvas-arrow)");
-  const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+  const route = c ? arrowRoute(c) : "curved";
+  const at = { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition };
+  const [path, labelX, labelY] =
+    route === "straight" ? getStraightPath(at) : route === "elbow" ? getSmoothStepPath({ ...at, borderRadius: 10 }) : getBezierPath(at);
   const markerId = `arrow-${id}`;
   const end = c?.toEnd !== "none";
   const startArrow = c?.fromEnd === "arrow";
@@ -1178,7 +1394,7 @@ function CanvasArrow({
         path={path}
         markerEnd={end ? `url(#${markerId})` : undefined}
         markerStart={startArrow ? `url(#${markerId})` : undefined}
-        style={{ stroke: color, strokeWidth: selected ? 2.25 : 1.75 }}
+        style={{ stroke: color, strokeWidth: selected ? 2.25 : 1.75, strokeDasharray: c ? dashPattern(c) : undefined, strokeLinecap: "round" }}
         interactionWidth={18}
       />
       {c?.label && (

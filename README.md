@@ -88,7 +88,12 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   the bottom (keys T, N, F, W, G), a zoom pill (- 100% +, with zoom to fit and to the selection), and
   a bar above whatever is selected (colour, open, label, group, delete). The View menu (the eye
   in the add bar) sets the grid (dots, lines or none), snapping to it, a mini-map, and cards with
-  previews or titles only; it's kept on this device, not in the canvas file. A canvas
+  previews or titles only; it's kept on this device, not in the canvas file. Arrows can be curved,
+  straight or elbowed, with arrowheads at the end, both ends or none, and solid, dashed or dotted
+  (kept as the Advanced Canvas plugin for Obsidian keeps them). Several cards can be aligned and
+  spaced evenly; cards can be duplicated (Ctrl/Cmd+D), brought to the front or sent to the back
+  (Ctrl/Cmd+] and [), and set to show their title only. Right-click a card, an arrow or empty
+  space for its menu. A canvas
   file that isn't valid JSON opens with an explanation and *Edit as text*, rather than an empty board
 - Excalidraw drawings (`.excalidraw` files): create with the pen button in the file tree, edit
   full-screen, embed with `![[Drawing.excalidraw]]` (rendered as SVG, click to open). Element

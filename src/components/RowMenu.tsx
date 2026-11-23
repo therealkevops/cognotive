@@ -43,9 +43,11 @@ export const RowMenu = forwardRef<
     alwaysVisible?: boolean;
     /** The button's own content and look instead of the three dots (it's then always shown). */
     button?: { content: ReactNode; className: string; title: string };
+    /** No button: opened only with `openAt` (a right-click). */
+    hideButton?: boolean;
   }
 >(
-  function RowMenu({ label, items, className = "", alwaysVisible = false, button: custom }, ref) {
+  function RowMenu({ label, items, className = "", alwaysVisible = false, button: custom, hideButton = false }, ref) {
     const button = useRef<HTMLButtonElement>(null);
     const panel = useRef<HTMLDivElement>(null);
     const [at, setAt] = useState<{ x: number; y: number; fromButton: boolean } | null>(null);
@@ -86,13 +88,19 @@ export const RowMenu = forwardRef<
         if (!panel.current?.contains(e.target as Node) && !button.current?.contains(e.target as Node)) close(false);
       };
       const away = () => close(false);
+      // Only a scroll that moves what the menu is anchored to (the page, or a box holding its
+      // button) closes it: a canvas scrolling a focused card into view doesn't.
+      const scrolled = (e: Event) => {
+        const t = e.target;
+        if (t === document || (t instanceof Node && button.current && t.contains(button.current))) close(false);
+      };
       document.addEventListener("mousedown", outside);
       window.addEventListener("resize", away);
-      window.addEventListener("scroll", away, true);
+      window.addEventListener("scroll", scrolled, true);
       return () => {
         document.removeEventListener("mousedown", outside);
         window.removeEventListener("resize", away);
-        window.removeEventListener("scroll", away, true);
+        window.removeEventListener("scroll", scrolled, true);
       };
     }, [at, place, close]);
 
@@ -116,35 +124,37 @@ export const RowMenu = forwardRef<
     const open = !!at;
     return (
       <>
-        <button
-          ref={button}
-          type="button"
-          className={
-            custom
-              ? custom.className
-              : `icon-button h-6 w-6 shrink-0 ${open || alwaysVisible ? "" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"} ${className}`
-          }
-          aria-label={label}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          title={custom?.title ?? "More"}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (open) close(false);
-            else openUnderButton();
-          }}
-          onKeyDown={(e) => {
-            // Keys on the button are its own, not the row's (Enter would open the note).
-            if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
-              e.preventDefault();
-              e.stopPropagation();
-              openUnderButton();
+        {!hideButton && (
+          <button
+            ref={button}
+            type="button"
+            className={
+              custom
+                ? custom.className
+                : `icon-button h-6 w-6 shrink-0 ${open || alwaysVisible ? "" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"} ${className}`
             }
-          }}
-          onDoubleClick={(e) => e.stopPropagation()}
-        >
-          {custom ? custom.content : <MoreHorizontal size={15} aria-hidden />}
-        </button>
+            aria-label={label}
+            aria-haspopup="menu"
+            aria-expanded={open}
+            title={custom?.title ?? "More"}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (open) close(false);
+              else openUnderButton();
+            }}
+            onKeyDown={(e) => {
+              // Keys on the button are its own, not the row's (Enter would open the note).
+              if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
+                e.preventDefault();
+                e.stopPropagation();
+                openUnderButton();
+              }
+            }}
+            onDoubleClick={(e) => e.stopPropagation()}
+          >
+            {custom ? custom.content : <MoreHorizontal size={15} aria-hidden />}
+          </button>
+        )}
         {open &&
           createPortal(
             <div
