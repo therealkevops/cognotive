@@ -3,19 +3,28 @@
 import {
   ChevronRight,
   Columns2,
+  Copy,
   File,
   FilePlus,
+  FolderInput,
   FolderPlus,
   Image as ImageIcon,
   LayoutDashboard,
+  Link2,
   PenTool,
   Pencil,
+  Pin,
+  PinOff,
   Trash2,
   Upload,
 } from "lucide-react";
 import { useContext, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { readPref, writePref } from "@/lib/prefs";
-import { dirname, isCanvas, isDrawing, isImage, isMarkdown } from "@/lib/vault/paths";
+import { dirname, isBinary, isCanvas, isDrawing, isImage, isMarkdown, isNote } from "@/lib/vault/paths";
+import { copyPath, moveTargets } from "@/lib/vault/tree-actions";
+import { formatLink } from "@/lib/links/format";
+import { hubProperty } from "@/lib/links/health";
+import { Picker } from "./Picker";
 import { buildTree, type TreeNode } from "@/lib/vault/tree";
 import { ATTACHMENT_FOLDER, useVault } from "../vault/useVault";
 import { DeleteDialog } from "./DeleteDialog";
@@ -58,6 +67,50 @@ export function FileTree() {
     if (parent) setOpen(parent, true);
     const path = await vault.createFolder(parent);
     if (path) setRenaming(path);
+  };
+  // Where the file picker's files go: the folder whose menu asked, or the default.
+  const uploadTo = useRef("");
+  const [moving, setMoving] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const say = (text: string) => {
+    setNotice(text);
+    setTimeout(() => setNotice((n) => (n === text ? null : n)), 2500);
+  };
+  const actions: TreeActions = {
+    newNote: (f) => void newNote(f),
+    newFolder: (f) => void newFolder(f),
+    newDrawing: (f) => {
+      setOpen(f, true);
+      void vault.createDrawing(f);
+    },
+    newCanvas: (f) => {
+      setOpen(f, true);
+      void vault.createCanvas(f);
+    },
+    upload: (f) => {
+      uploadTo.current = f;
+      upload.current?.click();
+    },
+    move: setMoving,
+    duplicate: (path) => {
+      const content = vault.textOf(path);
+      if (content === undefined) return;
+      void vault.createNoteWith(copyPath(path, vault.exists), content);
+    },
+    copyLink: (path) => {
+      const inner = vault.links.linkText(path);
+      // Written for pasting into the open note (a markdown link is relative to it).
+      const link = formatLink(vault.settings.linkFormat, vault.active?.path ?? path, { path, target: inner }, inner);
+      void navigator.clipboard.writeText(link).then(
+        () => say(`Copied ${link}`),
+        () => say("The browser didn't allow copying."),
+      );
+    },
+    togglePin: (path) => {
+      const pinned = hubProperty(vault.links.get(path)?.properties) === true;
+      void vault.setProperty(path, "hub", pinned ? undefined : true);
+      say(pinned ? "Unpinned from the sidebar." : "Pinned to the sidebar.");
+    },
   };
 
   const dropProps = (folder: string) => ({
@@ -131,7 +184,10 @@ export function FileTree() {
             className="icon-button"
             aria-label="Add files"
             title={`Add files (saved in ${ATTACHMENT_FOLDER}/, or drop them on a folder)`}
-            onClick={() => upload.current?.click()}
+            onClick={() => {
+              uploadTo.current = "";
+              upload.current?.click();
+            }}
           >
             <Upload size={16} aria-hidden />
           </button>
@@ -144,7 +200,8 @@ export function FileTree() {
             onChange={(e) => {
               const files = [...(e.target.files ?? [])];
               e.target.value = "";
-              if (files.length) void addFiles(files, "");
+              if (files.length) void addFiles(files, uploadTo.current);
+              uploadTo.current = "";
             }}
           />
         </div>
@@ -167,10 +224,27 @@ export function FileTree() {
             setRenaming={setRenaming}
             dropTarget={dropTarget}
             dropProps={dropProps}
-            onNewNote={newNote}
+            actions={actions}
           />
         ))}
       </div>
+      {notice && (
+        <p role="status" className="truncate px-2 pt-1 text-xs text-muted">
+          {notice}
+        </p>
+      )}
+      {moving && (
+        <Picker
+          title={`Move ${moving.split("/").pop()} to…`}
+          placeholder="Folder"
+          items={moveTargets(tree, moving)}
+          onPick={(item) => {
+            if (item.id) setOpen(item.id, true);
+            void vault.move(moving, item.id);
+          }}
+          onClose={() => setMoving(null)}
+        />
+      )}
     </nav>
   );
 }
@@ -184,7 +258,7 @@ function Node({
   setRenaming,
   dropTarget,
   dropProps,
-  onNewNote,
+  actions,
 }: {
   node: TreeNode;
   depth: number;
@@ -194,7 +268,7 @@ function Node({
   setRenaming(path: string | null): void;
   dropTarget: string | null;
   dropProps: (folder: string) => Record<string, unknown>;
-  onNewNote(folder: string): void;
+  actions: TreeActions;
 }) {
   const vault = useVault();
   const openSide = useContext(SidePaneContext);
@@ -297,9 +371,29 @@ function Node({
             label={`More actions for ${node.name}`}
             className={`ml-auto ${isActive ? "[@media(hover:none)]:opacity-100" : ""}`}
             items={[
-              ...(isFolder ? [{ label: "New note here", icon: FilePlus, onSelect: () => onNewNote(node.path) }] : []),
-              ...(!isFolder && openSide && wide ? [{ label: "Open in side pane", icon: Columns2, onSelect: () => openSide(node.path) }] : []),
+              ...(isFolder
+                ? [
+                    { label: "New note here", icon: FilePlus, onSelect: () => actions.newNote(node.path) },
+                    { label: "New drawing here", icon: PenTool, onSelect: () => actions.newDrawing(node.path) },
+                    { label: "New canvas here", icon: LayoutDashboard, onSelect: () => actions.newCanvas(node.path) },
+                    { label: "New folder here", icon: FolderPlus, onSelect: () => actions.newFolder(node.path) },
+                    { label: "Upload files here", icon: Upload, onSelect: () => actions.upload(node.path) },
+                    "separator" as const,
+                  ]
+                : openSide && wide
+                  ? [{ label: "Open in side pane", icon: Columns2, onSelect: () => openSide(node.path) }, "separator" as const]
+                  : []),
               { label: "Rename", icon: Pencil, onSelect: () => setRenaming(node.path) },
+              { label: "Move to…", icon: FolderInput, onSelect: () => actions.move(node.path) },
+              ...(!isFolder && !isBinary(node.path) ? [{ label: "Duplicate", icon: Copy, onSelect: () => actions.duplicate(node.path) }] : []),
+              ...(!isFolder ? [{ label: "Copy link", icon: Link2, onSelect: () => actions.copyLink(node.path) }] : []),
+              ...(!isFolder && isNote(node.path)
+                ? [
+                    hubProperty(vault.links.get(node.path)?.properties) === true
+                      ? { label: "Unpin from sidebar", icon: PinOff, onSelect: () => actions.togglePin(node.path) }
+                      : { label: "Pin to sidebar", icon: Pin, onSelect: () => actions.togglePin(node.path) },
+                  ]
+                : []),
               "separator" as const,
               { label: "Delete", icon: Trash2, danger: true, onSelect: remove },
             ]}
@@ -319,7 +413,7 @@ function Node({
               setRenaming={setRenaming}
               dropTarget={dropTarget}
               dropProps={dropProps}
-              onNewNote={onNewNote}
+              actions={actions}
             />
           ))}
         </div>
@@ -349,4 +443,17 @@ function RenameInput({ initial, onDone }: { initial: string; onDone(name: string
       onBlur={() => onDone(value)}
     />
   );
+}
+
+/** What a file tree item's menu can do (shared by every item, so each only says which path). */
+interface TreeActions {
+  newNote(folder: string): void;
+  newFolder(parent: string): void;
+  newDrawing(folder: string): void;
+  newCanvas(folder: string): void;
+  upload(folder: string): void;
+  move(path: string): void;
+  duplicate(path: string): void;
+  copyLink(path: string): void;
+  togglePin(path: string): void;
 }
