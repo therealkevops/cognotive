@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { unusedAttachments, type SizedFile } from "@/lib/attachments/unused";
 import { LocalStore } from "@/lib/vault/local-store";
 import { basename, dirname, isBinary } from "@/lib/vault/paths";
-import { formatBytes, requestPersistence, storageStatus, type StorageStatus } from "@/lib/storage-safety";
+import { formatBytes, requestPersistence, storageLimit, storageStatus, type StorageStatus } from "@/lib/storage-safety";
 import { cacheUsage, removeModel, repositoryUsage, storageParts, type RepositoryUsage, type StoragePart } from "@/lib/storage-usage";
 import { useVault } from "../vault/useVault";
 import { useVaults } from "../vault/useVaults";
@@ -58,6 +58,13 @@ export function StorageSection() {
   };
   const status = measured?.status;
   const model = measured?.parts.find((p) => p.id === "model");
+  const [limit, setLimitState] = useState<number | null>(() => storageLimit.get());
+  const setLimit = (bytes: number | null) => {
+    storageLimit.set(bytes);
+    setLimitState(bytes);
+  };
+  // The limit counts only when it's below what the browser allows.
+  const limited = !!limit && (!status?.quota || limit < status.quota);
 
   return (
     <section aria-label="Storage">
@@ -77,7 +84,12 @@ export function StorageSection() {
               <p className="text-sm">
                 <span className="font-semibold tracking-tight text-2xl">{formatBytes(measured.total)}</span>{" "}
                 <span className="text-muted">
-                  used{status?.quota ? ` of ${formatBytes(status.quota)} the browser allows this site` : ""}
+                  used
+                  {limited
+                    ? ` of your ${formatBytes(limit!)} limit`
+                    : status?.quota
+                      ? ` of ${formatBytes(status.quota)} the browser allows this site`
+                      : ""}
                 </span>
               </p>
               <button type="button" className="icon-button h-8 w-8" aria-label="Measure again" title="Measure again" onClick={again}>
@@ -85,7 +97,14 @@ export function StorageSection() {
               </button>
             </div>
             <Breakdown parts={measured.parts} total={measured.total} />
+            {limited && measured.total > limit! && (
+              <p role="alert" className="mt-2 text-[0.8125rem] text-red-600 dark:text-red-400">
+                Over your limit: new attachments won&apos;t be added until there&apos;s room. Notes still save.
+              </p>
+            )}
           </div>
+
+          <StorageLimitRow limit={limit} browserQuota={status?.quota} onChange={setLimit} />
 
           <Group>
             <ul aria-label="Storage by kind" className="divide-y divide-border">
@@ -293,6 +312,107 @@ function UnusedAttachments({ onChanged }: { onChanged(): void }) {
           </>
         )}
       </section>
+    </Group>
+  );
+}
+
+const MB = 1024 * 1024;
+const GB = 1024 * MB;
+const PRESETS = [250 * MB, 500 * MB, GB, 2 * GB, 5 * GB, 10 * GB];
+
+/**
+ * A limit on what the app keeps in this browser, below what the browser allows: warnings
+ * measure against it, and new attachments are refused once it's reached (notes never are).
+ */
+function StorageLimitRow({
+  limit,
+  browserQuota,
+  onChange,
+}: {
+  limit: number | null;
+  browserQuota?: number;
+  onChange(bytes: number | null): void;
+}) {
+  const preset = limit === null ? "none" : PRESETS.includes(limit) ? String(limit) : "custom";
+  const [custom, setCustom] = useState(preset === "custom");
+  const choice = custom ? "custom" : preset;
+  const [amount, setAmount] = useState(() => (limit ? String(+(limit >= GB ? limit / GB : limit / MB).toFixed(2)) : "1"));
+  const [unit, setUnit] = useState<"MB" | "GB">(() => (limit && limit < GB ? "MB" : "GB"));
+  const applyCustom = (a: string, u: "MB" | "GB") => {
+    const n = Number(a);
+    if (Number.isFinite(n) && n > 0) onChange(Math.round(n * (u === "GB" ? GB : MB)));
+  };
+  return (
+    <Group title="Storage limit">
+      <Row
+        label="Limit for this app"
+        id="storage-limit"
+        description={
+          <>
+            Warnings measure against it, and new attachments aren&apos;t added once it&apos;s reached. Notes always save. Applies to
+            this browser on this device.
+          </>
+        }
+      >
+        <div className="flex flex-col gap-2 sm:items-end">
+          <select
+            id="storage-limit"
+            className="input w-auto"
+            value={choice}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "custom") {
+                setCustom(true);
+                applyCustom(amount, unit);
+              } else {
+                setCustom(false);
+                onChange(v === "none" ? null : Number(v));
+              }
+            }}
+          >
+            <option value="none">{browserQuota ? `Browser maximum (${formatBytes(browserQuota)})` : "Browser maximum"}</option>
+            {PRESETS.map((b) => (
+              <option key={b} value={String(b)}>
+                {formatBytes(b)}
+              </option>
+            ))}
+            <option value="custom">Custom…</option>
+          </select>
+          {choice === "custom" && (
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                min="1"
+                step="any"
+                inputMode="decimal"
+                aria-label="Custom limit"
+                className="input w-24"
+                value={amount}
+                onChange={(e) => {
+                  setAmount(e.target.value);
+                  applyCustom(e.target.value, unit);
+                }}
+              />
+              <select
+                aria-label="Unit"
+                className="input w-auto"
+                value={unit}
+                onChange={(e) => {
+                  const u = e.target.value as "MB" | "GB";
+                  setUnit(u);
+                  applyCustom(amount, u);
+                }}
+              >
+                <option value="MB">MB</option>
+                <option value="GB">GB</option>
+              </select>
+            </div>
+          )}
+          {limit !== null && browserQuota !== undefined && limit >= browserQuota && (
+            <p className="text-xs text-muted">That&apos;s more than the browser allows, so the browser&apos;s limit applies.</p>
+          )}
+        </div>
+      </Row>
     </Group>
   );
 }

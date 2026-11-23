@@ -100,6 +100,34 @@ export function storageWarning(s: StorageStatus, now: number, snoozedUntil?: num
   return share >= NEARLY_FULL ? share : null;
 }
 
+/** A limit the user set for the app's storage on this device, in bytes (null: what the browser allows). */
+export const storageLimit = {
+  get(): number | null {
+    const v = readPref<unknown>("storageLimit", null);
+    return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null;
+  },
+  set(bytes: number | null) {
+    writePref("storageLimit", bytes);
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(STORAGE_LIMIT_EVENT));
+  },
+};
+/** Sent on `window` when the limit changes, so warnings can look again. */
+export const STORAGE_LIMIT_EVENT = "noted-storage-limit";
+
+/**
+ * The status measured against the user's limit when they set one below what the browser
+ * allows (`limited` says which it is): warnings and the Storage summary use this quota.
+ */
+export function withLimit(s: StorageStatus, limit: number | null): StorageStatus & { limited: boolean } {
+  if (!limit || (s.quota && s.quota <= limit)) return { ...s, limited: false };
+  return { ...s, quota: limit, limited: true };
+}
+
+/** Whether `adding` more bytes keeps usage within the limit (true without a limit, or a usage figure). */
+export function withinLimit(usage: number | undefined, limit: number | null, adding: number): boolean {
+  return !limit || usage === undefined || usage + adding <= limit;
+}
+
 /** For this browser (storage is per site, not per repository). */
 export const storagePrefs = {
   snoozedUntil: () => readPref<number | undefined>("storageFullSnooze", undefined),

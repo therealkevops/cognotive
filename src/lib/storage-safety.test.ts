@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DAY, backupReminder, formatBytes, storageWarning } from "./storage-safety";
+import { DAY, backupReminder, formatBytes, storageLimit, storageWarning, withLimit, withinLimit } from "./storage-safety";
 
 const now = Date.UTC(2026, 10, 22);
 const base = { local: true, now, lastChange: now - DAY, firstSeen: now - 30 * DAY, persisted: true, safari: false, installed: false };
@@ -42,5 +42,35 @@ describe("storageWarning", () => {
   });
   it("says nothing when the browser doesn't tell", () => {
     expect(storageWarning({ supported: false, persisted: false }, now)).toBeNull();
+  });
+});
+
+describe("a storage limit the user sets", () => {
+  const MB = 1024 * 1024;
+  it("is kept per browser, and only a positive number counts", () => {
+    localStorage.clear();
+    expect(storageLimit.get()).toBeNull();
+    storageLimit.set(500 * MB);
+    expect(storageLimit.get()).toBe(500 * MB);
+    storageLimit.set(null);
+    expect(storageLimit.get()).toBeNull();
+    localStorage.setItem("noted-ai:storageLimit", JSON.stringify(-3));
+    expect(storageLimit.get()).toBeNull();
+  });
+
+  it("replaces the browser's quota when it's lower", () => {
+    const s = { supported: true, persisted: true, usage: 450 * MB, quota: 2000 * MB };
+    expect(withLimit(s, 500 * MB)).toEqual({ ...s, quota: 500 * MB, limited: true });
+    expect(withLimit(s, 5000 * MB)).toEqual({ ...s, limited: false });
+    expect(withLimit(s, null)).toEqual({ ...s, limited: false });
+    // And the warning follows it: 450 of 500 is 90%.
+    expect(storageWarning(withLimit(s, 500 * MB), 0)).toBeCloseTo(0.9);
+  });
+
+  it("says whether more fits", () => {
+    expect(withinLimit(450 * MB, 500 * MB, 40 * MB)).toBe(true);
+    expect(withinLimit(450 * MB, 500 * MB, 60 * MB)).toBe(false);
+    expect(withinLimit(450 * MB, null, 9000 * MB)).toBe(true);
+    expect(withinLimit(undefined, 500 * MB, 9000 * MB)).toBe(true);
   });
 });

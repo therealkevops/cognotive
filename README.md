@@ -112,6 +112,9 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
     as they are; files imported from a backup are never changed
   - Settings → Storage lists attachments no note, drawing or canvas uses, largest first, to
     delete; a banner warns when the browser's storage for the app is 80% full
+  - A storage limit (Settings → Storage: 250 MB to 10 GB, or a custom amount) for this browser:
+    warnings measure against it, and new attachments aren't added once it's reached. Notes
+    always save
 - Live preview renders `![[Note]]` embeds in place, and highlights `#tags`;
   `[[Note#^block]]` links scroll to the block
 - Tables: in live preview a table is a grid you type in (notes still store ordinary markdown

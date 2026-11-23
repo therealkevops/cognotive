@@ -100,3 +100,47 @@ test("a warning when storage is nearly full, which can be put off or followed", 
   await expect(editor(page)).toBeVisible();
   await expect(page.getByRole("region", { name: "Storage nearly full" })).toBeHidden();
 });
+
+test("a storage limit: warnings measure against it, and new attachments stop at it", async ({ page }) => {
+  // The browser reports 100 MB used of 2 GB.
+  await page.addInitScript(() => {
+    const storage = navigator.storage;
+    if (storage) storage.estimate = async () => ({ usage: 100 * 1024 * 1024, quota: 2000 * 1024 * 1024 });
+  });
+  await page.goto("/");
+  await expect(editor(page)).toBeVisible();
+  await expect(page.getByRole("region", { name: "Storage nearly full" })).toBeHidden();
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  await dialog.getByRole("button", { name: "Storage" }).click();
+  const limit = dialog.getByLabel("Limit for this app");
+  await expect(limit).toHaveValue("none");
+  await limit.selectOption({ label: "250 MB" });
+  await expect(dialog).toContainText("of your 250 MB limit");
+  // A custom limit, just above what's used: the warning appears.
+  await limit.selectOption("custom");
+  await dialog.getByLabel("Custom limit").fill("110");
+  await dialog.getByLabel("Unit").selectOption("MB");
+  await page.keyboard.press("Escape");
+  const banner = page.getByRole("region", { name: "Storage nearly full" });
+  await expect(banner).toContainText("of the 110 MB limit you set");
+
+  // A 20 MB file would go over it: refused, and nothing is added.
+  await add(page, "Big report.pdf", "application/pdf", Buffer.alloc(20 * 1024 * 1024, 1));
+  await expect(page.getByRole("alert").filter({ hasText: "Not added: Big report.pdf" })).toContainText("110 MB storage limit");
+  await expect(tree(page).getByRole("treeitem", { name: "Big report.pdf" })).toHaveCount(0);
+
+  // Back to the browser's limit (kept after a reload): it's added.
+  await page.reload();
+  await expect(editor(page)).toBeVisible();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await dialog.getByRole("button", { name: "Storage" }).click();
+  await expect(dialog.getByLabel("Limit for this app")).toHaveValue("custom");
+  await expect(dialog.getByLabel("Custom limit")).toHaveValue("110");
+  await dialog.getByLabel("Limit for this app").selectOption("none");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("region", { name: "Storage nearly full" })).toBeHidden();
+  await add(page, "Big report.pdf", "application/pdf", Buffer.alloc(20 * 1024 * 1024, 1));
+  await expect(tree(page).getByRole("treeitem", { name: "Big report.pdf" })).toBeVisible();
+});

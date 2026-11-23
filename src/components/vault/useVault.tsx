@@ -59,6 +59,7 @@ import {
 import { WELCOME_NOTES } from "@/lib/vault/welcome";
 import { decideSave } from "@/lib/vault/save-merge";
 import { shrinkImage } from "@/lib/attachments/shrink";
+import { formatBytes, storageLimit, storageStatus, withinLimit } from "@/lib/storage-safety";
 
 const SAVE_DELAY_MS = 400;
 /** Where pasted, dropped and uploaded files go. */
@@ -463,10 +464,19 @@ export function VaultProvider({
   const addAttachments = useCallback(
     async (files: File[], folder = settingsRef.current.attachmentFolder || ATTACHMENT_FOLDER) => {
       const saved: string[] = [];
+      // A limit set in Settings → Storage stops new files (never notes) once it's reached.
+      const limit = storageLimit.get();
+      let used = limit ? (await storageStatus()).usage : undefined;
+      const refused: string[] = [];
       try {
         for (const added of files) {
           // Images are kept smaller (and without their hidden details); see lib/attachments/shrink.
           const file = added.type.startsWith("image/") ? await shrinkImage(added) : added;
+          if (!withinLimit(used, limit, file.size)) {
+            refused.push(added.name || "a pasted image");
+            continue;
+          }
+          if (used !== undefined) used += file.size;
           const name = attachmentName(file);
           const path = uniquePath(joinPath(folder, name), (p) => exists(p) || saved.includes(p));
           if (isBinary(path)) {
@@ -481,6 +491,13 @@ export function VaultProvider({
         }
       } catch (e) {
         fail(e);
+      }
+      if (refused.length) {
+        fail(
+          new Error(
+            `Not added: ${refused.length === 1 ? refused[0] : `${refused.length} files`}. It would go over the ${formatBytes(limit!)} storage limit set in Settings → Storage.`,
+          ),
+        );
       }
       if (saved.length) {
         bumpIndex();
