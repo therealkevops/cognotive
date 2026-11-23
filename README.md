@@ -210,7 +210,8 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   notes are kept in the browser. After a new version is deployed, a page opened before it reloads
   itself the first time it needs a part of the app it hasn't loaded yet (the canvas or drawing editor)
 - Several repositories, with a switcher at the top of the sidebar; both sidebars collapse to
-  icon rails
+  icon rails, and can be resized by dragging their inner edge (or focus it and use the arrow
+  keys; a double-click puts the default width back). Widths are kept on this device
 - Sync with GitHub: paste a GitHub token, pick a repository, branch and optional subfolder.
   Notes sync both ways; see [How sync works](#how-sync-works)
 - AI chat about your notes, in the **Chat** tab of the right panel (see

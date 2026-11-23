@@ -213,6 +213,34 @@ select.input {
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 16px 48px -8px rgb(0 0 0 / 0.22);
   animation: pop-in 140ms ease-out;
 }
+/* The draggable edge of a sidebar: a line in the accent colour while pointed at or dragged. */
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.resize-handle:hover::after,
+.resize-handle:focus-visible::after,
+.resize-handle[data-active]::after {
+  opacity: 1;
+}
+.resize-handle:focus-visible {
+  outline: none;
+}
+body.is-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+body.is-resizing iframe {
+  pointer-events: none;
+}
+
 .menu-panel {
   border: 1px solid var(--border);
   border-radius: 0.75rem;
