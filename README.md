@@ -430,10 +430,13 @@ the repository uses markdown links.
 
 ## Deploy to Vercel (Hobby)
 
-1. In Vercel, **Add New → Project** and import `therealkevops/noted-ai`.
+1. In Vercel, **Add New → Project** and import `therealkevops/cognotive`.
 2. Keep the detected defaults (Framework: Next.js, build `next build`). No environment
    variables are needed; `.env.example` lists the one a later phase adds.
-3. Deploy. Every push to `main` deploys to production; other branches get preview URLs.
+3. Deploy. Every push to `main` deploys to production. Other branches don't deploy at all
+   (`git.deploymentEnabled` in `vercel.json`): each deployment keeps a full copy of the app,
+   search model included, so previews of every branch soon add up. To preview a branch,
+   remove that setting or deploy it by hand with the Vercel CLI.
 
 Check a deployment at `/api/health`, which reports the commit it was built from.
 
