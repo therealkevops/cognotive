@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreHorizontal, type LucideIcon } from "lucide-react";
+import { Check, MoreHorizontal, type LucideIcon } from "lucide-react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
@@ -11,8 +11,15 @@ export type RowMenuItem =
       onSelect(): void;
       /** Shown in red: deleting and the like. */
       danger?: boolean;
+      /** A setting that's on or off (a tick when on); choosing it leaves the menu open. */
+      checked?: boolean;
+      /** With `checked`: one of a set, as radio buttons are. */
+      radio?: boolean;
     }
+  | { heading: string }
   | "separator";
+
+const ITEMS = '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]';
 
 export interface RowMenuHandle {
   /** Opens the menu at a point (a right-click), instead of under the button. */
@@ -74,7 +81,7 @@ export const RowMenu = forwardRef<
     // Focus the first item once it's placed; close on a click elsewhere, scrolling or resizing.
     useEffect(() => {
       if (!at || !place) return;
-      panel.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+      panel.current?.querySelector<HTMLElement>(ITEMS)?.focus();
       const outside = (e: MouseEvent) => {
         if (!panel.current?.contains(e.target as Node) && !button.current?.contains(e.target as Node)) close(false);
       };
@@ -93,7 +100,7 @@ export const RowMenu = forwardRef<
       // The menu is drawn in a portal but still sits inside the row in React's tree: keys
       // pressed here aren't the row's (Enter would open the note).
       e.stopPropagation();
-      const entries = [...(panel.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
+      const entries = [...(panel.current?.querySelectorAll<HTMLElement>(ITEMS) ?? [])];
       const i = entries.indexOf(document.activeElement as HTMLElement);
       const go = (n: number) => entries[(n + entries.length) % entries.length]?.focus();
       if (e.key === "ArrowDown") go(i + 1);
@@ -157,22 +164,28 @@ export const RowMenu = forwardRef<
               {items.map((item, i) =>
                 item === "separator" ? (
                   <div key={`sep-${i}`} role="separator" className="mx-1 my-1 border-t border-border" />
+                ) : "heading" in item ? (
+                  <div key={`h-${i}`} role="presentation" className="px-2.5 pt-1.5 pb-0.5 text-[11px] font-medium text-muted">
+                    {item.heading}
+                  </div>
                 ) : (
                   <button
                     key={item.label}
                     type="button"
-                    role="menuitem"
+                    role={item.checked === undefined ? "menuitem" : item.radio ? "menuitemradio" : "menuitemcheckbox"}
+                    aria-checked={item.checked}
                     tabIndex={-1}
                     className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm outline-none hover:bg-foreground/[0.06] focus:bg-foreground/[0.06] ${
                       item.danger ? "text-red-600 dark:text-red-400" : ""
                     }`}
                     onClick={() => {
-                      close(true);
+                      if (item.checked === undefined) close(true);
                       item.onSelect();
                     }}
                   >
                     {item.icon && <item.icon size={14} aria-hidden className={`shrink-0 ${item.danger ? "" : "text-muted"}`} />}
                     <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                    {item.checked && <Check size={14} aria-hidden className="shrink-0 text-accent" />}
                   </button>
                 ),
               )}

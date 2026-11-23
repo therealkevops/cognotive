@@ -3,10 +3,12 @@
 import "@xyflow/react/dist/style.css";
 import {
   Background,
+  BackgroundVariant,
   BaseEdge,
   ConnectionMode,
   EdgeLabelRenderer,
   Handle,
+  MiniMap,
   NodeResizer,
   NodeToolbar,
   Position,
@@ -26,6 +28,7 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import {
+  Eye,
   ExternalLink,
   FileText,
   Globe,
@@ -50,7 +53,8 @@ import {
   type CanvasNode,
   type Side,
 } from "@/lib/canvas/format";
-import { withoutTitle } from "@/lib/canvas/card-text";
+import { firstLine, withoutTitle } from "@/lib/canvas/card-text";
+import { CANVAS_VIEW_EVENT, GRID_GAP, loadCanvasView, saveCanvasView, type CanvasViewPrefs } from "@/lib/canvas/view-prefs";
 import { openHow, type OpenHow } from "@/lib/links/open";
 import { splitLinkText } from "@/lib/links/parse";
 import { renderMarkdown } from "@/lib/markdown/render";
@@ -61,6 +65,7 @@ import type { PropertyInfo } from "@/lib/editor/properties";
 import { Modal } from "./Modal";
 import { PropertiesEditor } from "./PropertiesEditor";
 import { Picker } from "./Picker";
+import { RowMenu } from "../RowMenu";
 import { BarButton, BarDivider, ColourPicker, FIT, SelectionBar, ZoomPill } from "./CanvasChrome";
 
 /** What a canvas needs from the vault. */
@@ -133,6 +138,14 @@ function toArrow(c: CanvasEdge): ArrowEdge {
   };
 }
 
+/** Height of a card shown by its title only. */
+const TITLE_ONLY_HEIGHT = 42;
+
+/** Cards that shrink to their title when the view shows titles only (pictures and groups don't). */
+function hasTitleView(c: CanvasNode): boolean {
+  return c.type === "text" || c.type === "link" || (c.type === "file" && !isImage(c.file) && !isDrawing(c.file));
+}
+
 /** The canvas file contents for the board as it is now. */
 function toCanvas(nodes: CardNode[], edges: ArrowEdge[], extra: Record<string, unknown>): CanvasData {
   return {
@@ -160,6 +173,8 @@ interface CanvasCtx {
   dark: boolean;
   editing: string | null;
   setEditing(id: string | null): void;
+  /** Cards shown by their titles only (a view setting on this device). */
+  compact: boolean;
   update(id: string, patch: Partial<CanvasNode>): void;
   /** Makes a card at least this tall (a text card growing with its text). */
   growTo(id: string, height: number): void;
@@ -228,6 +243,23 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
   const [nodes, setNodes] = useState<CardNode[]>(start?.nodes ?? []);
   const [edges, setEdges] = useState<ArrowEdge[]>(start?.edges ?? []);
   const [editing, setEditing] = useState<string | null>(null);
+  // How canvases are shown on this device; other open canvases follow a change.
+  const [view, setView] = useState<CanvasViewPrefs>(loadCanvasView);
+  useEffect(() => {
+    const on = () => setView(loadCanvasView());
+    window.addEventListener(CANVAS_VIEW_EVENT, on);
+    return () => window.removeEventListener(CANVAS_VIEW_EVENT, on);
+  }, []);
+  const changeView = (patch: Partial<CanvasViewPrefs>) => saveCanvasView({ ...view, ...patch });
+  const compact = view.cards === "titles";
+  // What the board draws: with titles only, cards are shorter on screen but keep their size in the file.
+  const shown = useMemo(
+    () =>
+      compact
+        ? nodes.map((n) => (n.id !== editing && hasTitleView(n.data.c) ? { ...n, height: TITLE_ONLY_HEIGHT } : n))
+        : nodes,
+    [nodes, compact, editing],
+  );
   // Fit the cards in view when the canvas opens, not when the first card is added to an empty one.
   const [fitOnOpen] = useState(() => (start?.nodes.length ?? 0) > 0);
   const [picker, setPicker] = useState<null | "note" | "file">(null);
@@ -446,12 +478,13 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
       dark,
       editing,
       setEditing,
+      compact,
       update,
       growTo,
       openLink: (t, sub, how) => onOpenLink(t, sub, how),
       openFile: (p, how) => onOpenFile(p, how),
     }),
-    [vault, dark, editing, update, growTo, onOpenLink, onOpenFile],
+    [vault, dark, editing, compact, update, growTo, onOpenLink, onOpenFile],
   );
 
   const nodeTypes = useMemo(() => ({ text: TextCard, file: FileCard, link: LinkCard, group: GroupCard }), []);
@@ -500,7 +533,7 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
         }}
       >
         <ReactFlow<CardNode, ArrowEdge>
-          nodes={nodes}
+          nodes={shown}
           edges={edges}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
@@ -519,10 +552,33 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
           maxZoom={2.5}
           fitView={fitOnOpen}
           fitViewOptions={{ maxZoom: 1, padding: 0.15 }}
+          snapToGrid={view.snap}
+          snapGrid={[GRID_GAP, GRID_GAP]}
           colorMode={dark ? "dark" : "light"}
           proOptions={{ hideAttribution: true }}
         >
-          <Background gap={22} size={1.4} />
+          {view.grid !== "none" && (
+            <Background
+              key={view.grid}
+              variant={view.grid === "lines" ? BackgroundVariant.Lines : BackgroundVariant.Dots}
+              gap={GRID_GAP}
+              size={view.grid === "lines" ? 1 : 1.4}
+              className={view.grid === "lines" ? "canvas-grid-lines" : undefined}
+            />
+          )}
+          {view.minimap && (
+            <MiniMap<CardNode>
+              position="top-right"
+              pannable
+              zoomable
+              ariaLabel="Mini-map"
+              className="canvas-minimap"
+              nodeBorderRadius={6}
+              nodeColor={(n) => colorValue(n.data.c.color) ?? (n.type === "group" ? "transparent" : dark ? "#3f3f46" : "#d4d4d8")}
+              nodeStrokeColor={(n) => (n.type === "group" ? (colorValue(n.data.c.color) ?? (dark ? "#52525b" : "#a1a1aa")) : "transparent")}
+              nodeStrokeWidth={2}
+            />
+          )}
         </ReactFlow>
 
         {/* Adding things: a dock at the bottom, clear of the cards. */}
@@ -546,9 +602,33 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
           <ToolButton label="Add group" shortcut="G" onClick={addGroup}>
             <Group size={16} aria-hidden />
           </ToolButton>
+          <BarDivider />
+          <RowMenu
+            label="View options"
+            button={{
+              content: <Eye size={16} aria-hidden />,
+              className: "icon-button h-8 w-8 sm:h-9 sm:w-9",
+              title: "View",
+            }}
+            items={[
+              { heading: "Grid" },
+              ...(["dots", "lines", "none"] as const).map((g) => ({
+                label: g === "dots" ? "Dots" : g === "lines" ? "Lines" : "No grid",
+                checked: view.grid === g,
+                radio: true,
+                onSelect: () => changeView({ grid: g }),
+              })),
+              { label: "Snap to grid", checked: view.snap, onSelect: () => changeView({ snap: !view.snap }) },
+              "separator",
+              { heading: "Cards" },
+              { label: "Show previews", checked: !compact, radio: true, onSelect: () => changeView({ cards: "preview" }) },
+              { label: "Titles only", checked: compact, radio: true, onSelect: () => changeView({ cards: "titles" }) },
+              "separator",
+              { label: "Mini-map", checked: view.minimap, onSelect: () => changeView({ minimap: !view.minimap }) },
+            ]}
+          />
           {propertyInfo && (
             <>
-              <BarDivider />
               <ToolButton label="Canvas properties" onClick={() => setShowProps((v) => !v)}>
                 <SlidersHorizontal size={16} aria-hidden />
               </ToolButton>
@@ -726,6 +806,7 @@ function Card({
   children,
   className = "",
   minHeight = 40,
+  resizable = true,
 }: {
   id: string;
   selected: boolean;
@@ -733,11 +814,13 @@ function Card({
   children: React.ReactNode;
   className?: string;
   minHeight?: number;
+  /** Not while shown by title only: its height on screen isn't its real one. */
+  resizable?: boolean;
 }) {
   const c = colorValue(color);
   return (
     <>
-      <NodeResizer isVisible={selected} minWidth={120} minHeight={minHeight} lineClassName="canvas-resize-line" handleClassName="canvas-resize-handle" />
+      <NodeResizer isVisible={selected && resizable} minWidth={120} minHeight={minHeight} lineClassName="canvas-resize-line" handleClassName="canvas-resize-handle" />
       <div
         className={`canvas-card h-full w-full overflow-hidden ${selected ? "is-selected" : ""} ${className}`}
         style={c ? ({ "--card-color": c } as React.CSSProperties) : undefined}
@@ -804,17 +887,29 @@ function useFade(ref: React.RefObject<HTMLElement | null>, html: string) {
 
 function TextCard({ id, data, selected }: NodeProps<CardNode>) {
   const c = data.c as Extract<CanvasNode, { type: "text" }>;
-  const { editing, setEditing, update, growTo, vault } = useCanvas();
+  const { editing, setEditing, update, growTo, vault, compact } = useCanvas();
   const isEditing = editing === id;
+  const short = compact && !isEditing;
   const [draft, setDraft] = useState(c.text);
-  const html = useMemo(() => (isEditing ? "" : renderMarkdown(c.text, vault.links)), [c.text, isEditing, vault.links]);
+  const html = useMemo(() => (isEditing || short ? "" : renderMarkdown(c.text, vault.links)), [c.text, isEditing, short, vault.links]);
   const ref = useRef<HTMLDivElement>(null);
   useAssets(ref, html);
   useFade(ref, html);
   const onClick = useLinkClicks();
   return (
-    <Card id={id} selected={!!selected} color={c.color}>
-      {isEditing ? (
+    <Card id={id} selected={!!selected} color={c.color} resizable={!short}>
+      {short ? (
+        <div
+          className="flex h-full items-center truncate px-3 text-sm font-medium"
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            setDraft(c.text);
+            setEditing(id);
+          }}
+        >
+          <span className="truncate">{firstLine(c.text) || <span className="text-muted">Empty card</span>}</span>
+        </div>
+      ) : isEditing ? (
         <textarea
           aria-label="Card text"
           className="nodrag nowheel nopan h-full w-full resize-none bg-transparent p-3 font-[family-name:var(--note-font)] text-[0.95rem] leading-relaxed outline-none"
@@ -854,7 +949,7 @@ function TextCard({ id, data, selected }: NodeProps<CardNode>) {
 
 function FileCard({ id, data, selected }: NodeProps<CardNode>) {
   const c = data.c as Extract<CanvasNode, { type: "file" }>;
-  const { vault, openFile, openLink } = useCanvas();
+  const { vault, openFile, openLink, compact } = useCanvas();
   const exists = vault.exists(c.file);
   const picture = isImage(c.file) || isDrawing(c.file);
   const preview = useMemo(
@@ -863,7 +958,11 @@ function FileCard({ id, data, selected }: NodeProps<CardNode>) {
     [exists, c.file, c.subpath, vault],
   );
   // The card's header already shows the title: leave out a first heading that only repeats it.
-  const html = useMemo(() => (preview ? renderMarkdown(withoutTitle(preview.markdown, preview.title), vault.links) : ""), [preview, vault.links]);
+  const short = compact && !picture;
+  const html = useMemo(
+    () => (preview && !short ? renderMarkdown(withoutTitle(preview.markdown, preview.title), vault.links) : ""),
+    [preview, short, vault.links],
+  );
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     if (!exists || !picture) return;
@@ -884,24 +983,40 @@ function FileCard({ id, data, selected }: NodeProps<CardNode>) {
   const props = exists && isNote(c.file) && !c.subpath ? vault.noteProperties?.(c.file) : null;
   const propCount = props ? Object.keys(props.properties).length : 0;
   const name = basename(c.file).replace(/\.md$/i, "");
+  const open = (e: React.MouseEvent) => {
+    if (!exists) return;
+    const how = openHow(e);
+    if (c.subpath) openLink(c.file, c.subpath.replace(/^#/, ""), how);
+    else openFile(c.file, how);
+  };
 
   return (
-    <Card id={id} selected={!!selected} color={c.color} className="flex flex-col">
-      <div className="canvas-card-head flex shrink-0 items-center">
-        <button
-          type="button"
-          className="nodrag flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-sm font-medium hover:text-accent"
-          title="Open (Ctrl/Cmd-click: new tab)"
-          onClick={(e) => {
-            if (!exists) return;
-            const how = openHow(e);
-            if (c.subpath) openLink(c.file, c.subpath.replace(/^#/, ""), how);
-            else openFile(c.file, how);
-          }}
-        >
-          <Icon size={14} aria-hidden className="shrink-0 text-muted" />
-          <span className="truncate">{title}</span>
-        </button>
+    <Card id={id} selected={!!selected} color={c.color} className="flex flex-col" resizable={!short}>
+      <div className={`${short ? "h-full" : "canvas-card-head"} flex shrink-0 items-center`}>
+        {short ? (
+          // The whole card is its title: it drags like any card, and a double-click opens it.
+          <div
+            className="flex min-w-0 flex-1 items-center gap-2 px-3 text-sm font-medium"
+            title="Double-click to open"
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              open(e);
+            }}
+          >
+            <Icon size={14} aria-hidden className="shrink-0 text-muted" />
+            <span className="truncate">{title}</span>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="nodrag flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-sm font-medium hover:text-accent"
+            title="Open (Ctrl/Cmd-click: new tab)"
+            onClick={open}
+          >
+            <Icon size={14} aria-hidden className="shrink-0 text-muted" />
+            <span className="truncate">{title}</span>
+          </button>
+        )}
         {props && (
           <button
             type="button"
@@ -930,25 +1045,27 @@ function FileCard({ id, data, selected }: NodeProps<CardNode>) {
           </div>
         </NodeToolbar>
       )}
-      <div className="min-h-0 flex-1">
-        {!exists ? (
-          <p className="p-3 text-sm text-muted">“{c.file}” isn&apos;t in this repository.</p>
-        ) : picture ? (
-          url && (
-            // eslint-disable-next-line @next/next/no-img-element -- object URL of a vault file
-            <img src={url} alt={basename(c.file)} className="h-full w-full object-contain" draggable={false} />
-          )
-        ) : preview ? (
-          <div
-            ref={ref}
-            className="prose-note canvas-card-body nowheel h-full overflow-auto p-3 text-[0.9rem]"
-            onClick={onClick}
-            dangerouslySetInnerHTML={{ __html: html || '<p class="text-muted">(empty note)</p>' }}
-          />
-        ) : (
-          <p className="p-3 text-sm text-muted">Open it to see what&apos;s inside.</p>
-        )}
-      </div>
+      {!short && (
+        <div className="min-h-0 flex-1">
+          {!exists ? (
+            <p className="p-3 text-sm text-muted">“{c.file}” isn&apos;t in this repository.</p>
+          ) : picture ? (
+            url && (
+              // eslint-disable-next-line @next/next/no-img-element -- object URL of a vault file
+              <img src={url} alt={basename(c.file)} className="h-full w-full object-contain" draggable={false} />
+            )
+          ) : preview ? (
+            <div
+              ref={ref}
+              className="prose-note canvas-card-body nowheel h-full overflow-auto p-3 text-[0.9rem]"
+              onClick={onClick}
+              dangerouslySetInnerHTML={{ __html: html || '<p class="text-muted">(empty note)</p>' }}
+            />
+          ) : (
+            <p className="p-3 text-sm text-muted">Open it to see what&apos;s inside.</p>
+          )}
+        </div>
+      )}
     </Card>
   );
 }
@@ -960,6 +1077,15 @@ function LinkCard({ id, data, selected }: NodeProps<CardNode>) {
     host = new URL(c.url).hostname;
   } catch {
     // keep the raw text
+  }
+  const { compact } = useCanvas();
+  if (compact) {
+    return (
+      <Card id={id} selected={!!selected} color={c.color} className="flex items-center gap-2 px-3" resizable={false}>
+        <Globe size={14} aria-hidden className="shrink-0 text-muted" />
+        <span className="truncate text-sm font-medium">{host}</span>
+      </Card>
+    );
   }
   return (
     <Card id={id} selected={!!selected} color={c.color} className="flex flex-col items-start justify-center gap-2 p-4">

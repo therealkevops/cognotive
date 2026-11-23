@@ -86,7 +86,9 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 - Canvases (`.canvas`, the JSON Canvas format Obsidian uses): cards for text, notes, images,
   drawings and web links, groups, and labelled arrows, which become typed relations. An add bar at
   the bottom (keys T, N, F, W, G), a zoom pill (- 100% +, with zoom to fit and to the selection), and
-  a bar above whatever is selected (colour, open, label, group, delete). A canvas
+  a bar above whatever is selected (colour, open, label, group, delete). The View menu (the eye
+  in the add bar) sets the grid (dots, lines or none), snapping to it, a mini-map, and cards with
+  previews or titles only; it's kept on this device, not in the canvas file. A canvas
   file that isn't valid JSON opens with an explanation and *Edit as text*, rather than an empty board
 - Excalidraw drawings (`.excalidraw` files): create with the pen button in the file tree, edit
   full-screen, embed with `![[Drawing.excalidraw]]` (rendered as SVG, click to open). Element

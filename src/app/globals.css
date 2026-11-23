@@ -1168,6 +1168,25 @@ mark {
   --xy-selection-border: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent);
   --xy-edge-label-background-color: var(--raised);
 }
+.canvas-board .react-flow {
+  --xy-minimap-background-color: var(--raised);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--foreground) 7%, transparent);
+  --xy-minimap-mask-stroke-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  --xy-minimap-mask-stroke-width: 1.5;
+}
+.canvas-grid-lines {
+  --xy-background-pattern-color: color-mix(in srgb, var(--foreground) 7%, transparent);
+}
+.canvas-minimap {
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 28px -6px rgb(0 0 0 / 0.18);
+}
+.canvas-minimap svg {
+  width: 180px;
+  height: 120px;
+}
 .canvas-board .react-flow__node {
   font-family: var(--font-sans), system-ui, sans-serif;
   color: var(--foreground);

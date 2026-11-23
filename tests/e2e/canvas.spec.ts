@@ -252,3 +252,53 @@ test("a note card opens from the selection bar, without repeating its title", as
   await page.getByRole("toolbar", { name: "Selection" }).getByRole("button", { name: "Open", exact: true }).click();
   await expect(title(page)).toHaveValue("Linking notes");
 });
+
+test("the view menu: titles only, grid, snapping and the mini-map, kept on this device", async ({ page }) => {
+  await newCanvas(page);
+  await addNote(page, "Linking notes");
+  const noteCard = card(page, "Linking notes");
+  await expect(noteCard.locator(".canvas-card-body")).toBeVisible();
+  const full = (await noteCard.boundingBox())!.height;
+
+  const menu = async () => {
+    await page.getByRole("button", { name: "View options" }).click();
+    return page.getByRole("menu", { name: "View options" });
+  };
+  let view = await menu();
+  await expect(view.getByRole("menuitemradio", { name: "Dots" })).toHaveAttribute("aria-checked", "true");
+  await view.getByRole("menuitemradio", { name: "Titles only" }).click();
+  // The menu stays open for more changes.
+  await view.getByRole("menuitemradio", { name: "No grid" }).click();
+  await view.getByRole("menuitemcheckbox", { name: "Mini-map" }).click();
+  await view.getByRole("menuitemcheckbox", { name: "Snap to grid" }).click();
+  await expect(view.getByRole("menuitemcheckbox", { name: "Snap to grid" })).toHaveAttribute("aria-checked", "true");
+  await page.keyboard.press("Escape");
+
+  await expect(noteCard.locator(".canvas-card-body")).toHaveCount(0);
+  expect((await noteCard.boundingBox())!.height).toBeLessThan(full / 3);
+  await expect(board(page).locator(".react-flow__background")).toHaveCount(0);
+  await expect(board(page).locator(".react-flow__minimap")).toBeVisible();
+
+  // Snapping: a dragged card lands on the grid.
+  const b = (await noteCard.boundingBox())!;
+  await page.mouse.move(b.x + 60, b.y + b.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + 60 + 37, b.y + b.height / 2 + 51, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.getByRole("status")).toHaveText("Saved");
+
+  const at = await noteCard.evaluate((el) => /translate\(([-\d.]+)px, ?([-\d.]+)px\)/.exec(el.style.transform)!.slice(1).map(Number));
+  expect(at.map((v) => ((v % 22) + 22) % 22)).toEqual([0, 0]);
+
+  // Kept after a reload.
+  await page.reload();
+  await tree(page).getByRole("treeitem", { name: "Canvas" }).click();
+  await expect(card(page, "Linking notes")).toBeVisible();
+  await expect(card(page, "Linking notes").locator(".canvas-card-body")).toHaveCount(0);
+  await expect(board(page).locator(".react-flow__minimap")).toBeVisible();
+  view = await menu();
+  await view.getByRole("menuitemradio", { name: "Show previews" }).click();
+  await page.keyboard.press("Escape");
+  await expect(card(page, "Linking notes").locator(".canvas-card-body")).toBeVisible();
+  expect(Math.abs((await card(page, "Linking notes").boundingBox())!.height - full)).toBeLessThan(4);
+});
