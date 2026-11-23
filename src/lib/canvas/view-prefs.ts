@@ -8,9 +8,11 @@ export interface CanvasViewPrefs {
   minimap: boolean;
   /** Cards with their contents, or just their titles. */
   cards: "preview" | "titles";
+  /** In the graph, faint lines where the notes on cards link to each other. */
+  noteLinks: boolean;
 }
 
-export const DEFAULT_CANVAS_VIEW: CanvasViewPrefs = { grid: "dots", snap: false, minimap: false, cards: "preview" };
+export const DEFAULT_CANVAS_VIEW: CanvasViewPrefs = { grid: "dots", snap: false, minimap: false, cards: "preview", noteLinks: true };
 
 /** Spacing of the grid and of snapping, in board units. */
 export const GRID_GAP = 22;
@@ -27,6 +29,7 @@ export function cleanCanvasView(raw: unknown): CanvasViewPrefs {
     snap: typeof v.snap === "boolean" ? v.snap : d.snap,
     minimap: typeof v.minimap === "boolean" ? v.minimap : d.minimap,
     cards: v.cards === "preview" || v.cards === "titles" ? v.cards : d.cards,
+    noteLinks: typeof v.noteLinks === "boolean" ? v.noteLinks : d.noteLinks,
   };
 }
 

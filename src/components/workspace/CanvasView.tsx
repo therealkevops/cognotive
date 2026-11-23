@@ -46,6 +46,7 @@ import {
   ExternalLink,
   LayoutGrid,
   MoreHorizontal as MoreIcon,
+  Waypoints,
   MousePointer2,
   Spline,
   FileText,
@@ -73,7 +74,8 @@ import {
 } from "@/lib/canvas/format";
 import { align, distribute, duplicate, restack, type Alignment } from "@/lib/canvas/arrange";
 import { arrowEnds, arrowLine, arrowRoute, dashPattern, withArrowStyle, type ArrowEnds, type ArrowLine, type ArrowRoute } from "@/lib/canvas/arrow-style";
-import { firstLine, withoutTitle } from "@/lib/canvas/card-text";
+import { cardLabel, firstLine, withoutTitle } from "@/lib/canvas/card-text";
+import { canvasGraph, dotRadius } from "@/lib/canvas/graph";
 import { CANVAS_VIEW_EVENT, GRID_GAP, loadCanvasView, saveCanvasView, type CanvasViewPrefs } from "@/lib/canvas/view-prefs";
 import { openHow, type OpenHow } from "@/lib/links/open";
 import { splitLinkText } from "@/lib/links/parse";
@@ -99,6 +101,8 @@ export interface CanvasVault {
   exists(path: string): boolean;
   /** Resolving and reading notes, for rendering [[links]] and embeds in cards. */
   links: LinkContext;
+  /** Links between these notes (each from one of them to another), for the graph. */
+  noteLinks?(paths: string[]): Array<{ from: string; to: string }>;
   /** A note's properties, to edit from its card (writes into the note). */
   noteProperties?(path: string): {
     properties: Record<string, unknown>;
@@ -121,8 +125,13 @@ export interface CanvasViewProps {
   vault: CanvasVault;
 }
 
-type CardData = { c: CanvasNode };
-type ArrowData = { c: CanvasEdge };
+type CardData = { c: CanvasNode; /** In the graph: lines meeting the dot. */ degree?: number };
+type ArrowData = {
+  c: CanvasEdge;
+  /** In the graph: a link between two cards' notes rather than an arrow; and the dots' radii. */
+  link?: boolean;
+  radii?: [number, number];
+};
 type CardNode = Node<CardData>;
 type ArrowEdge = Edge<ArrowData>;
 
@@ -285,6 +294,19 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
   );
   // Fit the cards in view when the canvas opens, not when the first card is added to an empty one.
   const [fitOnOpen] = useState(() => (start?.nodes.length ?? 0) > 0);
+
+  // The board, or the same cards and arrows drawn as a graph (laid out automatically; never saved).
+  const [mode, setMode] = useState<"board" | "graph">("board");
+  const graphing = mode === "graph";
+  const [moved, setMoved] = useState<Record<string, { x: number; y: number }>>({});
+  const switchTo = (next: "board" | "graph") => {
+    if (next === mode) return;
+    setMoved({});
+    setEditing(null);
+    setMode(next);
+    // Once the other view is drawn, show all of it.
+    requestAnimationFrame(() => requestAnimationFrame(() => void rf.fitView({ ...FIT, duration: 0 })));
+  };
   const [picker, setPicker] = useState<null | "note" | "file">(null);
   const [asking, setAsking] = useState<null | { kind: "link" } | { kind: "label"; edge: string }>(null);
   const busy = useRef(false);
@@ -497,6 +519,7 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
       if (!onBoard || active?.closest("input, textarea, select, [contenteditable], [role=dialog], [role=menu]")) return;
       if (document.querySelector("[role=dialog][aria-modal=true]")) return;
       const k = e.key;
+      if (graphing && (e.ctrlKey || e.metaKey || /^[a-z]$/i.test(k))) return;
       if (e.ctrlKey || e.metaKey) {
         // Ctrl/Cmd+D duplicates; Ctrl/Cmd+] and [ bring to the front and send to the back.
         const mod: Record<string, () => void> = {
@@ -542,7 +565,7 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
     if (singleFile.subpath) onOpenLink(singleFile.file, singleFile.subpath.replace(/^#/, ""), how);
     else onOpenFile(singleFile.file, how);
   };
-  const singleTitleView = single && hasTitleView(single) && !compact ? single : null;
+  const singleTitleView = single && hasTitleView(single) && !compact && !graphing ? single : null;
 
   const ALIGN: Array<[Alignment, string, typeof AlignStartVertical]> = [
     ["left", "Align left", AlignStartVertical],
@@ -600,14 +623,14 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
     ...(selectedEdges.length === 1 && !selectedNodes.length
       ? [{ label: "Label arrow", icon: Tag, onSelect: () => setAsking({ kind: "label", edge: selectedEdges[0].id }) }]
       : []),
-    ...(selectedNodes.length
+    ...(selectedNodes.length && !graphing
       ? [
           { label: "Duplicate", icon: Copy, onSelect: duplicateSelected },
           { label: "Bring to front", icon: ArrowUpToLine, onSelect: () => restackSelected("front") },
           { label: "Send to back", icon: ArrowDownToLine, onSelect: () => restackSelected("back") },
         ]
       : []),
-    ...(selectedNodes.length > 1 ? ["separator" as const, ...alignItems] : []),
+    ...(selectedNodes.length > 1 && !graphing ? ["separator" as const, ...alignItems] : []),
     "separator",
     { label: selectedNodes.length + selectedEdges.length > 1 ? "Delete them" : "Delete", icon: Trash2, danger: true, onSelect: removeSelected },
   ];
@@ -622,20 +645,116 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
     setMenuFor(kind);
     contextMenu.current?.openAt(e.clientX, e.clientY);
   };
-  const paneItems = (at: { x: number; y: number }): RowMenuItem[] => [
-    { label: "Add text card here", icon: Type, onSelect: () => addText(at) },
-    {
-      label: "Add note here",
-      icon: FileText,
-      onSelect: () => {
-        setPickAt(at);
-        setPicker("note");
-      },
-    },
-    "separator",
-    { label: "Select all", icon: MousePointer2, onSelect: () => selectOnly(nodes.map((n) => n.id)) },
-    { label: "Zoom to fit", icon: LayoutGrid, onSelect: () => void rf.fitView(FIT) },
-  ];
+  const paneItems = (at: { x: number; y: number }): RowMenuItem[] =>
+    graphing
+      ? [
+          { label: "Select all", icon: MousePointer2, onSelect: () => selectOnly(nodes.filter((n) => n.type !== "group").map((n) => n.id)) },
+          { label: "Zoom to fit", icon: LayoutGrid, onSelect: () => void rf.fitView(FIT) },
+          "separator",
+          { label: "Back to the board", icon: LayoutDashboard, onSelect: () => switchTo("board") },
+        ]
+      : [
+          { label: "Add text card here", icon: Type, onSelect: () => addText(at) },
+          {
+            label: "Add note here",
+            icon: FileText,
+            onSelect: () => {
+              setPickAt(at);
+              setPicker("note");
+            },
+          },
+          "separator",
+          { label: "Select all", icon: MousePointer2, onSelect: () => selectOnly(nodes.map((n) => n.id)) },
+          { label: "Zoom to fit", icon: LayoutGrid, onSelect: () => void rf.fitView(FIT) },
+          "separator",
+          { label: "Show as a graph", icon: Waypoints, onSelect: () => switchTo("graph") },
+        ];
+
+  // The graph's shape changes only when cards, arrows or note links come and go, not when
+  // something is moved, recoloured or selected: lay it out again only then.
+  const shape = graphing
+    ? nodes.map((n) => `${n.id}:${n.type}:${n.data.c.type === "file" ? `${n.data.c.file}${n.data.c.subpath ?? ""}` : ""}`).join("|") +
+      "#" +
+      edges.map((e) => `${e.id}:${e.source}>${e.target}`).join("|")
+    : "";
+  const notePaths = graphing && view.noteLinks
+    ? [...new Set(nodes.flatMap((n) => (n.data.c.type === "file" && !n.data.c.subpath && isNote(n.data.c.file) ? [n.data.c.file] : [])))].sort().join("\u0000")
+    : "";
+  const graph = useMemo(() => {
+    if (!graphing) return null;
+    const paths = notePaths ? notePaths.split("\u0000") : [];
+    const links = paths.length > 1 ? (vault.noteLinks?.(paths) ?? []) : [];
+    return canvasGraph(
+      nodes.map((n) => n.data.c),
+      edges.map((e) => ({ ...e.data!.c, fromNode: e.source, toNode: e.target })),
+      links,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- laid out again only when its shape changes (see above)
+  }, [graphing, shape, notePaths, vault]);
+
+  const graphNodes = useMemo<CardNode[]>(() => {
+    if (!graph) return [];
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    return graph.dots.flatMap((d) => {
+      const n = byId.get(d.id);
+      if (!n) return [];
+      const r = dotRadius(d.degree);
+      return [
+        {
+          id: d.id,
+          type: "dot",
+          position: moved[d.id] ?? { x: d.x - r, y: d.y - r },
+          width: r * 2,
+          height: r * 2,
+          selected: n.selected,
+          data: { c: n.data.c, degree: d.degree },
+        },
+      ];
+    });
+  }, [graph, nodes, moved]);
+
+  const graphEdges = useMemo<ArrowEdge[]>(() => {
+    if (!graph) return [];
+    const byId = new Map(edges.map((e) => [e.id, e]));
+    const degree = new Map(graph.dots.map((d) => [d.id, d.degree]));
+    const radii = (a: string, b: string): [number, number] => [dotRadius(degree.get(a) ?? 0), dotRadius(degree.get(b) ?? 0)];
+    return graph.lines.flatMap((l): ArrowEdge[] => {
+      if (l.kind === "link") {
+        return [
+          {
+            id: l.id,
+            type: "graph",
+            source: l.source,
+            target: l.target,
+            selectable: false,
+            focusable: false,
+            deletable: false,
+            data: { c: { id: l.id, fromNode: l.source, toNode: l.target, toEnd: "none" }, link: true, radii: radii(l.source, l.target) },
+          },
+        ];
+      }
+      const e = byId.get(l.id);
+      if (!e) return [];
+      return [{ ...e, type: "graph", sourceHandle: null, targetHandle: null, data: { ...e.data!, radii: radii(l.source, l.target) } }];
+    });
+  }, [graph, edges]);
+
+  // In the graph, dragging a dot only moves it there; selecting and deleting act on the canvas.
+  const onGraphNodesChange = useCallback((changes: NodeChange<CardNode>[]) => {
+    const places: Record<string, { x: number; y: number }> = {};
+    for (const c of changes) if (c.type === "position" && c.position) places[c.id] = c.position;
+    if (Object.keys(places).length) setMoved((m) => ({ ...m, ...places }));
+    const rest = changes.filter((c) => c.type === "select" || c.type === "remove");
+    if (rest.length) {
+      const gone = new Set(rest.flatMap((c) => (c.type === "remove" ? [c.id] : [])));
+      setNodes((ns) => applyNodeChanges(rest, ns));
+      if (gone.size) setEdges((es) => es.filter((e) => !gone.has(e.source) && !gone.has(e.target)));
+    }
+  }, []);
+  const onGraphEdgesChange = useCallback((changes: EdgeChange<ArrowEdge>[]) => {
+    const rest = changes.filter((c) => (c.type === "select" || c.type === "remove") && !c.id.startsWith("link:"));
+    if (rest.length) setEdges((es) => applyEdgeChanges(rest, es));
+  }, []);
 
   const ctx = useMemo<CanvasCtx>(
     () => ({
@@ -652,8 +771,8 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
     [vault, dark, editing, compact, update, growTo, onOpenLink, onOpenFile],
   );
 
-  const nodeTypes = useMemo(() => ({ text: TextCard, file: FileCard, link: LinkCard, group: GroupCard }), []);
-  const edgeTypes = useMemo(() => ({ canvas: CanvasArrow }), []);
+  const nodeTypes = useMemo(() => ({ text: TextCard, file: FileCard, link: LinkCard, group: GroupCard, dot: GraphDot }), []);
+  const edgeTypes = useMemo(() => ({ canvas: CanvasArrow, graph: GraphLine }), []);
 
   if (!start) {
     return (
@@ -680,7 +799,7 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
         data-testid="canvas"
         // Double-click empty space for a new text card, as in Obsidian.
         onDoubleClick={(e) => {
-          if ((e.target as HTMLElement).classList.contains("react-flow__pane")) {
+          if (!graphing && (e.target as HTMLElement).classList.contains("react-flow__pane")) {
             addText(rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }));
           }
         }}
@@ -698,16 +817,23 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
         }}
       >
         <ReactFlow<CardNode, ArrowEdge>
-          nodes={shown}
-          edges={edges}
+          nodes={graphing ? graphNodes : shown}
+          edges={graphing ? graphEdges : edges}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
+          onNodesChange={graphing ? onGraphNodesChange : onNodesChange}
+          onEdgesChange={graphing ? onGraphEdgesChange : onEdgesChange}
           onConnect={onConnect}
-          onNodeDragStart={onNodeDragStart}
-          onNodeDrag={onNodeDrag}
-          onNodeDragStop={onNodeDragStop}
+          nodesConnectable={!graphing}
+          onNodeDragStart={graphing ? undefined : onNodeDragStart}
+          onNodeDrag={graphing ? undefined : onNodeDrag}
+          onNodeDragStop={graphing ? undefined : onNodeDragStop}
+          onNodeDoubleClick={(_e, node) => {
+            const c = node.data.c;
+            if (!graphing || c.type !== "file" || !vault.exists(c.file)) return;
+            if (c.subpath) onOpenLink(c.file, c.subpath.replace(/^#/, ""), "here");
+            else onOpenFile(c.file, "here");
+          }}
           onEdgeDoubleClick={(_e, edge) => setAsking({ kind: "label", edge: edge.id })}
           onNodeContextMenu={(e, node) => {
             if (!node.selected) selectOnly([node.id]);
@@ -727,7 +853,7 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
           maxZoom={2.5}
           fitView={fitOnOpen}
           fitViewOptions={{ maxZoom: 1, padding: 0.15 }}
-          snapToGrid={view.snap}
+          snapToGrid={view.snap && !graphing}
           snapGrid={[GRID_GAP, GRID_GAP]}
           colorMode={dark ? "dark" : "light"}
           proOptions={{ hideAttribution: true }}
@@ -749,12 +875,36 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
               ariaLabel="Mini-map"
               className="canvas-minimap"
               nodeBorderRadius={6}
-              nodeColor={(n) => colorValue(n.data.c.color) ?? (n.type === "group" ? "transparent" : dark ? "#3f3f46" : "#d4d4d8")}
+              nodeColor={(n) => colorValue(n.data.c.color) ?? (n.type === "group" ? "transparent" : dark ? "#52525b" : "#a1a1aa")}
               nodeStrokeColor={(n) => (n.type === "group" ? (colorValue(n.data.c.color) ?? (dark ? "#52525b" : "#a1a1aa")) : "transparent")}
               nodeStrokeWidth={2}
             />
           )}
         </ReactFlow>
+
+        {/* Board or graph. */}
+        <div role="radiogroup" aria-label="Show as" className="menu-panel absolute top-3 left-3 z-10 flex items-center gap-0.5 p-1">
+          {(
+            [
+              ["board", "Board", LayoutDashboard],
+              ["graph", "Graph", Waypoints],
+            ] as const
+          ).map(([m, label, Icon]) => (
+            <button
+              key={m}
+              type="button"
+              role="radio"
+              aria-checked={mode === m}
+              className={`flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium ${
+                mode === m ? "bg-foreground/[0.08] text-foreground" : "text-muted hover:text-foreground"
+              }`}
+              onClick={() => switchTo(m)}
+            >
+              <Icon size={14} aria-hidden />
+              {label}
+            </button>
+          ))}
+        </div>
 
         {/* Adding things: a dock at the bottom, clear of the cards. */}
         <div
@@ -762,22 +912,26 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
           aria-label="Canvas tools"
           className="menu-panel absolute bottom-3 left-3 z-10 flex items-center gap-0.5 p-1 sm:left-1/2 sm:-translate-x-1/2"
         >
-          <ToolButton label="Add text card" shortcut="T" onClick={() => addText()}>
-            <Type size={16} aria-hidden />
-          </ToolButton>
-          <ToolButton label="Add note" shortcut="N" onClick={() => setPicker("note")}>
-            <FileText size={16} aria-hidden />
-          </ToolButton>
-          <ToolButton label="Add image or file" shortcut="F" onClick={() => setPicker("file")}>
-            <ImageIcon size={16} aria-hidden />
-          </ToolButton>
-          <ToolButton label="Add web page" shortcut="W" onClick={() => setAsking({ kind: "link" })}>
-            <Globe size={16} aria-hidden />
-          </ToolButton>
-          <ToolButton label="Add group" shortcut="G" onClick={addGroup}>
-            <Group size={16} aria-hidden />
-          </ToolButton>
-          <BarDivider />
+          {!graphing && (
+            <>
+              <ToolButton label="Add text card" shortcut="T" onClick={() => addText()}>
+                <Type size={16} aria-hidden />
+              </ToolButton>
+              <ToolButton label="Add note" shortcut="N" onClick={() => setPicker("note")}>
+                <FileText size={16} aria-hidden />
+              </ToolButton>
+              <ToolButton label="Add image or file" shortcut="F" onClick={() => setPicker("file")}>
+                <ImageIcon size={16} aria-hidden />
+              </ToolButton>
+              <ToolButton label="Add web page" shortcut="W" onClick={() => setAsking({ kind: "link" })}>
+                <Globe size={16} aria-hidden />
+              </ToolButton>
+              <ToolButton label="Add group" shortcut="G" onClick={addGroup}>
+                <Group size={16} aria-hidden />
+              </ToolButton>
+              <BarDivider />
+            </>
+          )}
           <RowMenu
             label="View options"
             button={{
@@ -800,6 +954,9 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
               { label: "Titles only", checked: compact, radio: true, onSelect: () => changeView({ cards: "titles" }) },
               "separator",
               { label: "Mini-map", checked: view.minimap, onSelect: () => changeView({ minimap: !view.minimap }) },
+              "separator",
+              { heading: "Graph" },
+              { label: "Note links", checked: view.noteLinks, onSelect: () => changeView({ noteLinks: !view.noteLinks }) },
             ]}
           />
           {propertyInfo && (
@@ -846,14 +1003,14 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
                 button={{ content: <Spline size={15} aria-hidden />, className: "icon-button h-8 w-8", title: "Arrow style" }}
               />
             )}
-            {selectedNodes.length > 1 && (
+            {selectedNodes.length > 1 && !graphing && (
               <RowMenu
                 label="Align"
                 items={alignItems}
                 button={{ content: <AlignStartVertical size={15} aria-hidden />, className: "icon-button h-8 w-8", title: "Align" }}
               />
             )}
-            {selectedNodes.some((n) => n.type !== "group") && (
+            {selectedNodes.some((n) => n.type !== "group") && !graphing && (
               <BarButton label="Group the selected cards" onClick={addGroup}>
                 <Group size={15} aria-hidden />
               </BarButton>
@@ -891,7 +1048,7 @@ function Board({ initial, onChange, onOpenLink, onOpenFile, onEditAsText, vault,
           </div>
         )}
 
-        {nodes.length === 0 && (
+        {nodes.length === 0 && !graphing && (
           <p className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm text-muted">
             Double-click to add a card, or drag notes here from the file tree.
           </p>
@@ -1355,6 +1512,81 @@ function GroupCard({ id, data, selected }: NodeProps<CardNode>) {
       {SIDES.map((s) => (
         <Handle key={s} id={s} type="source" position={SIDE_POSITION[s]} className="canvas-handle" />
       ))}
+    </>
+  );
+}
+
+/* ---------- The graph ---------- */
+
+/** A card as a dot in the graph: its colour, sized by its connections, named beside it. */
+function GraphDot({ data, selected }: NodeProps<CardNode>) {
+  const r = dotRadius(data.degree ?? 0);
+  const color = colorValue(data.c.color);
+  const label = cardLabel(data.c);
+  return (
+    <>
+      <div
+        className={`canvas-dot ${selected ? "is-selected" : ""}`}
+        style={{ width: r * 2, height: r * 2, ...(color ? ({ "--card-color": color } as React.CSSProperties) : {}) }}
+        title={data.c.type === "file" ? `${label} (double-click to open)` : label}
+      />
+      <span className="canvas-dot-label" style={{ top: r * 2 + 4 }}>
+        {label}
+      </span>
+      <Handle type="source" position={Position.Top} className="canvas-dot-handle" isConnectable={false} />
+    </>
+  );
+}
+
+/** A line between two dots: an arrow (with its ends and label), or a faint link between notes. */
+function GraphLine({ id, sourceX, sourceY, targetX, targetY, data, selected }: EdgeProps<ArrowEdge>) {
+  const c = data?.c;
+  const [r1, r2] = data?.radii ?? [0, 0];
+  // The handles sit at the dots' centres: start and end the line at their rims.
+  const dx = targetX - sourceX;
+  const dy = targetY - sourceY;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const start = c?.fromEnd === "arrow";
+  const end = !data?.link && c?.toEnd !== "none";
+  const [path, labelX, labelY] = getStraightPath({
+    sourceX: sourceX + ux * (r1 + (start ? 3 : 1)),
+    sourceY: sourceY + uy * (r1 + (start ? 3 : 1)),
+    targetX: targetX - ux * (r2 + (end ? 3 : 1)),
+    targetY: targetY - uy * (r2 + (end ? 3 : 1)),
+  });
+  if (data?.link) {
+    return <BaseEdge id={id} path={path} className="canvas-note-link" interactionWidth={0} />;
+  }
+  const own = colorValue(c?.color);
+  const color = selected ? (own ?? "var(--accent)") : (own ?? "var(--canvas-arrow)");
+  const markerId = `graph-arrow-${id}`;
+  return (
+    <>
+      <defs>
+        <marker id={markerId} viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M1,1 L9,5 L1,9 z" fill={color} stroke={color} strokeWidth="1" strokeLinejoin="round" />
+        </marker>
+      </defs>
+      <BaseEdge
+        id={id}
+        path={path}
+        markerEnd={end ? `url(#${markerId})` : undefined}
+        markerStart={start ? `url(#${markerId})` : undefined}
+        style={{ stroke: color, strokeWidth: selected ? 2.25 : 1.75, strokeDasharray: c ? dashPattern(c) : undefined, strokeLinecap: "round" }}
+        interactionWidth={14}
+      />
+      {c?.label && (
+        <EdgeLabelRenderer>
+          <div
+            className="canvas-edge-label nodrag nopan absolute rounded-full px-2.5 py-0.5 text-xs font-medium"
+            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`, color: own }}
+          >
+            {c.label}
+          </div>
+        </EdgeLabelRenderer>
+      )}
     </>
   );
 }

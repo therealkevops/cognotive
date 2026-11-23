@@ -1256,6 +1256,50 @@ mark {
   border: 1.5px solid var(--accent) !important;
   background: var(--raised) !important;
 }
+/* The graph: cards as dots, named underneath; links between notes as faint lines. */
+.canvas-dot {
+  --card-color: color-mix(in srgb, var(--foreground) 42%, var(--background));
+  border-radius: 9999px;
+  background: var(--card-color);
+  box-shadow: 0 0 0 3px var(--background);
+  transition: box-shadow 120ms;
+}
+.react-flow__node-dot:hover .canvas-dot {
+  box-shadow: 0 0 0 3px var(--background), 0 0 0 5px color-mix(in srgb, var(--card-color) 45%, transparent);
+}
+.canvas-dot.is-selected {
+  box-shadow: 0 0 0 3px var(--background), 0 0 0 5px var(--accent);
+}
+.canvas-dot-label {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--foreground);
+  text-shadow: 0 0 3px var(--background), 0 0 3px var(--background);
+  pointer-events: none;
+}
+.canvas-dot-handle {
+  top: 50% !important;
+  left: 50% !important;
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  border: 0 !important;
+  opacity: 0;
+  transform: translate(-50%, -50%) !important;
+  pointer-events: none;
+}
+.canvas-note-link {
+  stroke: color-mix(in srgb, var(--foreground) 16%, transparent) !important;
+  stroke-width: 1.25;
+}
 .canvas-edge-label {
   background: var(--raised);
   border: 1px solid var(--border);

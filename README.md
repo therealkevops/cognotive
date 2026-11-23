@@ -93,7 +93,10 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   (kept as the Advanced Canvas plugin for Obsidian keeps them). Several cards can be aligned and
   spaced evenly; cards can be duplicated (Ctrl/Cmd+D), brought to the front or sent to the back
   (Ctrl/Cmd+] and [), and set to show their title only. Right-click a card, an arrow or empty
-  space for its menu. A canvas
+  space for its menu. The Board / Graph switch (top left) draws the same canvas as a graph: each
+  card a dot in its colour, sized by its connections, arrows as lines, and faint lines where the
+  notes on cards link to each other (*Note links* in the View menu). The graph is laid out
+  automatically and never saved, so the board stays as you arranged it. A canvas
   file that isn't valid JSON opens with an explanation and *Edit as text*, rather than an empty board
 - Excalidraw drawings (`.excalidraw` files): create with the pen button in the file tree, edit
   full-screen, embed with `![[Drawing.excalidraw]]` (rendered as SVG, click to open). Element

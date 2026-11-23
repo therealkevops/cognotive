@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { firstLine, withoutTitle } from "./card-text";
+import { cardLabel, firstLine, withoutTitle } from "./card-text";
 
 describe("withoutTitle", () => {
   it("drops a first heading that repeats the title", () => {
@@ -21,5 +21,17 @@ describe("firstLine", () => {
     expect(firstLine("- [ ] Ask [[Sam|Samira]] about [[Budget]]")).toBe("Ask Samira about Budget");
     expect(firstLine("> See [the site](https://example.com) and `code`")).toBe("See the site and code");
     expect(firstLine("")).toBe("");
+  });
+});
+
+describe("cardLabel", () => {
+  it("names each kind of card", () => {
+    expect(cardLabel({ type: "file", file: "Projects/Plan.md" })).toBe("Plan");
+    expect(cardLabel({ type: "file", file: "Sketch.excalidraw.md", subpath: "" })).toBe("Sketch");
+    expect(cardLabel({ type: "file", file: "Plan.md", subpath: "#Goals" })).toBe("Plan › Goals");
+    expect(cardLabel({ type: "text", text: "## Idea\nmore" })).toBe("Idea");
+    expect(cardLabel({ type: "text", text: "" })).toBe("Empty card");
+    expect(cardLabel({ type: "link", url: "https://example.com/a" })).toBe("example.com");
+    expect(cardLabel({ type: "group" })).toBe("Group");
   });
 });

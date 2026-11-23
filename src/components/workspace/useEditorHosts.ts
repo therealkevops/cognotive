@@ -273,6 +273,16 @@ export function useEditorHosts({
       fileUrl: (p) => fileUrlOf(p, { dark: prefersDark() }),
       exists: (p) => vault.entries.some((e) => e.path === p),
       links: linkContext,
+      noteLinks: (paths) => {
+        const on = new Set(paths);
+        const out: Array<{ from: string; to: string }> = [];
+        for (const from of paths) {
+          for (const { resolved } of vault.indexed.links.outgoing(from)) {
+            if (resolved && resolved !== from && on.has(resolved)) out.push({ from, to: resolved });
+          }
+        }
+        return out;
+      },
       noteProperties: (p) => ({
         properties: vault.indexed.links.get(p)?.properties ?? {},
         info: propertyInfo(),

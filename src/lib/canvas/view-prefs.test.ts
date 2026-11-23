@@ -14,6 +14,7 @@ describe("canvas view preferences", () => {
       snap: true,
       minimap: false,
       cards: "preview",
+      noteLinks: true,
     });
     expect(cleanCanvasView(null)).toEqual(DEFAULT_CANVAS_VIEW);
   });
@@ -21,8 +22,8 @@ describe("canvas view preferences", () => {
   it("saves, reads back and tells open canvases", () => {
     const heard = vi.fn();
     window.addEventListener(CANVAS_VIEW_EVENT, heard);
-    saveCanvasView({ grid: "none", snap: true, minimap: true, cards: "titles" });
-    expect(loadCanvasView()).toEqual({ grid: "none", snap: true, minimap: true, cards: "titles" });
+    saveCanvasView({ grid: "none", snap: true, minimap: true, cards: "titles", noteLinks: false });
+    expect(loadCanvasView()).toEqual({ grid: "none", snap: true, minimap: true, cards: "titles", noteLinks: false });
     expect(heard).toHaveBeenCalledOnce();
     window.removeEventListener(CANVAS_VIEW_EVENT, heard);
   });

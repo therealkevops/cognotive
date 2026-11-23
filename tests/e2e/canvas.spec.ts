@@ -421,3 +421,60 @@ test("arrow styles: route, arrowheads and dashes", async ({ page }) => {
   await expect(board(page).locator(".react-flow__edge-path")).toHaveAttribute("marker-start", /url/);
   await expect(board(page).locator(".react-flow__edge-path")).toHaveCSS("stroke-dasharray", /9(px)?,? 6/);
 });
+
+test("the canvas as a graph: dots, note links, and the board left as it was", async ({ page }) => {
+  await newCanvas(page);
+  await addNote(page, "Welcome");
+  const first = card(page, "Welcome to Cognotive.ai");
+  const fb = (await first.boundingBox())!;
+  await page.mouse.move(fb.x + fb.width / 2, fb.y + 80);
+  await page.mouse.down();
+  await page.mouse.move(fb.x + fb.width / 2 - 260, fb.y + 80, { steps: 8 });
+  await page.mouse.up();
+  await addNote(page, "Linking notes");
+  await expect(card(page, "Type [[")).toBeVisible();
+  const where = async () =>
+    board(page)
+      .locator(".react-flow__node")
+      .evaluateAll((els) => els.map((el) => (el as HTMLElement).style.transform).join("|"));
+  const placed = await where();
+
+  await page.getByRole("radio", { name: "Graph" }).click();
+  await expect(page.getByRole("radio", { name: "Graph" })).toHaveAttribute("aria-checked", "true");
+  const dots = board(page).locator(".react-flow__node-dot");
+  await expect(dots).toHaveCount(2);
+  await expect(dots.filter({ hasText: "Welcome" })).toBeVisible();
+  // Welcome links to Linking notes: a faint line, though no arrow was drawn.
+  await expect(board(page).locator(".canvas-note-link")).toHaveCount(1);
+  // No adding cards while it's a graph.
+  await expect(page.getByRole("button", { name: "Add note" })).toHaveCount(0);
+
+  // Dots can be selected, coloured and moved; moving one doesn't move its card.
+  await dots.filter({ hasText: "Linking notes" }).locator(".canvas-dot").click();
+  const bar = page.getByRole("toolbar", { name: "Selection" });
+  await bar.getByRole("button", { name: "Colour" }).click();
+  await bar.getByRole("button", { name: "Red" }).click();
+  const d = (await dots.filter({ hasText: "Linking notes" }).boundingBox())!;
+  await page.mouse.move(d.x + d.width / 2, d.y + 8);
+  await page.mouse.down();
+  await page.mouse.move(d.x + d.width / 2 + 120, d.y + 90, { steps: 6 });
+  await page.mouse.up();
+
+  // The note-links line can be turned off.
+  await page.getByRole("button", { name: "View options" }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Note links" }).click();
+  await page.keyboard.press("Escape");
+  await expect(board(page).locator(".canvas-note-link")).toHaveCount(0);
+
+  // Back on the board: the cards are where they were, with the new colour.
+  await page.getByRole("radio", { name: "Board" }).click();
+  await expect(card(page, "Type [[")).toBeVisible();
+  expect(await where()).toBe(placed);
+  await expect(card(page, "Type [[").locator(".canvas-card")).toHaveAttribute("style", /--card-color: #e5484d/);
+  await expect(page.getByRole("status")).toHaveText("Saved");
+
+  // A double-click on a note's dot opens it.
+  await page.getByRole("radio", { name: "Graph" }).click();
+  await dots.filter({ hasText: "Welcome" }).locator(".canvas-dot").dblclick();
+  await expect(title(page)).toHaveValue("Welcome");
+});

@@ -15,3 +15,22 @@ export function firstLine(markdown: string): string {
     .replace(/(\*\*|__|==|~~|`)/g, "")
     .trim();
 }
+
+/** A short name for a card: a file's name, a text card's first line, a web page's host. */
+export function cardLabel(c: { type: string; [k: string]: unknown }): string {
+  if (c.type === "file" && typeof c.file === "string") {
+    const name = (c.file.split("/").pop() ?? c.file).replace(/\.(excalidraw\.md|excalidraw|canvas|md)$/i, "");
+    const sub = typeof c.subpath === "string" ? c.subpath.replace(/^#\^?/, "") : "";
+    return sub ? `${name} › ${sub}` : name;
+  }
+  if (c.type === "text" && typeof c.text === "string") return firstLine(c.text) || "Empty card";
+  if (c.type === "link" && typeof c.url === "string") {
+    try {
+      return new URL(c.url).hostname;
+    } catch {
+      return c.url;
+    }
+  }
+  if (c.type === "group") return typeof c.label === "string" && c.label ? c.label : "Group";
+  return "";
+}
