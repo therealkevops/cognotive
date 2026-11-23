@@ -87,6 +87,25 @@ export const backupPrefs = {
   snooze: (id: string, now = Date.now()) => writePref(key(id, "backupSnooze"), now + SNOOZE_DAYS * DAY),
 };
 
+/** Share of what the browser allows this site at which to warn that storage is nearly full. */
+export const NEARLY_FULL = 0.8;
+
+/**
+ * How full this site's storage is (0 to 1) when it's worth a warning: past NEARLY_FULL and
+ * not put off. Null when there's nothing to say, or the browser doesn't tell.
+ */
+export function storageWarning(s: StorageStatus, now: number, snoozedUntil?: number): number | null {
+  if (!s.usage || !s.quota || (snoozedUntil && now < snoozedUntil)) return null;
+  const share = s.usage / s.quota;
+  return share >= NEARLY_FULL ? share : null;
+}
+
+/** For this browser (storage is per site, not per repository). */
+export const storagePrefs = {
+  snoozedUntil: () => readPref<number | undefined>("storageFullSnooze", undefined),
+  snooze: (now = Date.now()) => writePref("storageFullSnooze", now + DAY),
+};
+
 export { isStandalone };
 
 export function formatBytes(n: number): string {

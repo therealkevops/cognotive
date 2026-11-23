@@ -1,9 +1,13 @@
 "use client";
 
 import { RotateCcw, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { unusedAttachments, type SizedFile } from "@/lib/attachments/unused";
+import { LocalStore } from "@/lib/vault/local-store";
+import { basename, dirname, isBinary } from "@/lib/vault/paths";
 import { formatBytes, requestPersistence, storageStatus, type StorageStatus } from "@/lib/storage-safety";
 import { cacheUsage, removeModel, repositoryUsage, storageParts, type RepositoryUsage, type StoragePart } from "@/lib/storage-usage";
+import { useVault } from "../vault/useVault";
 import { useVaults } from "../vault/useVaults";
 import { Group, Row, SectionHeader } from "./parts";
 
@@ -116,6 +120,8 @@ export function StorageSection() {
             </p>
           )}
 
+          <UnusedAttachments onChanged={again} />
+
           {measured.repos.length > 1 && (
             <Group title="By repository">
               {measured.repos.map((r) => {
@@ -185,5 +191,108 @@ function Breakdown({ parts, total }: { parts: StoragePart[]; total: number }) {
         />
       ))}
     </div>
+  );
+}
+
+const SHOWN = 8;
+
+/**
+ * Attachments in the open repository that no note, drawing or canvas uses (nor names),
+ * largest first, to delete one by one or all at once.
+ */
+function UnusedAttachments({ onChanged }: { onChanged(): void }) {
+  const vault = useVault();
+  const { active } = useVaults();
+  const [sizes, setSizes] = useState<Map<string, number> | null>(null);
+  const [all, setAll] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const { entries, indexed, vaultId } = vault;
+
+  useEffect(() => {
+    let live = true;
+    const store = new LocalStore(vaultId);
+    void store
+      .sizes()
+      .then((m) => live && setSizes(m))
+      .finally(() => void store.close());
+    return () => {
+      live = false;
+    };
+  }, [vaultId, entries]);
+
+  const unused = useMemo<SizedFile[] | null>(() => {
+    if (!sizes) return null;
+    const files = entries.filter((e) => e.kind === "file" && !e.path.split("/").some((seg) => seg.startsWith(".")));
+    const attachments = files.filter((e) => isBinary(e.path)).map((e) => ({ path: e.path, size: sizes.get(e.path) ?? 0 }));
+    const texts = files.flatMap((e) => (isBinary(e.path) ? [] : [indexed.links.content(e.path) ?? ""]));
+    return unusedAttachments(attachments, (p) => indexed.links.backlinks(p).length > 0, texts);
+  }, [sizes, entries, indexed]);
+
+  const synced = active.kind !== "local";
+  const remove = async (files: SizedFile[]) => {
+    const what = files.length === 1 ? `“${basename(files[0].path)}”` : `these ${files.length} attachments`;
+    const where = synced ? " They're deleted from GitHub too when this repository next syncs (its history keeps them)." : "";
+    if (!window.confirm(`Delete ${what} (${formatBytes(files.reduce((n, f) => n + f.size, 0))})?${where}`)) return;
+    setBusy(true);
+    try {
+      for (const f of files) await vault.remove(f.path);
+    } finally {
+      setBusy(false);
+      onChanged();
+    }
+  };
+
+  const total = unused?.reduce((n, f) => n + f.size, 0) ?? 0;
+  const shown = unused && (all ? unused : unused.slice(0, SHOWN));
+  return (
+    <Group title="Unused attachments">
+      <section aria-label="Unused attachments">
+        {!unused ? (
+          <p className="py-3 text-sm text-muted">Looking…</p>
+        ) : unused.length === 0 ? (
+          <p className="py-3 text-sm text-muted">Every attachment in this repository is used by a note, drawing or canvas.</p>
+        ) : (
+          <>
+            <p className="pt-2 pb-1 text-[0.8125rem] leading-snug text-muted">
+              {unused.length === 1 ? "1 file" : `${unused.length} files`} ({formatBytes(total)}) in this repository that no note,
+              drawing or canvas uses.
+            </p>
+            <ul className="divide-y divide-border">
+              {shown!.map((f) => (
+                <li key={f.path} className="flex items-center gap-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm">{basename(f.path)}</p>
+                    {dirname(f.path) && <p className="truncate text-xs text-muted">{dirname(f.path)}</p>}
+                  </div>
+                  <span className="shrink-0 text-sm tabular-nums">{formatBytes(f.size)}</span>
+                  <button
+                    type="button"
+                    className="icon-button h-8 w-8 shrink-0"
+                    aria-label={`Delete ${basename(f.path)}`}
+                    title="Delete"
+                    disabled={busy}
+                    onClick={() => void remove([f])}
+                  >
+                    <Trash2 size={14} aria-hidden />
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap items-center gap-2 py-3">
+              {unused.length > SHOWN && (
+                <button type="button" className="button-secondary px-2.5 py-1 text-xs" onClick={() => setAll((v) => !v)}>
+                  {all ? "Show fewer" : `Show all ${unused.length}`}
+                </button>
+              )}
+              {unused.length > 1 && (
+                <button type="button" className="button-danger px-2.5 py-1 text-xs" disabled={busy} onClick={() => void remove(unused)}>
+                  <Trash2 size={12} aria-hidden /> Delete all {unused.length} ({formatBytes(total)})
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </section>
+    </Group>
   );
 }

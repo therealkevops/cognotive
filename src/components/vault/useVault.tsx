@@ -58,6 +58,7 @@ import {
 } from "@/lib/vault/file-properties";
 import { WELCOME_NOTES } from "@/lib/vault/welcome";
 import { decideSave } from "@/lib/vault/save-merge";
+import { shrinkImage } from "@/lib/attachments/shrink";
 
 const SAVE_DELAY_MS = 400;
 /** Where pasted, dropped and uploaded files go. */
@@ -463,7 +464,9 @@ export function VaultProvider({
     async (files: File[], folder = settingsRef.current.attachmentFolder || ATTACHMENT_FOLDER) => {
       const saved: string[] = [];
       try {
-        for (const file of files) {
+        for (const added of files) {
+          // Images are kept smaller (and without their hidden details); see lib/attachments/shrink.
+          const file = added.type.startsWith("image/") ? await shrinkImage(added) : added;
           const name = attachmentName(file);
           const path = uniquePath(joinPath(folder, name), (p) => exists(p) || saved.includes(p));
           if (isBinary(path)) {

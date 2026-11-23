@@ -103,8 +103,15 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   links like `[[Note]]` and links in drawing text count as links, so drawings appear in
   backlinks; drawing text is searchable
 - Attachments: paste or drop images into a note (saved to `attachments/` and embedded as
-  `![[Pasted image ….png]]`), add files with the upload button or by dropping them on a folder,
+  `![[Pasted image ….webp]]`), add files with the upload button or by dropping them on a folder,
   and open images, PDFs, audio and video. `![[pic.png|300]]` sets an image's width
+  - Added images are kept smaller: at most 2000 pixels on the long side, saved as WebP (JPEG
+    where the browser can't write WebP), so a phone photo typically takes several times less room.
+    The original isn't kept. Re-encoding drops a photo's hidden details (camera, where it was
+    taken), and a JPEG kept as it is has them taken out too. GIFs, SVGs and small images stay
+    as they are; files imported from a backup are never changed
+  - Settings → Storage lists attachments no note, drawing or canvas uses, largest first, to
+    delete; a banner warns when the browser's storage for the app is 80% full
 - Live preview renders `![[Note]]` embeds in place, and highlights `#tags`;
   `[[Note#^block]]` links scroll to the block
 - Tables: in live preview a table is a grid you type in (notes still store ordinary markdown

@@ -141,8 +141,19 @@ export class LocalStore implements VaultStore {
    * entries are worked out once, by reading those files, and remembered).
    */
   async usage(): Promise<StoreUsage> {
-    const db = await this.db;
     const out: StoreUsage = { text: { count: 0, bytes: 0 }, attachments: { count: 0, bytes: 0 } };
+    for (const [path, size] of await this.sizes()) {
+      const part = isBinaryPath(path) ? out.attachments : out.text;
+      part.count++;
+      part.bytes += size;
+    }
+    return out;
+  }
+
+  /** Each file's size in bytes (worked out once for older entries that lack one, and remembered). */
+  async sizes(): Promise<Map<string, number>> {
+    const db = await this.db;
+    const out = new Map<string, number>();
     for (const e of await db.getAll("entries")) {
       let size = e.size;
       if (size === undefined) {
@@ -155,9 +166,7 @@ export class LocalStore implements VaultStore {
         if (now && now.mtime === e.mtime && now.size === undefined) await tx.store.put({ ...now, size });
         await tx.done;
       }
-      const part = isBinaryPath(e.path) ? out.attachments : out.text;
-      part.count++;
-      part.bytes += size;
+      out.set(e.path, size);
     }
     return out;
   }
