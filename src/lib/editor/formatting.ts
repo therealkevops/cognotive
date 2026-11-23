@@ -216,3 +216,37 @@ export const toggleItalic = toggleInline("*");
 export const toggleStrikethrough = toggleInline("~~");
 export const toggleHighlight = toggleInline("==");
 export const toggleInlineCode = toggleInline("`");
+
+const EMPTY_ITEM = /^(\s*)([-*+]|\d+[.)])\s+(?:\[.\]\s*)?$/;
+const LIST_ITEM = /^(\s*)(?:[-*+]|\d+[.)])\s/;
+
+/**
+ * Enter on an empty list item (just "- ", "1. " or "- [ ] "), as most editors do it: a
+ * nested item moves out a level (to its parent's indentation); a top-level one ends the
+ * list, leaving an empty line. Anywhere else it does nothing, so Enter continues the list.
+ */
+export const exitEmptyListItem: Command = ({ state, dispatch }) => {
+  const sel = state.selection.main;
+  if (!sel.empty || state.selection.ranges.length > 1) return false;
+  const line = state.doc.lineAt(sel.head);
+  const m = EMPTY_ITEM.exec(line.text);
+  if (!m || sel.head !== line.to) return false;
+  const indent = m[1];
+  if (indent) {
+    // The closest item above with less indentation is the parent: take its indentation.
+    let parent = "";
+    for (let n = line.number - 1; n >= 1; n--) {
+      const above = LIST_ITEM.exec(state.doc.line(n).text);
+      if (above && above[1].length < indent.length) {
+        parent = above[1];
+        break;
+      }
+      if (!above && !state.doc.line(n).text.trim()) break;
+    }
+    const insert = parent + line.text.slice(indent.length);
+    dispatch(state.update({ changes: { from: line.from, to: line.to, insert }, selection: { anchor: line.from + insert.length }, userEvent: "input" }));
+    return true;
+  }
+  dispatch(state.update({ changes: { from: line.from, to: line.to, insert: "" }, selection: { anchor: line.from }, userEvent: "input" }));
+  return true;
+};

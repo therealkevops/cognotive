@@ -1,6 +1,7 @@
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import {
+  exitEmptyListItem,
   insertLink,
   insertTableOf,
   setHeading,
@@ -112,5 +113,38 @@ describe("insertTableOf", () => {
     expect(run(insertTableOf(2, 2), "text|")).toBe(
       "text\n| |Column 1 | Column 2 |\n| -------- | -------- |\n|          |          |\n|          |          |",
     );
+  });
+});
+
+describe("exitEmptyListItem", () => {
+  /** Runs it with the cursor at "|"; returns the doc with "|" where the cursor ends, or null if it did nothing. */
+  const enter = (doc: string) => {
+    const at = doc.indexOf("|");
+    let state = EditorState.create({ doc: doc.replace("|", ""), selection: EditorSelection.cursor(at) });
+    const done = exitEmptyListItem({ state, dispatch: (tr) => (state = tr.state) });
+    if (!done) return null;
+    const text = state.doc.toString();
+    const head = state.selection.main.head;
+    return text.slice(0, head) + "|" + text.slice(head);
+  };
+
+  it("ends the list on an empty top-level item", () => {
+    expect(enter("- [ ] Buy milk\n- [ ] |")).toBe("- [ ] Buy milk\n|");
+    expect(enter("- Apples\n- |")).toBe("- Apples\n|");
+    expect(enter("1. First\n2. |")).toBe("1. First\n|");
+    expect(enter("* one\n* |")).toBe("* one\n|");
+  });
+
+  it("moves an empty nested item out to its parent's level", () => {
+    expect(enter("- Fruit\n  - Apples\n  - |")).toBe("- Fruit\n  - Apples\n- |");
+    expect(enter("- a\n    - b\n        - [ ] |")).toBe("- a\n    - b\n    - [ ] |");
+    expect(enter("1. Steps\n   1. Mix\n   2. |")).toBe("1. Steps\n   1. Mix\n2. |");
+  });
+
+  it("leaves everything else to the usual Enter", () => {
+    expect(enter("- [ ] Buy milk|")).toBeNull();
+    expect(enter("- |Apples")).toBeNull();
+    expect(enter("Plain text|")).toBeNull();
+    expect(enter("|")).toBeNull();
   });
 });

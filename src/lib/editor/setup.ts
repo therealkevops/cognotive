@@ -4,7 +4,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
-import { Compartment, type Extension } from "@codemirror/state";
+import { Compartment, Prec, type Extension } from "@codemirror/state";
 import {
   drawSelection,
   EditorView,
@@ -24,6 +24,7 @@ import {
   toggleLinePrefix,
   toggleStrikethrough,
   toggleTaskDone,
+  exitEmptyListItem,
 } from "./formatting";
 import { FrontmatterSyntax } from "./frontmatter-syntax";
 import { highlightTag, HighlightSyntax } from "./highlight-syntax";
@@ -162,6 +163,9 @@ export function editorExtensions(opts: {
     tagHighlighter,
     ...(opts.links ? [linkHost.of(opts.links), wikilinkExtensions()] : []),
     autocompletion({ override: [completeLinks, completeProperties, (ctx) => completeSlash(ctx)], icons: false }),
+    // Ahead of the markdown keymap's Enter, which would make the list "loose" instead of
+    // ending it; after autocompletion's, so Enter still picks a suggestion.
+    Prec.highest(keymap.of([{ key: "Enter", run: exitEmptyListItem }])),
     propertyExtensions(),
     tableGridExtensions(),
     tableEditing(),
