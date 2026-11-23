@@ -26,8 +26,8 @@ const THEMES: Array<{ id: Appearance["theme"]; label: string; icon: typeof Sun }
 
 /** A small picture of the app in a theme, for the theme picker. */
 export function ThemePreview({ theme }: { theme: Appearance["theme"] }) {
-  const light = { bg: "#faf9f5", side: "#f3f1ea", line: "#d8d4c8" };
-  const dark = { bg: "#262624", side: "#1f1e1d", line: "#4a4843" };
+  const light = { bg: "#ffffff", side: "#f4f4f5", line: "#d1d1d6" };
+  const dark = { bg: "#121212", side: "#1a1a1d", line: "#45454d" };
   const half = (c: typeof light) => (
     <div className="flex h-full flex-1" style={{ background: c.bg }}>
       <div className="w-1/4" style={{ background: c.side }} />

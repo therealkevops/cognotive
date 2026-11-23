@@ -31,7 +31,7 @@ export function Modal({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center gap-3">
-          <h2 className="min-w-0 flex-1 truncate font-serif text-xl">{label}</h2>
+          <h2 className="min-w-0 flex-1 truncate font-semibold tracking-tight text-xl">{label}</h2>
           <button type="button" className="icon-button" aria-label="Close" onClick={onClose}>
             <X size={16} aria-hidden />
           </button>

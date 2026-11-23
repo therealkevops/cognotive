@@ -188,7 +188,7 @@ export function ConnectRepoForm({ onDone }: { onDone(): void }) {
         })();
       }}
     >
-      <h4 className="font-serif text-lg">Connect a GitHub repository</h4>
+      <h4 className="font-semibold tracking-tight text-lg">Connect a GitHub repository</h4>
       <div className="space-y-3">
         <p className="text-sm text-muted">
           Cognotive.ai syncs with a GitHub token that can only reach the repositories you pick.

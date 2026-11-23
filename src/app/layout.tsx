@@ -8,7 +8,7 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
-// Notes read in a book-like serif by default (Settings → Appearance can switch to sans).
+// Notes can be read in a book-like serif (Settings → Appearance); the default is sans.
 const serif = Source_Serif_4({
   variable: "--font-serif-face",
   subsets: ["latin"],
@@ -36,8 +36,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#faf9f5" },
-    { media: "(prefers-color-scheme: dark)", color: "#262624" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#121212" },
   ],
 };
 

@@ -218,7 +218,7 @@ export function HealthDialog({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 px-6 pt-5 pb-2">
-          <h2 className="min-w-0 flex-1 font-serif text-2xl">Repository health</h2>
+          <h2 className="min-w-0 flex-1 font-semibold tracking-tight text-2xl">Repository health</h2>
           <button type="button" className="icon-button" aria-label="Close repository health" onClick={onClose}>
             <X size={18} aria-hidden />
           </button>
@@ -228,7 +228,7 @@ export function HealthDialog({
             <div className="flex min-w-0 items-center gap-5">
               <ScoreRing score={health.score} tone={verdict.tone} />
               <div className="min-w-0">
-                <p className="font-serif text-xl" data-testid="health-verdict">
+                <p className="font-semibold tracking-tight text-xl" data-testid="health-verdict">
                   {verdict.label}
                 </p>
                 {fixedToday > 0 && (

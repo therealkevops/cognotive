@@ -86,12 +86,14 @@ test("appearance settings apply and persist", async ({ page }) => {
   await page.getByRole("button", { name: "Settings" }).click();
   const appearance = page.getByRole("region", { name: "Appearance" });
   await appearance.getByRole("radio", { name: "Dark" }).click();
-  await appearance.getByRole("button", { name: "teal" }).click();
+  await appearance.getByRole("button", { name: "violet" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  expect(bg).toBe("rgb(38, 38, 36)");
+  expect(bg).toBe("rgb(18, 18, 18)"); // Excalidraw's dark canvas
+  const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--accent-dark").trim());
+  expect(accent).toBe("#a294f0");
 });
 
 test("live preview shows tables as grids and highlights tags", async ({ page }) => {

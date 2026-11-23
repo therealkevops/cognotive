@@ -231,7 +231,7 @@ export function AddButtons({ onGitHub }: { onGitHub(): void }) {
           add({ id: newVaultId("local"), name: name.trim(), kind: "local", ...(starters ? { starterTemplates: true } : {}) });
         }}
       >
-        <h4 className="font-serif text-lg">New local repository</h4>
+        <h4 className="font-semibold tracking-tight text-lg">New local repository</h4>
         <Field label="Name">
           <input className="input" value={name} autoFocus onChange={(e) => setName(e.target.value)} />
         </Field>

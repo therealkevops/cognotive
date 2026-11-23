@@ -69,7 +69,7 @@ export function PropertyTable({ paths, onClose, onOpen }: { paths: string[]; onC
       >
         <div className="flex items-center gap-3 px-6 pt-5 pb-3">
           <div className="min-w-0 flex-1">
-            <h2 className="font-serif text-2xl">Edit properties</h2>
+            <h2 className="font-semibold tracking-tight text-2xl">Edit properties</h2>
             <p className="text-sm text-muted">
               {paths.length} {paths.length === 1 ? "file" : "files"}. Changes are saved as you leave each cell.
               {busy && " Saving…"}

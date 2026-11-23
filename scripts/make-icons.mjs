@@ -7,8 +7,8 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
-const INK = "#1f1e1d";
-const PAPER = "#faf9f5";
+const INK = "#18181b";
+const PAPER = "#ffffff";
 
 const f = (n) => Number(n.toFixed(2));
 const at = (cx, cy, radius, angle) => `${f(cx + radius * Math.cos(angle))} ${f(cy + radius * Math.sin(angle))}`;

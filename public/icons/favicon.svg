@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <!-- The Cognotive.ai cog, readable at 16px. Drawn by scripts/make-icons.mjs. -->
   <style>
-    .bg { fill: #1f1e1d; }
-    .cog { fill: #faf9f5; stroke: #faf9f5; }
+    .bg { fill: #18181b; }
+    .cog { fill: #ffffff; stroke: #ffffff; }
     @media (prefers-color-scheme: dark) {
-      .bg { fill: #faf9f5; }
-      .cog { fill: #1f1e1d; stroke: #1f1e1d; }
+      .bg { fill: #ffffff; }
+      .cog { fill: #18181b; stroke: #18181b; }
     }
   </style>
   <rect class="bg" width="64" height="64" rx="14"/>

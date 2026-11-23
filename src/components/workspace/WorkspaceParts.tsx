@@ -27,7 +27,7 @@ export function TitleInput({ path }: { path: string }) {
   return (
     <input
       aria-label="Note title"
-      className="min-w-0 flex-1 truncate rounded-md bg-transparent px-1.5 py-0.5 font-serif text-lg outline-none hover:bg-foreground/[0.04] focus:bg-foreground/[0.04]"
+      className="min-w-0 flex-1 truncate rounded-md bg-transparent px-1.5 py-0.5 font-semibold tracking-tight text-lg outline-none hover:bg-foreground/[0.04] focus:bg-foreground/[0.04]"
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onBlur={() => void commit()}

@@ -91,7 +91,7 @@ export function HistoryDialog({ path, onClose }: { path: string; onClose(): void
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 border-b border-border px-5 py-3">
-          <h2 className="min-w-0 flex-1 truncate font-serif text-xl">History of {basename(path)}</h2>
+          <h2 className="min-w-0 flex-1 truncate font-semibold tracking-tight text-xl">History of {basename(path)}</h2>
           <button type="button" className="icon-button" aria-label="Close history" onClick={onClose}>
             <X size={16} aria-hidden />
           </button>

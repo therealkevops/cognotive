@@ -67,7 +67,7 @@ export function TokenDialog({ reason, repo, onClose }: { reason: "missing" | "re
         <button type="button" className="icon-button absolute top-3 right-3" aria-label="Close" onClick={onClose}>
           <X size={18} aria-hidden />
         </button>
-        <h2 className="flex items-center gap-2 font-serif text-2xl">
+        <h2 className="flex items-center gap-2 font-semibold tracking-tight text-2xl">
           <KeyRound size={20} aria-hidden /> GitHub token
         </h2>
         <p className="text-sm text-muted">

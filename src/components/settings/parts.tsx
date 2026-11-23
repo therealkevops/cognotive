@@ -7,7 +7,7 @@ import { useState, type ReactNode } from "react";
 export function SectionHeader({ title, description }: { title: string; description?: ReactNode }) {
   return (
     <header className="mb-6">
-      <h3 className="font-serif text-2xl">{title}</h3>
+      <h3 className="font-semibold tracking-tight text-2xl">{title}</h3>
       {description && <p className="mt-1 text-sm text-muted">{description}</p>}
     </header>
   );

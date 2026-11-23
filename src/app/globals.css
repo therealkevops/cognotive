@@ -13,73 +13,76 @@
 }
 
 /*
- * Design tokens: warm neutrals (ivory paper, near-black ink) with a clay
- * accent, a darker sidebar and white raised surfaces for dialogs and menus.
+ * Design tokens: neutral greys with a teal accent; a lighter sidebar in light mode, and in
+ * dark mode a note area that matches Excalidraw's dark canvas. Raised surfaces for dialogs
+ * and menus.
  * Components use the Tailwind names (bg-surface, bg-sidebar, text-muted, ...).
  */
 :root {
-  --background: #faf9f5;
-  --sidebar: #f3f1ea;
-  --surface: #f0eee6;
+  --background: #ffffff;
+  --sidebar: #f4f4f5;
+  --surface: #ececee;
   --raised: #ffffff;
-  --border: #e3e0d6;
-  --border-strong: #cfcbbf;
-  --foreground: #1f1e1d;
-  --muted: #6f6c64;
-  --primary: #1f1e1d;
-  --primary-foreground: #faf9f5;
-  --accent: var(--accent-light, #c96442);
+  --border: #e4e4e7;
+  --border-strong: #d1d1d6;
+  --foreground: #18181b;
+  --muted: #68686f;
+  --primary: #18181b;
+  --primary-foreground: #ffffff;
+  --accent: var(--accent-light, #0d7d72);
   --editor-font-size: 16px;
   --line-width: 46rem;
-  --note-font: var(--font-serif-face), Georgia, serif;
+  --note-font: var(--font-geist-sans), system-ui, sans-serif;
   /* Chart series, in a fixed order (validated for colour-blind separation in both modes). */
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-3: #1baf7a;
   --series-4: #eda100;
-  --series-rest: #c4c0b4;
+  --series-rest: #c8c8ce;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --background: #262624;
-    --sidebar: #1f1e1d;
-    --surface: #30302e;
-    --raised: #30302e;
-    --border: #3b3a36;
-    --border-strong: #55534d;
-    --foreground: #f0eee6;
-    --muted: #a3a097;
-    --primary: #f0eee6;
-    --primary-foreground: #1f1e1d;
-    --accent: var(--accent-dark, #d97757);
+    /* The note area matches Excalidraw's dark canvas (#121212); raised panels its toolbars. */
+    --background: #121212;
+    --sidebar: #1a1a1d;
+    --surface: #232329;
+    --raised: #232329;
+    --border: #2e2e34;
+    --border-strong: #45454d;
+    --foreground: #ededf0;
+    --muted: #9d9da7;
+    --primary: #ededf0;
+    --primary-foreground: #121212;
+    --accent: var(--accent-dark, #4cc5b5);
     --series-1: #3987e5;
     --series-2: #d95926;
     --series-3: #199e70;
     --series-4: #c98500;
-    --series-rest: #5a5852;
+    --series-rest: #55555c;
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --background: #262624;
-  --sidebar: #1f1e1d;
-  --surface: #30302e;
-  --raised: #30302e;
-  --border: #3b3a36;
-  --border-strong: #55534d;
-  --foreground: #f0eee6;
-  --muted: #a3a097;
-  --primary: #f0eee6;
-  --primary-foreground: #1f1e1d;
-  --accent: var(--accent-dark, #d97757);
+  /* The note area matches Excalidraw's dark canvas (#121212); raised panels its toolbars. */
+  --background: #121212;
+  --sidebar: #1a1a1d;
+  --surface: #232329;
+  --raised: #232329;
+  --border: #2e2e34;
+  --border-strong: #45454d;
+  --foreground: #ededf0;
+  --muted: #9d9da7;
+  --primary: #ededf0;
+  --primary-foreground: #121212;
+  --accent: var(--accent-dark, #4cc5b5);
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
   --series-4: #c98500;
-  --series-rest: #5a5852;
+  --series-rest: #55555c;
   color-scheme: dark;
 }
 
@@ -894,7 +897,9 @@ mark {
   inset: 0;
   display: grid;
   place-items: center;
-  font-family: var(--font-serif-face), Georgia, serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   font-size: 2rem;
   color: var(--tone);
   font-variant-numeric: tabular-nums;

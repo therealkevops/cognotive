@@ -71,7 +71,7 @@ export function StorageSection() {
           <div className="mb-6">
             <div className="flex items-baseline justify-between gap-4">
               <p className="text-sm">
-                <span className="font-serif text-2xl">{formatBytes(measured.total)}</span>{" "}
+                <span className="font-semibold tracking-tight text-2xl">{formatBytes(measured.total)}</span>{" "}
                 <span className="text-muted">
                   used{status?.quota ? ` of ${formatBytes(status.quota)} the browser allows this site` : ""}
                 </span>

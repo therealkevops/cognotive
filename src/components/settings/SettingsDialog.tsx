@@ -53,7 +53,7 @@ export function SettingsDialog({ onClose, initial = "appearance" }: { onClose():
       >
         {/* Phones: a title bar with the close button, so the section tabs below never run under it. */}
         <div className="flex shrink-0 items-center justify-between bg-sidebar pt-2 pr-2 pl-5 md:hidden">
-          <h2 className="font-serif text-xl">Settings</h2>
+          <h2 className="font-semibold tracking-tight text-xl">Settings</h2>
           <button type="button" className="icon-button" aria-label="Close settings" onClick={onClose}>
             <X size={18} aria-hidden />
           </button>
@@ -63,7 +63,7 @@ export function SettingsDialog({ onClose, initial = "appearance" }: { onClose():
           aria-label="Settings sections"
           className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-sidebar p-3 md:w-56 md:flex-col md:overflow-visible md:border-r md:border-b-0 md:p-4"
         >
-          <h2 className="mb-3 hidden px-2.5 font-serif text-2xl md:block">Settings</h2>
+          <h2 className="mb-3 hidden px-2.5 font-semibold tracking-tight text-2xl md:block">Settings</h2>
           {SECTIONS.map((s) => (
             <button
               key={s.id}

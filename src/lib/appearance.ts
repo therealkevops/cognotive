@@ -20,10 +20,9 @@ export interface Appearance {
 }
 
 export const ACCENTS = {
-  clay: { light: "#c96442", dark: "#d97757" },
   violet: { light: "#6d5bd0", dark: "#a294f0" },
   blue: { light: "#2f6fd6", dark: "#7aa7f0" },
-  teal: { light: "#0f8a7e", dark: "#4cc5b5" },
+  teal: { light: "#0d7d72", dark: "#4cc5b5" },
   green: { light: "#2f8a3e", dark: "#6fca7d" },
   orange: { light: "#c2601a", dark: "#f0a060" },
   rose: { light: "#c2416b", dark: "#f08aa8" },
@@ -44,20 +43,20 @@ export const NOTE_FONTS: Record<Appearance["noteFont"], string> = {
 
 export const DEFAULT_APPEARANCE: Appearance = {
   theme: "system",
-  accent: "clay",
+  accent: "teal",
   fontSize: 16,
   lineWidth: "normal",
   linkClick: "edit",
   hoverPreview: "always",
-  noteFont: "serif",
+  noteFont: "sans",
   spellcheck: true,
   tables: "grid",
 };
 
 export function loadAppearance(): Appearance {
   const a = { ...DEFAULT_APPEARANCE, ...readPref<Partial<Appearance>>("appearance", {}) };
-  if (!(a.accent in ACCENTS)) a.accent = "clay";
-  if (!(a.noteFont in NOTE_FONTS)) a.noteFont = "serif";
+  if (!(a.accent in ACCENTS)) a.accent = "teal";
+  if (!(a.noteFont in NOTE_FONTS)) a.noteFont = "sans";
   if (typeof a.spellcheck !== "boolean") a.spellcheck = true;
   if (a.linkClick !== "edit" && a.linkClick !== "follow") a.linkClick = "edit";
   if (a.hoverPreview !== "always" && a.hoverPreview !== "mod") a.hoverPreview = "always";
@@ -97,4 +96,4 @@ export function isDark(): boolean {
  */
 export const APPEARANCE_BOOT_SCRIPT = `(function(){try{var a=JSON.parse(localStorage.getItem("noted-ai:appearance")||"{}");var A=${JSON.stringify(
   ACCENTS,
-)};var W=${JSON.stringify(LINE_WIDTHS)};var r=document.documentElement;if(a.theme==="light"||a.theme==="dark")r.setAttribute("data-theme",a.theme);var c=A[a.accent]||A.clay;var F=${JSON.stringify(NOTE_FONTS)};if(F[a.noteFont])r.style.setProperty("--note-font",F[a.noteFont]);r.style.setProperty("--accent-light",c.light);r.style.setProperty("--accent-dark",c.dark);if(a.fontSize)r.style.setProperty("--editor-font-size",a.fontSize+"px");if(W[a.lineWidth])r.style.setProperty("--line-width",W[a.lineWidth]);}catch(e){}})();`;
+)};var W=${JSON.stringify(LINE_WIDTHS)};var r=document.documentElement;if(a.theme==="light"||a.theme==="dark")r.setAttribute("data-theme",a.theme);var c=A[a.accent]||A.teal;var F=${JSON.stringify(NOTE_FONTS)};if(F[a.noteFont])r.style.setProperty("--note-font",F[a.noteFont]);r.style.setProperty("--accent-light",c.light);r.style.setProperty("--accent-dark",c.dark);if(a.fontSize)r.style.setProperty("--editor-font-size",a.fontSize+"px");if(W[a.lineWidth])r.style.setProperty("--line-width",W[a.lineWidth]);}catch(e){}})();`;

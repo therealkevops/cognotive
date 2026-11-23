@@ -87,7 +87,7 @@ export function RecoveryKeyStep({
   };
   return (
     <section aria-label="Recovery key" className="space-y-4 rounded-xl border border-border p-5">
-      <h4 className="font-serif text-lg">Save your recovery key</h4>
+      <h4 className="font-semibold tracking-tight text-lg">Save your recovery key</h4>
       <p className="text-sm text-muted">
         If you forget the passphrase, this key is the only way to read these notes again. Nobody else has a copy,
         including Cognotive.ai. Store it in a password manager or print it.
@@ -159,7 +159,7 @@ export function UnlockDialog({ onClose }: { onClose(): void }) {
         <button type="button" className="icon-button absolute top-3 right-3" aria-label="Close" onClick={onClose}>
           <X size={18} aria-hidden />
         </button>
-        <h2 className="flex items-center gap-2 font-serif text-2xl">
+        <h2 className="flex items-center gap-2 font-semibold tracking-tight text-2xl">
           <Lock size={20} aria-hidden /> Unlock
         </h2>
         <p className="text-sm text-muted">

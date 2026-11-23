@@ -4,7 +4,7 @@ const title = (page: import("@playwright/test").Page) => page.getByRole("textbox
 
 test("the manifest offers app shortcuts and the icons are served", async ({ request }) => {
   const manifest = await (await request.get("/manifest.webmanifest")).json();
-  expect(manifest).toMatchObject({ id: "/", display: "standalone", theme_color: "#faf9f5" });
+  expect(manifest).toMatchObject({ id: "/", display: "standalone", theme_color: "#ffffff" });
   expect(manifest.shortcuts.map((s: { name: string }) => s.name)).toEqual([
     "Quick note",
     "New note",
