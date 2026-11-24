@@ -237,6 +237,10 @@ export function useEditorHosts({
         return { dataURL, mimeType: blob.type || "image/png" };
       },
       resolve: (t) => vault.links.resolve(t, vault.active?.path),
+      saveImage: async (file) => {
+        const [path] = await vault.addAttachments([file]);
+        return path ? { path, linkText: vault.links.linkText(path) } : null;
+      },
     };
   }, [vault]);
 

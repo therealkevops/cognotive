@@ -55,6 +55,11 @@ export interface DrawingVault {
   pictureData(path: string): Promise<{ dataURL: string; mimeType: string } | null>;
   /** The note a link target resolves to, or null if there's no such note yet. */
   resolve(target: string): string | null;
+  /**
+   * Saves a picture pasted or dropped into the drawing as an attachment (made smaller, as
+   * every added image is); null if it wasn't added (over the storage limit, say).
+   */
+  saveImage?(file: File): Promise<{ path: string; linkText: string } | null>;
 }
 
 export interface DrawingViewProps {
@@ -147,6 +152,46 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
   }, [docKey]);
 
   const lastFingerprint = useRef<string | null>(null);
+
+  // Pictures pasted or dropped into the drawing are also saved as attachments, so they're in the
+  // file tree and smaller; the drawing keeps (the smaller) copy, so it still opens anywhere, and
+  // the image is linked to its file. Those already in the drawing when it opened are left alone.
+  const seenFiles = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    seenFiles.current = new Set(Object.keys(initialData?.files ?? {}));
+  }, [initialData]);
+  const keepAsAttachment = useCallback(
+    async (fileId: string, file: { dataURL: string; mimeType: string }) => {
+      if (!api || !vault?.saveImage) return;
+      try {
+        const blob = await (await fetch(file.dataURL)).blob();
+        const ext = file.mimeType.split("/")[1]?.replace("jpeg", "jpg").replace("svg+xml", "svg") || "png";
+        // "image.png" is named like a pasted image: "Pasted image 20261124….webp".
+        const saved = await vault.saveImage(new File([blob], `image.${ext}`, { type: file.mimeType }));
+        if (!saved) return;
+        const data = await vault.pictureData(saved.path);
+        if (!data) return;
+        const newId = `vault-${Array.from(new TextEncoder().encode(saved.path + data.dataURL.length), (b) => b.toString(16))
+          .join("")
+          .slice(0, 40)}`;
+        seenFiles.current.add(newId);
+        api.addFiles([{ id: newId, dataURL: data.dataURL, mimeType: data.mimeType, created: Date.now() } as unknown as BinaryFileData]);
+        api.updateScene({
+          elements: api
+            .getSceneElements()
+            .map((e) =>
+              e.type === "image" && e.fileId === fileId
+                ? newElementWith(e, { fileId: newId as never, link: e.link ?? `[[${saved.linkText}]]` })
+                : e,
+            ),
+          captureUpdate: CaptureUpdateAction.EVENTUALLY,
+        });
+      } catch {
+        // Left as it is: the drawing still has the picture.
+      }
+    },
+    [api, vault],
+  );
 
   /** The middle of what's on screen, in scene coordinates. */
   const viewCenter = useCallback(() => {
@@ -260,6 +305,11 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
           ) : null
         }
         onChange={(elements, appState, files) => {
+          for (const [id, f] of Object.entries(files)) {
+            if (seenFiles.current.has(id)) continue;
+            seenFiles.current.add(id);
+            if (!id.startsWith("vault-") && f.dataURL) void keepAsAttachment(id, f);
+          }
           // Text that mentions [[a note]] links its box to that note.
           const links = textLinkUpdates(elements);
           if (links.size && api) {

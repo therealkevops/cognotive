@@ -146,3 +146,45 @@ test("a drawing's properties can be edited, are indexed, and survive drawing", a
   await page.getByRole("button", { name: "Properties", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Drawing properties" })).toContainText("#sketches");
 });
+
+test("an image pasted into a drawing is also kept as an attachment, linked from the drawing", async ({ page }) => {
+  await page.goto("/");
+  await expect(editor(page)).toBeVisible();
+  await page.getByRole("button", { name: "New drawing" }).click();
+  await expect(title(page)).toHaveValue("Drawing");
+  const canvas = page.getByTestId("drawing").locator("canvas.interactive");
+  await expect(canvas).toBeVisible({ timeout: 30_000 });
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+
+  // Paste a picture where Excalidraw listens for it.
+  await page.evaluate(async () => {
+    const c = document.createElement("canvas");
+    c.width = 120;
+    c.height = 60;
+    const g = c.getContext("2d")!;
+    g.fillStyle = "#3a6";
+    g.fillRect(0, 0, 120, 60);
+    const blob = await new Promise<Blob>((r) => c.toBlob((b) => r(b!), "image/png"));
+    const dt = new DataTransfer();
+    dt.items.add(new File([blob], "image.png", { type: "image/png" }));
+    document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+  });
+
+  // It lands in attachments/, like an image pasted into a note.
+  await tree(page).getByRole("treeitem", { name: "attachments" }).click();
+  const attachment = tree(page).getByRole("treeitem", { name: /^Pasted image \d{14}\.png/ });
+  await expect(attachment).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("status")).toHaveText("Saved");
+
+  // The drawing links it, so it isn't counted as unused.
+  await page.getByRole("button", { name: "Settings" }).click();
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  await dialog.getByRole("button", { name: "Storage" }).click();
+  await expect(dialog.getByRole("region", { name: "Unused attachments" })).toContainText("Every attachment in this repository is used");
+  await page.keyboard.press("Escape");
+
+  // And the image's file shows the drawing among its backlinks.
+  await attachment.click();
+  await expect(page.getByRole("region", { name: "Backlinks" }).getByRole("button", { name: /Drawing/ })).toBeVisible();
+});

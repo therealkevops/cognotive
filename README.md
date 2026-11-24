@@ -101,7 +101,9 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 - Excalidraw drawings (`.excalidraw` files): create with the pen button in the file tree, edit
   full-screen, embed with `![[Drawing.excalidraw]]` (rendered as SVG, click to open). Element
   links like `[[Note]]` and links in drawing text count as links, so drawings appear in
-  backlinks; drawing text is searchable
+  backlinks; drawing text is searchable. A picture pasted or dropped into a drawing is also
+  saved to `attachments/` (made smaller, like any added image), and the drawing's image is linked
+  to it; the drawing keeps its own copy too, so it still opens in Excalidraw or Obsidian
 - Attachments: paste or drop images into a note (saved to `attachments/` and embedded as
   `![[Pasted image ….webp]]`), add files with the upload button or by dropping them on a folder,
   and open images, PDFs, audio and video. `![[pic.png|300]]` sets an image's width
