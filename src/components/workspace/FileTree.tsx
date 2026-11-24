@@ -23,7 +23,7 @@ import {
 import { useContext, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { readPref, writePref } from "@/lib/prefs";
 import { dirname, isBinary, isCanvas, isDrawing, isImage, isMarkdown, isNote, isWithin } from "@/lib/vault/paths";
-import { copyPath, moveTargets, moveTargetsFor, rangeOf, topmost, visiblePaths } from "@/lib/vault/tree-actions";
+import { copyPath, moveTargets, moveTargetsFor, planCopy, rangeOf, topmost, visiblePaths } from "@/lib/vault/tree-actions";
 import { formatLink } from "@/lib/links/format";
 import { hubProperty } from "@/lib/links/health";
 import { Picker } from "./Picker";
@@ -84,6 +84,7 @@ export function FileTree() {
   const [movingMany, setMovingMany] = useState(false);
   const [deletingMany, setDeletingMany] = useState(false);
   const [renamingMany, setRenamingMany] = useState(false);
+  const [copyingMany, setCopyingMany] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const say = (text: string) => {
     setNotice(text);
@@ -108,6 +109,7 @@ export function FileTree() {
     moveChosen: () => setMovingMany(true),
     deleteChosen: () => setDeletingMany(true),
     renameChosen: () => setRenamingMany(true),
+    copyChosen: () => setCopyingMany(true),
     choose: (path) => {
       setChosen((prev) => (prev.includes(path) ? prev : [...prev, path]));
       anchor.current = path;
@@ -159,6 +161,17 @@ export function FileTree() {
     if (folder) setOpen(folder, true);
     setChosen([]);
     if (items.length) say(`Moved ${items.length} ${items.length === 1 ? "item" : "items"} to ${folder || "the top level"}.`);
+  };
+
+  /** Copies the chosen items into a folder (their own, for duplicates); clashing names get " copy". */
+  const copyMany = async (paths: string[], folder: string) => {
+    const items = paths.map((p) => ({ path: p, isFolder: !vault.entries.some((e) => e.path === p && e.kind === "file") }));
+    const plan = planCopy(items, folder, vault.entries);
+    await vault.copyFiles(plan);
+    if (folder) setOpen(folder, true);
+    setChosen([]);
+    const n = topmost(paths).length;
+    say(`Copied ${n} ${n === 1 ? "item" : "items"} to ${folder || "the top level"}.`);
   };
 
   const dropProps = (folder: string) => ({
@@ -266,6 +279,9 @@ export function FileTree() {
           <button type="button" className="button-secondary px-2 py-0.5 text-xs" onClick={() => setMovingMany(true)}>
             <FolderInput size={12} aria-hidden /> Move to…
           </button>
+          <button type="button" className="icon-button h-6 w-6" aria-label="Copy selected" title="Copy to…" onClick={() => setCopyingMany(true)}>
+            <Copy size={13} aria-hidden />
+          </button>
           <button
             type="button"
             className="icon-button h-6 w-6"
@@ -358,6 +374,16 @@ export function FileTree() {
           items={chosen.map((p) => ({ path: p, isFolder: !vault.entries.some((e) => e.path === p && e.kind === "file") }))}
           // Cancelling keeps the selection; deleted items drop out of it by themselves.
           onClose={() => setDeletingMany(false)}
+        />
+      )}
+      {copyingMany && chosen.length > 0 && (
+        <Picker
+          title={`Copy ${chosen.length} ${chosen.length === 1 ? "item" : "items"} to…`}
+          placeholder="Folder (its own for duplicates)"
+          // Any folder: the one they're in makes "Name copy" duplicates.
+          items={moveTargetsFor(tree, [])}
+          onPick={(item) => void copyMany(chosen, item.id)}
+          onClose={() => setCopyingMany(false)}
         />
       )}
       {movingMany && chosen.length > 0 && (
@@ -513,6 +539,7 @@ function Node({
             className={`ml-auto ${isActive ? "[@media(hover:none)]:opacity-100" : ""}`}
             items={many ? [
               { label: `Move ${chosen.length} items to…`, icon: FolderInput, onSelect: actions.moveChosen },
+              { label: `Copy ${chosen.length} items to…`, icon: Copy, onSelect: actions.copyChosen },
               { label: `Rename ${chosen.length} items…`, icon: Pencil, onSelect: actions.renameChosen },
               { label: "Clear selection", icon: X, onSelect: actions.clearChosen },
               "separator" as const,
@@ -607,6 +634,7 @@ interface TreeActions {
   moveChosen(): void;
   deleteChosen(): void;
   renameChosen(): void;
+  copyChosen(): void;
   choose(path: string): void;
   clearChosen(): void;
   duplicate(path: string): void;

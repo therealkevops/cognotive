@@ -170,3 +170,37 @@ test("numbering chosen files in the order shown, drawings keeping their kind", a
   await item(page, "Page 2").click();
   await expect(page.getByTestId("drawing")).toBeVisible({ timeout: 30_000 });
 });
+
+test("chosen files are copied to a folder, or duplicated where they are", async ({ page }) => {
+  await openApp(page);
+  await newFolder(page, "Archive");
+  const bar = page.getByRole("toolbar", { name: "Chosen files" });
+
+  await item(page, "Welcome").click({ modifiers: ["ControlOrMeta"] });
+  await item(page, "Linking notes").click({ modifiers: ["ControlOrMeta"] });
+  await bar.getByRole("button", { name: "Copy selected" }).click();
+  await page.getByRole("dialog", { name: "Copy 2 items to…" }).getByRole("combobox").fill("Archive");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("status").filter({ hasText: "Copied 2 items to Archive." })).toBeVisible();
+  // Copies in the folder, and the originals where they were.
+  const archived = tree(page).getByRole("group");
+  await expect(archived.getByRole("treeitem", { name: /^Welcome More/ })).toBeVisible();
+  await expect(archived.getByRole("treeitem", { name: /^Linking notes More/ })).toBeVisible();
+  await expect(tree(page).getByRole("treeitem", { name: /^Welcome More/ })).toHaveCount(2);
+  await expect(bar).toBeHidden();
+
+  // Copying them where they are makes duplicates, from a chosen row's menu.
+  await item(page, "Welcome").first().click({ modifiers: ["ControlOrMeta"] });
+  await item(page, "Linking notes").first().click({ modifiers: ["ControlOrMeta"] });
+  await item(page, "Welcome").first().click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Copy 2 items to…" }).click();
+  await page.getByRole("dialog", { name: "Copy 2 items to…" }).getByRole("combobox").fill("Top level");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("status").filter({ hasText: "Copied 2 items to the top level." })).toBeVisible();
+  await expect(item(page, "Welcome copy")).toBeVisible();
+  await expect(item(page, "Linking notes copy")).toBeVisible();
+
+  // A copy has the note's text.
+  await item(page, "Welcome copy").click();
+  await expect(page.locator(".cm-content")).toContainText("Welcome to Cognotive.ai");
+});

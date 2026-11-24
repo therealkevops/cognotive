@@ -163,6 +163,8 @@ export interface VaultApi {
   writeNote(path: string, content: string): Promise<void>;
   /** Writes any file (text or bytes), creating or replacing it. Reloads it if open. */
   writeFile(path: string, content: string | Uint8Array): Promise<void>;
+  /** Copies files and folders as planned (see planCopy); returns how many files were copied. */
+  copyFiles(plan: Array<{ from: string; to: string; kind: "file" | "folder" }>): Promise<number>;
   /** Case-insensitive, like most file systems Obsidian vaults live on. */
   exists(path: string): boolean;
 }
@@ -830,6 +832,40 @@ export function VaultProvider({
     [writeNote, flush, store, indexes, bumpIndex, open, changed, fail],
   );
 
+  const copyFiles = useCallback(
+    async (plan: Array<{ from: string; to: string; kind: "file" | "folder" }>) => {
+      let copied = 0;
+      try {
+        await flush(); // the open note's latest edits come too
+        for (const p of plan) {
+          if (p.kind === "folder") {
+            await store.createFolder(p.to);
+            continue;
+          }
+          if (isBinary(p.from)) {
+            const bytes = await store.readBinary(p.from);
+            if (!bytes) continue;
+            await store.writeBinary(p.to, bytes);
+            indexes.addFile(p.to);
+          } else {
+            const file = await store.read(p.from);
+            if (!file) continue;
+            await store.write(p.to, file.content);
+            indexes.set(p.to, file.content);
+          }
+          copied++;
+        }
+      } catch (e) {
+        fail(e);
+      }
+      bumpIndex();
+      await refresh();
+      changed();
+      return copied;
+    },
+    [flush, store, indexes, bumpIndex, refresh, changed, fail],
+  );
+
   const setProperty = useCallback(
     async (path: string, key: string, value: unknown) => {
       if (!isNote(path) && !isDrawing(path) && !isCanvas(path)) return setFileProperty(path, key, value);
@@ -958,6 +994,7 @@ export function VaultProvider({
       remove,
       writeNote,
       writeFile,
+      copyFiles,
       exportZip,
       importFiles,
       settings,
@@ -998,6 +1035,7 @@ export function VaultProvider({
       remove,
       writeNote,
       writeFile,
+      copyFiles,
       exportZip,
       importFiles,
       settings,

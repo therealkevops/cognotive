@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildTree } from "./tree";
-import { copyPath, moveTargets, moveTargetsFor, rangeOf, topmost, visiblePaths } from "./tree-actions";
+import { copyPath, moveTargets, moveTargetsFor, planCopy, rangeOf, topmost, visiblePaths } from "./tree-actions";
 
 describe("copyPath", () => {
   it("names a copy after the original, numbering further copies", () => {
@@ -58,5 +58,47 @@ describe("choosing several items", () => {
     // Both already at the top level: not offered.
     expect(moveTargetsFor(tree, ["A", "five.md"]).map((t) => t.id)).toEqual(["B"]);
     expect(moveTargetsFor(tree, ["five.md", "B/four.md"]).map((t) => t.id)).toEqual(["", "A", "A/Sub", "B"]);
+  });
+});
+
+describe("planCopy", () => {
+  const entries = [
+    { path: "Notes/Plan.md", kind: "file" as const },
+    { path: "Notes/Ideas.md", kind: "file" as const },
+    { path: "Notes/Sub/Deep.md", kind: "file" as const },
+    { path: "Notes/Empty", kind: "folder" as const },
+    { path: "Archive/Plan.md", kind: "file" as const },
+    { path: "pic.png", kind: "file" as const },
+  ];
+
+  it("copies files under their own names, or as copies where taken", () => {
+    expect(planCopy([{ path: "Notes/Plan.md", isFolder: false }, { path: "Notes/Ideas.md", isFolder: false }, { path: "pic.png", isFolder: false }], "Archive", entries)).toEqual([
+      { from: "Notes/Plan.md", to: "Archive/Plan copy.md", kind: "file" },
+      { from: "Notes/Ideas.md", to: "Archive/Ideas.md", kind: "file" },
+      { from: "pic.png", to: "Archive/pic.png", kind: "file" },
+    ]);
+  });
+
+  it("duplicates in the same folder", () => {
+    expect(planCopy([{ path: "Notes/Plan.md", isFolder: false }], "Notes", entries)).toEqual([
+      { from: "Notes/Plan.md", to: "Notes/Plan copy.md", kind: "file" },
+    ]);
+  });
+
+  it("copies a folder with everything in it, and what's inside a chosen folder once", () => {
+    expect(planCopy([{ path: "Notes", isFolder: true }, { path: "Notes/Plan.md", isFolder: false }], "", entries)).toEqual([
+      { from: "Notes", to: "Notes copy", kind: "folder" },
+      { from: "Notes/Plan.md", to: "Notes copy/Plan.md", kind: "file" },
+      { from: "Notes/Ideas.md", to: "Notes copy/Ideas.md", kind: "file" },
+      { from: "Notes/Sub/Deep.md", to: "Notes copy/Sub/Deep.md", kind: "file" },
+      { from: "Notes/Empty", to: "Notes copy/Empty", kind: "folder" },
+    ]);
+  });
+
+  it("gives two copies with the same name different names", () => {
+    expect(planCopy([{ path: "Notes/Plan.md", isFolder: false }, { path: "Archive/Plan.md", isFolder: false }], "", entries).map((p) => p.to)).toEqual([
+      "Plan.md",
+      "Plan copy.md",
+    ]);
   });
 });

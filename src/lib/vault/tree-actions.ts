@@ -77,3 +77,40 @@ export function moveTargetsFor(tree: TreeNode, paths: string[]): Array<{ id: str
   walk(tree);
   return out;
 }
+
+/**
+ * Where copies of the chosen items go in a folder: under their own names, or "Name copy"
+ * (then "Name copy 2") where that's taken, as Duplicate does. A folder's copy takes
+ * everything in it. Returns each file (and folder, so empty ones come too) to copy, in order.
+ */
+export function planCopy(
+  items: Array<{ path: string; isFolder: boolean }>,
+  toFolder: string,
+  entries: Array<{ path: string; kind: "file" | "folder" }>,
+): Array<{ from: string; to: string; kind: "file" | "folder" }> {
+  const keep = new Set(topmost(items.map((i) => i.path)));
+  const taken = new Set(entries.map((e) => e.path.toLowerCase()));
+  // Folders that exist only because files are in them count as taken too.
+  for (const e of entries) for (let d = dirname(e.path); d; d = dirname(d)) taken.add(d.toLowerCase());
+  const isTaken = (p: string) => taken.has(p.toLowerCase());
+  const out: Array<{ from: string; to: string; kind: "file" | "folder" }> = [];
+  for (const item of items) {
+    if (!keep.has(item.path)) continue;
+    const name = item.path.slice(item.path.lastIndexOf("/") + 1);
+    let target = toFolder ? `${toFolder}/${name}` : name;
+    if (isTaken(target)) target = copyPath(target, isTaken);
+    taken.add(target.toLowerCase());
+    if (!item.isFolder) {
+      out.push({ from: item.path, to: target, kind: "file" });
+      continue;
+    }
+    out.push({ from: item.path, to: target, kind: "folder" });
+    for (const e of entries) {
+      if (e.path === item.path || !isWithin(e.path, item.path)) continue;
+      const to = target + e.path.slice(item.path.length);
+      taken.add(to.toLowerCase());
+      out.push({ from: e.path, to, kind: e.kind });
+    }
+  }
+  return out;
+}

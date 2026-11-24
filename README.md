@@ -12,7 +12,9 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 - File tree: create, rename (double-click, F2 or the pencil), delete, and drag notes or
   folders into other folders. Choose several with Ctrl/Cmd-click (or *Select* in a row's menu)
   and Shift-click for a range, then move them together: drag one onto a folder, or *Move to…*
-  in the bar above the tree or a chosen row's menu. Rename them by one rule (find and replace
+  in the bar above the tree or a chosen row's menu. *Copy to…* copies them (a folder with
+  everything in it) into any folder, or duplicates them where they are; a taken name gets
+  " copy". Rename them by one rule (find and replace
   in their names, text added before or after, or numbered in the order shown), with every new
   name and any clash shown first; links follow. Delete them together too, after one
   confirmation (which lists them, and the notes that link to them). Escape or a plain click
