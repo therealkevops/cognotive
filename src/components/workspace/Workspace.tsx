@@ -1381,7 +1381,7 @@ export function Workspace() {
       )}
       {deleting && (
         <ErrorBoundary name="Deleting" onClose={() => setDeleting(null)}>
-          <DeleteDialog path={deleting} isFolder={false} onClose={() => setDeleting(null)} />
+          <DeleteDialog items={[{ path: deleting, isFolder: false }]} onClose={() => setDeleting(null)} />
         </ErrorBoundary>
       )}
       {settingsOpen && (

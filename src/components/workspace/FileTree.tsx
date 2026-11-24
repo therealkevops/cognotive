@@ -81,6 +81,7 @@ export function FileTree() {
   const anchor = useRef<string | null>(null);
   const chosen = useMemo(() => chosenRaw.filter((p) => vault.entries.some((e) => e.path === p || isWithin(e.path, p))), [chosenRaw, vault.entries]);
   const [movingMany, setMovingMany] = useState(false);
+  const [deletingMany, setDeletingMany] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const say = (text: string) => {
     setNotice(text);
@@ -103,6 +104,7 @@ export function FileTree() {
     },
     move: setMoving,
     moveChosen: () => setMovingMany(true),
+    deleteChosen: () => setDeletingMany(true),
     choose: (path) => {
       setChosen((prev) => (prev.includes(path) ? prev : [...prev, path]));
       anchor.current = path;
@@ -261,6 +263,15 @@ export function FileTree() {
           <button type="button" className="button-secondary px-2 py-0.5 text-xs" onClick={() => setMovingMany(true)}>
             <FolderInput size={12} aria-hidden /> Move to…
           </button>
+          <button
+            type="button"
+            className="icon-button h-6 w-6 hover:text-red-600 dark:hover:text-red-400"
+            aria-label="Delete selected"
+            title="Delete selected"
+            onClick={() => setDeletingMany(true)}
+          >
+            <Trash2 size={13} aria-hidden />
+          </button>
           <button type="button" className="icon-button h-6 w-6" aria-label="Clear selection" title="Clear selection (Escape)" onClick={clearChosen}>
             <X size={13} aria-hidden />
           </button>
@@ -312,6 +323,13 @@ export function FileTree() {
             void vault.move(moving, item.id);
           }}
           onClose={() => setMoving(null)}
+        />
+      )}
+      {deletingMany && chosen.length > 0 && (
+        <DeleteDialog
+          items={chosen.map((p) => ({ path: p, isFolder: !vault.entries.some((e) => e.path === p && e.kind === "file") }))}
+          // Cancelling keeps the selection; deleted items drop out of it by themselves.
+          onClose={() => setDeletingMany(false)}
         />
       )}
       {movingMany && chosen.length > 0 && (
@@ -467,8 +485,9 @@ function Node({
             className={`ml-auto ${isActive ? "[@media(hover:none)]:opacity-100" : ""}`}
             items={many ? [
               { label: `Move ${chosen.length} items to…`, icon: FolderInput, onSelect: actions.moveChosen },
-              "separator" as const,
               { label: "Clear selection", icon: X, onSelect: actions.clearChosen },
+              "separator" as const,
+              { label: `Delete ${chosen.length} items`, icon: Trash2, danger: true, onSelect: actions.deleteChosen },
             ] : [
               ...(isFolder
                 ? [
@@ -520,7 +539,7 @@ function Node({
           ))}
         </div>
       )}
-      {deleting && <DeleteDialog path={node.path} isFolder={isFolder} onClose={() => setDeleting(false)} />}
+      {deleting && <DeleteDialog items={[{ path: node.path, isFolder }]} onClose={() => setDeleting(false)} />}
     </div>
   );
 }
@@ -557,6 +576,7 @@ interface TreeActions {
   move(path: string): void;
   /** Several chosen items: move them, add one, or let them go. */
   moveChosen(): void;
+  deleteChosen(): void;
   choose(path: string): void;
   clearChosen(): void;
   duplicate(path: string): void;

@@ -84,3 +84,33 @@ test("a chosen file's menu moves them all, and Select works without a keyboard",
   await page.keyboard.press("Enter");
   await expect(page.getByRole("status").filter({ hasText: "Moved 2 items to Later." })).toBeVisible();
 });
+
+test("several chosen files are deleted together, after one confirmation", async ({ page }) => {
+  await openApp(page);
+  await newFolder(page, "Old");
+  await item(page, "Linking notes").click({ modifiers: ["ControlOrMeta"] });
+  await item(page, "Old").click({ modifiers: ["ControlOrMeta"] });
+  const bar = page.getByRole("toolbar", { name: "Chosen files" });
+  await expect(bar).toContainText("2 selected");
+
+  // Cancelling keeps them chosen.
+  await bar.getByRole("button", { name: "Delete selected" }).click();
+  let dialog = page.getByRole("dialog", { name: "Delete 2 items" });
+  await expect(dialog).toContainText("Delete these 2 items (a folder with everything in it)?");
+  await expect(dialog.getByRole("list", { name: "To delete" })).toContainText("Linking notes.md");
+  // Welcome links to Linking notes: the dialog says so.
+  await expect(dialog).toContainText("1 note links to them");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(bar).toContainText("2 selected");
+
+  // From a chosen row's menu, this time.
+  await item(page, "Old").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Delete 2 items" }).click();
+  dialog = page.getByRole("dialog", { name: "Delete 2 items" });
+  await dialog.getByRole("button", { name: "Delete" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(item(page, "Linking notes")).toHaveCount(0);
+  await expect(item(page, "Old")).toHaveCount(0);
+  await expect(item(page, "Welcome")).toBeVisible();
+  await expect(bar).toBeHidden();
+});

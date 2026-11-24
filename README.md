@@ -12,7 +12,9 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 - File tree: create, rename (double-click, F2 or the pencil), delete, and drag notes or
   folders into other folders. Choose several with Ctrl/Cmd-click (or *Select* in a row's menu)
   and Shift-click for a range, then move them together: drag one onto a folder, or *Move to…*
-  in the bar above the tree or a chosen row's menu. Escape or a plain click lets them go
+  in the bar above the tree or a chosen row's menu. Delete them together too, after one
+  confirmation (which lists them, and the notes that link to them). Escape or a plain click
+  lets them go
 - Editor (CodeMirror 6) with three modes: live preview, source, and reading
 - Formatting toolbar and shortcuts; `==highlight==`; task lists with clickable checkboxes
 - Reading view: GitHub-flavoured markdown, KaTeX maths, Mermaid diagrams, highlighted code,
