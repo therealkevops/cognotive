@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildTree } from "./tree";
-import { copyPath, moveTargets } from "./tree-actions";
+import { copyPath, moveTargets, moveTargetsFor, rangeOf, topmost, visiblePaths } from "./tree-actions";
 
 describe("copyPath", () => {
   it("names a copy after the original, numbering further copies", () => {
@@ -28,5 +28,35 @@ describe("moveTargets", () => {
 
   it("never offers a folder itself or anything inside it", () => {
     expect(ids("Work")).toEqual(["Home"]);
+  });
+});
+
+describe("choosing several items", () => {
+  const tree = buildTree(
+    ["A/one.md", "A/two.md", "A/Sub/three.md", "B/four.md", "five.md"].map((path) => ({ path, kind: "file" as const, mtime: 0 })),
+  );
+
+  it("lists the rows as shown, inside open folders only", () => {
+    expect(visiblePaths(tree, new Set(["A"]))).toEqual(["A", "A/Sub", "A/one.md", "A/two.md", "B", "five.md"]);
+    expect(visiblePaths(tree, new Set())).toEqual(["A", "B", "five.md"]);
+  });
+
+  it("takes a range either way round", () => {
+    const order = ["A", "A/Sub", "A/one.md", "A/two.md", "B", "five.md"];
+    expect(rangeOf(order, "A/one.md", "B")).toEqual(["A/one.md", "A/two.md", "B"]);
+    expect(rangeOf(order, "B", "A/one.md")).toEqual(["A/one.md", "A/two.md", "B"]);
+    expect(rangeOf(order, null, "B")).toEqual(["B"]);
+    expect(rangeOf(order, "gone.md", "B")).toEqual(["B"]);
+  });
+
+  it("moves a folder rather than what's inside it", () => {
+    expect(topmost(["A", "A/one.md", "A/Sub/three.md", "five.md"])).toEqual(["A", "five.md"]);
+  });
+
+  it("offers folders all of them can go to", () => {
+    expect(moveTargetsFor(tree, ["A/one.md", "A/two.md"]).map((t) => t.id)).toEqual(["", "A/Sub", "B"]);
+    // Both already at the top level: not offered.
+    expect(moveTargetsFor(tree, ["A", "five.md"]).map((t) => t.id)).toEqual(["B"]);
+    expect(moveTargetsFor(tree, ["five.md", "B/four.md"]).map((t) => t.id)).toEqual(["", "A", "A/Sub", "B"]);
   });
 });

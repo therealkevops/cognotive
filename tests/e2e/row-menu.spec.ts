@@ -15,6 +15,7 @@ test("a file's three-dot menu offers its actions, by mouse or keyboard", async (
     "Open in side pane",
     "Rename",
     "Move to…",
+    "Select",
     "Duplicate",
     "Copy link",
     "Pin to sidebar",
@@ -65,6 +66,7 @@ test("right-clicking a file or folder opens the same menu", async ({ page }) => 
     "Upload files here",
     "Rename",
     "Move to…",
+    "Select",
     "Delete",
   ]);
   await menu(page, "Work").getByRole("menuitem", { name: "New note here" }).click();

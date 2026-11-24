@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CheckSquare,
   ChevronRight,
   Columns2,
   Copy,
@@ -17,11 +18,12 @@ import {
   PinOff,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { useContext, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { readPref, writePref } from "@/lib/prefs";
-import { dirname, isBinary, isCanvas, isDrawing, isImage, isMarkdown, isNote } from "@/lib/vault/paths";
-import { copyPath, moveTargets } from "@/lib/vault/tree-actions";
+import { dirname, isBinary, isCanvas, isDrawing, isImage, isMarkdown, isNote, isWithin } from "@/lib/vault/paths";
+import { copyPath, moveTargets, moveTargetsFor, rangeOf, topmost, visiblePaths } from "@/lib/vault/tree-actions";
 import { formatLink } from "@/lib/links/format";
 import { hubProperty } from "@/lib/links/health";
 import { Picker } from "./Picker";
@@ -32,6 +34,9 @@ import { RowMenu, type RowMenuHandle } from "../RowMenu";
 import { SidePaneContext } from "./SidePane";
 
 import { TREE_DRAG_TYPE as DRAG_TYPE } from "@/lib/vault/drag";
+
+/** Dragging several chosen items: their paths, as JSON. */
+const DRAG_MANY = "application/x-noted-paths";
 
 export function FileTree() {
   const vault = useVault();
@@ -71,6 +76,11 @@ export function FileTree() {
   // Where the file picker's files go: the folder whose menu asked, or the default.
   const uploadTo = useRef("");
   const [moving, setMoving] = useState<string | null>(null);
+  // Several items chosen at once (Ctrl/Cmd-click, Shift-click), to move together.
+  const [chosenRaw, setChosen] = useState<string[]>([]);
+  const anchor = useRef<string | null>(null);
+  const chosen = useMemo(() => chosenRaw.filter((p) => vault.entries.some((e) => e.path === p || isWithin(e.path, p))), [chosenRaw, vault.entries]);
+  const [movingMany, setMovingMany] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const say = (text: string) => {
     setNotice(text);
@@ -92,6 +102,12 @@ export function FileTree() {
       upload.current?.click();
     },
     move: setMoving,
+    moveChosen: () => setMovingMany(true),
+    choose: (path) => {
+      setChosen((prev) => (prev.includes(path) ? prev : [...prev, path]));
+      anchor.current = path;
+    },
+    clearChosen: () => setChosen([]),
     duplicate: (path) => {
       const content = vault.textOf(path);
       if (content === undefined) return;
@@ -113,6 +129,33 @@ export function FileTree() {
     },
   };
 
+  /** A click on a row with Ctrl/Cmd (add or take away) or Shift (a range); false for a plain click. */
+  const choose = (path: string, how: { toggle: boolean; range: boolean }): boolean => {
+    if (how.range) {
+      const order = visiblePaths(tree, expanded);
+      setChosen(rangeOf(order, anchor.current ?? vault.active?.path ?? null, path));
+      return true;
+    }
+    if (how.toggle) {
+      setChosen((prev) => (prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path]));
+      anchor.current = path;
+      return true;
+    }
+    setChosen([]);
+    anchor.current = path;
+    return false;
+  };
+  const clearChosen = () => setChosen([]);
+
+  /** Moves the chosen items into a folder (a folder's contents go with it). */
+  const moveMany = async (paths: string[], folder: string) => {
+    const items = topmost(paths).filter((p) => dirname(p) !== folder && !isWithin(folder, p));
+    for (const p of items) await vault.move(p, folder);
+    if (folder) setOpen(folder, true);
+    setChosen([]);
+    if (items.length) say(`Moved ${items.length} ${items.length === 1 ? "item" : "items"} to ${folder || "the top level"}.`);
+  };
+
   const dropProps = (folder: string) => ({
     onDragOver: (e: DragEvent) => {
       if (!e.dataTransfer.types.includes(DRAG_TYPE) && !e.dataTransfer.types.includes("Files")) return;
@@ -128,6 +171,11 @@ export function FileTree() {
       // Files dragged in from the computer become attachments in that folder.
       if (e.dataTransfer.files.length) {
         void addFiles([...e.dataTransfer.files], folder);
+        return;
+      }
+      const many = e.dataTransfer.getData(DRAG_MANY);
+      if (many) {
+        void moveMany(JSON.parse(many) as string[], folder);
         return;
       }
       const path = e.dataTransfer.getData(DRAG_TYPE);
@@ -207,9 +255,27 @@ export function FileTree() {
           />
         </div>
       </div>
+      {chosen.length > 0 && (
+        <div role="toolbar" aria-label="Chosen files" className="mb-1.5 flex items-center gap-1 rounded-lg bg-accent/10 py-1 pr-1 pl-2.5 text-xs">
+          <span className="min-w-0 flex-1 truncate font-medium">{chosen.length} selected</span>
+          <button type="button" className="button-secondary px-2 py-0.5 text-xs" onClick={() => setMovingMany(true)}>
+            <FolderInput size={12} aria-hidden /> Move to…
+          </button>
+          <button type="button" className="icon-button h-6 w-6" aria-label="Clear selection" title="Clear selection (Escape)" onClick={clearChosen}>
+            <X size={13} aria-hidden />
+          </button>
+        </div>
+      )}
       <div
         role="tree"
         aria-label="Repository files"
+        aria-multiselectable
+        onKeyDown={(e) => {
+          if (e.key === "Escape" && chosen.length) {
+            e.stopPropagation();
+            clearChosen();
+          }
+        }}
         className={`-mx-2 min-h-24 flex-1 overflow-y-auto rounded px-2 pb-8 ${dropTarget === "" ? "bg-accent/10" : ""}`}
         {...dropProps("")}
       >
@@ -226,6 +292,8 @@ export function FileTree() {
             dropTarget={dropTarget}
             dropProps={dropProps}
             actions={actions}
+            chosen={chosen}
+            choose={choose}
           />
         ))}
       </div>
@@ -246,6 +314,15 @@ export function FileTree() {
           onClose={() => setMoving(null)}
         />
       )}
+      {movingMany && chosen.length > 0 && (
+        <Picker
+          title={`Move ${chosen.length} ${chosen.length === 1 ? "item" : "items"} to…`}
+          placeholder="Folder"
+          items={moveTargetsFor(tree, chosen)}
+          onPick={(item) => void moveMany(chosen, item.id)}
+          onClose={() => setMovingMany(false)}
+        />
+      )}
     </nav>
   );
 }
@@ -260,6 +337,8 @@ function Node({
   dropTarget,
   dropProps,
   actions,
+  chosen,
+  choose,
 }: {
   node: TreeNode;
   depth: number;
@@ -270,6 +349,8 @@ function Node({
   dropTarget: string | null;
   dropProps: (folder: string) => Record<string, unknown>;
   actions: TreeActions;
+  chosen: string[];
+  choose(path: string, how: { toggle: boolean; range: boolean }): boolean;
 }) {
   const vault = useVault();
   const openSide = useContext(SidePaneContext);
@@ -277,6 +358,8 @@ function Node({
   const open = isFolder && expanded.has(node.path);
   const isActive = vault.active?.path === node.path;
   const isRenaming = renaming === node.path;
+  const isChosen = chosen.includes(node.path);
+  const many = isChosen && chosen.length > 1;
   const canOpen = !isFolder;
   const FileIcon = isDrawing(node.path)
     ? PenTool
@@ -316,26 +399,37 @@ function Node({
         role="treeitem"
         aria-level={depth + 1}
         aria-expanded={isFolder ? open : undefined}
-        aria-selected={isActive}
+        aria-selected={chosen.length ? isChosen : isActive}
         aria-current={isActive ? "page" : undefined}
         tabIndex={0}
         draggable={!isRenaming}
         onDragStart={(e) => {
           e.dataTransfer.setData(DRAG_TYPE, node.path);
+          // Dragging one of several chosen items takes them all.
+          if (many) e.dataTransfer.setData(DRAG_MANY, JSON.stringify(chosen));
           // Move into a folder, or link from the editor.
           e.dataTransfer.effectAllowed = "linkMove";
         }}
-        onClick={activate}
+        onClick={(e) => {
+          if (choose(node.path, { toggle: e.ctrlKey || e.metaKey, range: e.shiftKey })) return;
+          activate();
+        }}
         onKeyDown={onKeyDown}
         onDoubleClick={() => setRenaming(node.path)}
         onContextMenu={(e) => {
           if (isRenaming) return;
           e.preventDefault();
+          // A right-click outside the chosen items is about this one only.
+          if (!isChosen && chosen.length) choose(node.path, { toggle: false, range: false });
           menu.current?.openAt(e.clientX, e.clientY);
         }}
         {...(isFolder ? dropProps(node.path) : {})}
         className={`group flex cursor-pointer items-center gap-1.5 rounded-lg py-[0.3125rem] pr-1 text-sm select-none ${
-          isActive ? "bg-foreground/[0.08] font-medium text-foreground" : "text-foreground/80 hover:bg-foreground/[0.05] hover:text-foreground"
+          isChosen
+            ? "bg-accent/15 text-foreground"
+            : isActive
+              ? "bg-foreground/[0.08] font-medium text-foreground"
+              : "text-foreground/80 hover:bg-foreground/[0.05] hover:text-foreground"
         } ${dropTarget === node.path ? "ring-1 ring-accent" : ""} ${canOpen || isFolder ? "" : "opacity-60"}`}
         style={{ paddingLeft: `${depth * 0.9 + 0.25}rem` }}
         data-path={node.path}
@@ -371,7 +465,11 @@ function Node({
             ref={menu}
             label={`More actions for ${node.name}`}
             className={`ml-auto ${isActive ? "[@media(hover:none)]:opacity-100" : ""}`}
-            items={[
+            items={many ? [
+              { label: `Move ${chosen.length} items to…`, icon: FolderInput, onSelect: actions.moveChosen },
+              "separator" as const,
+              { label: "Clear selection", icon: X, onSelect: actions.clearChosen },
+            ] : [
               ...(isFolder
                 ? [
                     { label: "New note here", icon: FilePlus, onSelect: () => actions.newNote(node.path) },
@@ -386,6 +484,7 @@ function Node({
                   : []),
               { label: "Rename", icon: Pencil, onSelect: () => setRenaming(node.path) },
               { label: "Move to…", icon: FolderInput, onSelect: () => actions.move(node.path) },
+              { label: isChosen ? "Selected" : "Select", icon: CheckSquare, onSelect: () => actions.choose(node.path) },
               ...(!isFolder && !isBinary(node.path) ? [{ label: "Duplicate", icon: Copy, onSelect: () => actions.duplicate(node.path) }] : []),
               ...(!isFolder ? [{ label: "Copy link", icon: Link2, onSelect: () => actions.copyLink(node.path) }] : []),
               ...(!isFolder && isNote(node.path)
@@ -415,6 +514,8 @@ function Node({
               dropTarget={dropTarget}
               dropProps={dropProps}
               actions={actions}
+              chosen={chosen}
+              choose={choose}
             />
           ))}
         </div>
@@ -454,6 +555,10 @@ interface TreeActions {
   newCanvas(folder: string): void;
   upload(folder: string): void;
   move(path: string): void;
+  /** Several chosen items: move them, add one, or let them go. */
+  moveChosen(): void;
+  choose(path: string): void;
+  clearChosen(): void;
   duplicate(path: string): void;
   copyLink(path: string): void;
   togglePin(path: string): void;
