@@ -221,6 +221,12 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 - Installable as an app (desktop or phone) that opens offline, with shortcuts on its icon;
   notes are kept in the browser. After a new version is deployed, a page opened before it reloads
   itself the first time it needs a part of the app it hasn't loaded yet (the canvas or drawing editor)
+- Import an Obsidian vault from a folder on this computer (Settings → Repositories & sync →
+  *Import an Obsidian vault*, or the command palette): into a new repository named after it, or
+  into the open one. Obsidian's `.obsidian` settings folder, its `.trash` and `.git` are left out;
+  a new repository takes the vault's attachment folder, link style, new-note location, and
+  daily-note and template settings. Files come in as they are (images aren't made smaller, since
+  notes link to them by name), and the summary shows the size first
 - Several repositories, with a switcher at the top of the sidebar; both sidebars collapse to
   icon rails, and can be resized by dragging their inner edge (or focus it and use the arrow
   keys; a double-click puts the default width back). Widths are kept on this device
