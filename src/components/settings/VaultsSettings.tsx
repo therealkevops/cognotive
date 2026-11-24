@@ -10,7 +10,6 @@ import { TokenInstructions } from "../sync/TokenFields";
 import { SectionHeader } from "./parts";
 import { useVaults } from "../vault/useVaults";
 import { ConnectRepoForm } from "./ConnectRepoForm";
-import { ObsidianImport } from "./ObsidianImport";
 import { Field, StarterTemplatesOption, SyncFields } from "./repo-fields";
 
 /* Repositories, sync and storage. */
@@ -256,7 +255,6 @@ export function AddButtons({ onGitHub }: { onGitHub(): void }) {
       <button type="button" className="button-secondary" onClick={() => setCreating(true)}>
         New local repository
       </button>
-      <ObsidianImport />
     </section>
   );
 }

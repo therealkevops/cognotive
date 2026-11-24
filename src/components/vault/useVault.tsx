@@ -146,11 +146,7 @@ export interface VaultApi {
    * Adds files (from an imported zip). Identical files are skipped; a different
    * file at the same path is kept and the import gets a numbered name.
    */
-  /** Adds files (bytes, or files to read one at a time), reporting progress as it goes. */
-  importFiles(
-    files: Map<string, Uint8Array | Blob>,
-    onProgress?: (done: number, total: number) => void,
-  ): Promise<{ added: number; skipped: number; renamed: number }>;
+  importFiles(files: Map<string, Uint8Array>): Promise<{ added: number; skipped: number; renamed: number }>;
   /** This vault's settings (.noted/settings.json). */
   settings: VaultSettings;
   /** An attachment's properties (kept in .noted/properties.json). */
@@ -729,16 +725,13 @@ export function VaultProvider({
   }, [flush, store]);
 
   const importFiles = useCallback(
-    async (files: Map<string, Uint8Array | Blob>, onProgress?: (done: number, total: number) => void) => {
+    async (files: Map<string, Uint8Array>) => {
       await flush();
       const result = { added: 0, skipped: 0, renamed: 0 };
       const same = (a: Uint8Array | undefined, b: Uint8Array) =>
         !!a && a.length === b.length && a.every((x, i) => x === b[i]);
-      let done = 0;
       try {
-        for (const [p, source] of files) {
-          onProgress?.(done++, files.size);
-          const bytes = source instanceof Uint8Array ? source : new Uint8Array(await source.arrayBuffer());
+        for (const [p, bytes] of files) {
           const binary = isBinary(p);
           let existing: Uint8Array | undefined;
           if (binary) existing = await store.readBinary(p);
@@ -766,7 +759,6 @@ export function VaultProvider({
             indexes.set(target, text);
           }
         }
-        onProgress?.(files.size, files.size);
         if (files.has(SETTINGS_PATH)) setSettings(parseSettings((await store.read(SETTINGS_PATH))?.content));
         bumpIndex();
         await refresh();

@@ -160,12 +160,7 @@ export function Workspace() {
   const [asking, setAsking] = useState<AskSource | null>(null);
   /** Notes opened in this session, most recent first, for ranking link suggestions. */
   const [recent, setRecent] = useState<string[]>([]);
-  // A note left by an import that opened another repository (see ObsidianImport), shown once.
-  const [importNote, setImportNote] = useState<string | null>(() => {
-    const left = readPref<string | null>("importNotice", null);
-    if (left) writePref("importNotice", null);
-    return left;
-  });
+  const [importNote, setImportNote] = useState<string | null>(null);
   const zipInput = useRef<HTMLInputElement>(null);
   const chooseZip = useCallback(() => zipInput.current?.click(), []);
   const tabsKey = `vault:${vault.vaultId}:tabs`;
@@ -926,7 +921,6 @@ export function Workspace() {
     },
     { id: "export", label: "Export repository as zip" },
     { id: "import", label: "Import notes from a zip…" },
-    { id: "import-obsidian", label: "Import an Obsidian vault…" },
     { id: "settings", label: "Open settings" },
     { id: "storage", label: "Show storage used on this device" },
     { id: "install", label: "Install Cognotive.ai as an app" },
@@ -996,7 +990,6 @@ export function Workspace() {
     history: () => setHistoryOpen(true),
     export: () => void exportZip(vault, vaults.active.name),
     import: chooseZip,
-    "import-obsidian": () => setSettingsOpen("vaults"),
     settings: () => setSettingsOpen("appearance"),
     storage: () => setSettingsOpen("storage"),
     install: () => setSettingsOpen("app"),
