@@ -21,8 +21,7 @@ import {
   SETTINGS_PATH,
   type VaultSettings,
 } from "@/lib/vault/settings";
-import { sceneWithEmbedded, type PictureLoader } from "@/lib/drawing/obsidian";
-import { toBase64 } from "@/lib/crypto/repo-crypto";
+import { drawingJson } from "@/lib/drawing/obsidian";
 import { EMPTY_CANVAS } from "@/lib/canvas/format";
 import { EMPTY_DRAWING } from "@/lib/drawing/parse";
 import { VaultIndexes } from "@/lib/vault/indexes";
@@ -240,19 +239,6 @@ export function VaultProvider({
   }, []);
 
   const bumpIndex = useCallback(() => setIndexVersion((v) => v + 1), []);
-
-  /** Pictures an Obsidian drawing at `from` links to (its "Embedded Files"), read from the repository. */
-  const pictureLoader = useCallback(
-    (from: string): PictureLoader =>
-      async (target) => {
-        const p = indexes.links.resolve(target, from);
-        if (!p || !isBinary(p)) return null;
-        const bytes = await store.readBinary(p);
-        const type = mimeType(p);
-        return bytes ? { dataURL: `data:${type};base64,${toBase64(bytes)}`, mimeType: type } : null;
-      },
-    [indexes, store],
-  );
   const indexed = useMemo<IndexedVault>(() => ({ links, search: index, version: indexVersion }), [links, index, indexVersion]);
 
   const refresh = useCallback(async () => {
@@ -289,7 +275,7 @@ export function VaultProvider({
       setEntries((prev) => prev.map((e) => (e.path === p.path ? { ...e, mtime: file.mtime } : e)));
       if (isDrawing(p.path) && settingsRef.current.drawingSvgCopy) {
         // "Name.excalidraw.svg" next to the drawing, so it shows on github.com.
-        const svg = await drawingToSvgText(await sceneWithEmbedded(p.path, p.text, pictureLoader(p.path)), false).catch(() => null);
+        const svg = await drawingToSvgText(drawingJson(p.path, p.text), false).catch(() => null);
         if (svg) {
           await store.writeBinary(`${p.path}.svg`, new TextEncoder().encode(svg));
           indexes.addFile(`${p.path}.svg`);
@@ -302,7 +288,7 @@ export function VaultProvider({
       setSaveState("error");
       fail(e);
     }
-  }, [store, indexes, bumpIndex, fail, changed, pictureLoader]);
+  }, [store, indexes, bumpIndex, fail, changed]);
 
   const open = useCallback(
     async (path: string | null) => {
@@ -543,7 +529,7 @@ export function VaultProvider({
       const url = (async () => {
         if (isDrawing(path)) {
           const f = await store.read(path);
-          return f ? drawingToSvgUrl(await sceneWithEmbedded(path, f.content, pictureLoader(path)), !!opts.dark) : null;
+          return f ? drawingToSvgUrl(drawingJson(path, f.content), !!opts.dark) : null;
         }
         if (!isBinary(path)) return null;
         const bytes = await store.readBinary(path);
@@ -552,7 +538,7 @@ export function VaultProvider({
       urlCache.current.set(cacheKey, { key, url });
       return url;
     },
-    [store, pictureLoader],
+    [store],
   );
 
   const createFolder = useCallback(

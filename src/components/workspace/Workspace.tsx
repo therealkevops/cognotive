@@ -24,7 +24,7 @@ import { setFrontmatterProperty } from "@/lib/markdown/frontmatter";
 import { healthIgnored, hubProperty, vaultHealth } from "@/lib/links/health";
 import { extractHeadings } from "@/lib/markdown/outline";
 import { basename, dirname, displayName, isCanvas, isDrawing, isNote, noteTitle } from "@/lib/vault/paths";
-import { drawingJson, embeddedFiles, isObsidianDrawing, replaceScene, withEmbeddedFiles } from "@/lib/drawing/obsidian";
+import { drawingJson, isObsidianDrawing, replaceScene } from "@/lib/drawing/obsidian";
 import { newNoteFromLink } from "@/lib/vault/settings";
 import { insertIntoNote, renderTemplate, type Rendered } from "@/lib/templates/templates";
 import { SettingsDialog, type SettingsSection } from "../settings/SettingsDialog";
@@ -1179,14 +1179,12 @@ export function Workspace() {
                 <DrawingView
                   docKey={`${vault.active.version}`}
                   initial={drawingJson(vault.active.path, vault.active.initial)}
-                  embedded={isObsidianDrawing(vault.active.path) ? embeddedFiles(vault.active.initial) : undefined}
-                  onChange={(json, embeds) =>
-                    // Obsidian plugin drawings keep their markdown wrapper (and list new pictures under
-                    // "## Embedded Files"); only the scene changes. Plain drawings keep their
-                    // properties, which Excalidraw doesn't know about.
+                  onChange={(json) =>
+                    // Obsidian plugin drawings keep their markdown wrapper; only the scene changes.
+                    // Plain drawings keep their properties, which Excalidraw doesn't know about.
                     vault.edit(
                       isObsidianDrawing(activePathNow!)
-                        ? withEmbeddedFiles(replaceScene(vault.activeText, json), embeds ?? [])
+                        ? replaceScene(vault.activeText, json)
                         : keepDrawingProperties(activePathNow!, json, vault.activeText),
                     )
                   }
