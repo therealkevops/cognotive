@@ -61,6 +61,11 @@ export function extname(path: string): string {
   return i <= 0 ? "" : name.slice(i).toLowerCase();
 }
 
+/** The ending a rename keeps: a file's extension, all of a drawing's ".excalidraw.md". */
+export function fileSuffix(path: string): string {
+  return /\.excalidraw\.md$/i.exec(basename(path))?.[0].toLowerCase() ?? extname(path);
+}
+
 export function isMarkdown(path: string): boolean {
   return extname(path) === ".md";
 }

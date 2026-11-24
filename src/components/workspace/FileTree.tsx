@@ -30,6 +30,7 @@ import { Picker } from "./Picker";
 import { buildTree, type TreeNode } from "@/lib/vault/tree";
 import { ATTACHMENT_FOLDER, useVault } from "../vault/useVault";
 import { DeleteDialog } from "./DeleteDialog";
+import { BatchRename } from "./BatchRename";
 import { RowMenu, type RowMenuHandle } from "../RowMenu";
 import { SidePaneContext } from "./SidePane";
 
@@ -82,6 +83,7 @@ export function FileTree() {
   const chosen = useMemo(() => chosenRaw.filter((p) => vault.entries.some((e) => e.path === p || isWithin(e.path, p))), [chosenRaw, vault.entries]);
   const [movingMany, setMovingMany] = useState(false);
   const [deletingMany, setDeletingMany] = useState(false);
+  const [renamingMany, setRenamingMany] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const say = (text: string) => {
     setNotice(text);
@@ -105,6 +107,7 @@ export function FileTree() {
     move: setMoving,
     moveChosen: () => setMovingMany(true),
     deleteChosen: () => setDeletingMany(true),
+    renameChosen: () => setRenamingMany(true),
     choose: (path) => {
       setChosen((prev) => (prev.includes(path) ? prev : [...prev, path]));
       anchor.current = path;
@@ -265,6 +268,16 @@ export function FileTree() {
           </button>
           <button
             type="button"
+            className="icon-button h-6 w-6"
+            aria-label="Rename selected"
+            title="Rename selected"
+            disabled={chosen.length < 2}
+            onClick={() => setRenamingMany(true)}
+          >
+            <Pencil size={13} aria-hidden />
+          </button>
+          <button
+            type="button"
             className="icon-button h-6 w-6 hover:text-red-600 dark:hover:text-red-400"
             aria-label="Delete selected"
             title="Delete selected"
@@ -323,6 +336,21 @@ export function FileTree() {
             void vault.move(moving, item.id);
           }}
           onClose={() => setMoving(null)}
+        />
+      )}
+      {renamingMany && chosen.length > 1 && (
+        <BatchRename
+          // In the order the tree shows them (chosen items in closed folders after).
+          items={(() => {
+            const order = visiblePaths(tree, expanded);
+            const sorted = [...chosen].sort((a, b) => (order.indexOf(a) + 1 || Infinity) - (order.indexOf(b) + 1 || Infinity));
+            return sorted.map((p) => ({ path: p, isFolder: !vault.entries.some((e) => e.path === p && e.kind === "file") }));
+          })()}
+          onClose={() => setRenamingMany(false)}
+          onDone={(n) => {
+            setChosen([]);
+            if (n) say(`Renamed ${n} ${n === 1 ? "item" : "items"}.`);
+          }}
         />
       )}
       {deletingMany && chosen.length > 0 && (
@@ -485,6 +513,7 @@ function Node({
             className={`ml-auto ${isActive ? "[@media(hover:none)]:opacity-100" : ""}`}
             items={many ? [
               { label: `Move ${chosen.length} items to…`, icon: FolderInput, onSelect: actions.moveChosen },
+              { label: `Rename ${chosen.length} items…`, icon: Pencil, onSelect: actions.renameChosen },
               { label: "Clear selection", icon: X, onSelect: actions.clearChosen },
               "separator" as const,
               { label: `Delete ${chosen.length} items`, icon: Trash2, danger: true, onSelect: actions.deleteChosen },
@@ -577,6 +606,7 @@ interface TreeActions {
   /** Several chosen items: move them, add one, or let them go. */
   moveChosen(): void;
   deleteChosen(): void;
+  renameChosen(): void;
   choose(path: string): void;
   clearChosen(): void;
   duplicate(path: string): void;

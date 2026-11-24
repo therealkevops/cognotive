@@ -33,6 +33,7 @@ import {
   dirname,
   extensionFor,
   extname,
+  fileSuffix,
   isBinary,
   isCanvas,
   isDrawing,
@@ -652,7 +653,8 @@ export function VaultProvider({
         const err = validateName(newName);
         if (err) throw new Error(err);
         const entry = entriesRef.current.find((e) => e.path === path);
-        const ext = entry?.kind === "file" ? extname(path) : "";
+        // A drawing keeps all of ".excalidraw.md", not just ".md".
+        const ext = entry?.kind === "file" ? fileSuffix(path) : "";
         const keepExt = ext && !newName.trim().toLowerCase().endsWith(ext) ? ext : "";
         await renameOrMove(path, joinPath(dirname(path), newName.trim() + keepExt));
         return true;

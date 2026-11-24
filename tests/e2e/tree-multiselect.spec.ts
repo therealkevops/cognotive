@@ -114,3 +114,59 @@ test("several chosen files are deleted together, after one confirmation", async 
   await expect(item(page, "Welcome")).toBeVisible();
   await expect(bar).toBeHidden();
 });
+
+test("several chosen files are renamed by one rule, with the new names shown first, and links follow", async ({ page }) => {
+  await openApp(page);
+  await item(page, "Welcome").click({ modifiers: ["ControlOrMeta"] });
+  await item(page, "Linking notes").click({ modifiers: ["ControlOrMeta"] });
+  await page.getByRole("toolbar", { name: "Chosen files" }).getByRole("button", { name: "Rename selected" }).click();
+  const dialog = page.getByRole("dialog", { name: "Rename 2 items" });
+
+  // A clash is named, and nothing can be renamed until it's gone.
+  await dialog.getByLabel("Find").fill("Welcome");
+  await dialog.getByLabel("Replace with").fill("Linking notes");
+  const names = dialog.getByRole("list", { name: "New names" });
+  await expect(names).toContainText("Another file would get this name.");
+  await expect(dialog.getByRole("button", { name: /^Rename/ })).toBeDisabled();
+
+  // Text before the names: each shown, then done.
+  await dialog.getByRole("radio", { name: "Add text" }).click();
+  await dialog.getByLabel("Before the name").fill("Old ");
+  await expect(names).toContainText("Linking notes");
+  await expect(names).toContainText("Old Linking notes");
+  await expect(names).toContainText("Old Welcome");
+  await dialog.getByRole("button", { name: "Rename 2" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Renamed 2 items." })).toBeVisible();
+  await expect(item(page, "Old Welcome")).toBeVisible();
+  await expect(item(page, "Old Linking notes")).toBeVisible();
+  await expect(page.getByRole("toolbar", { name: "Chosen files" })).toBeHidden();
+
+  // Welcome's link to Linking notes follows it.
+  await item(page, "Old Welcome").click();
+  await expect(page.getByRole("region", { name: "Outgoing links" }).getByRole("button", { name: "Old Linking notes" })).toBeVisible();
+});
+
+test("numbering chosen files in the order shown, drawings keeping their kind", async ({ page }) => {
+  await openApp(page);
+  // An Obsidian-style drawing (.excalidraw.md) among them.
+  const { strToU8, zipSync } = await import("fflate");
+  const drawing = "---\nexcalidraw-plugin: parsed\n---\n# Excalidraw Data\n%%\n## Drawing\n```json\n{\"type\":\"excalidraw\",\"elements\":[]}\n```\n%%";
+  const zip = zipSync({ "V/Sketch.excalidraw.md": strToU8(drawing) });
+  await page.getByLabel("Choose a zip to import").setInputFiles({ name: "v.zip", mimeType: "application/zip", buffer: Buffer.from(zip) });
+  await expect(item(page, "Sketch")).toBeVisible();
+
+  // Rows: Linking notes, Sketch, Welcome.
+  await item(page, "Linking notes").click({ modifiers: ["ControlOrMeta"] });
+  await item(page, "Welcome").click({ modifiers: ["Shift"] });
+  await page.getByRole("toolbar", { name: "Chosen files" }).getByRole("button", { name: "Rename selected" }).click();
+  const dialog = page.getByRole("dialog", { name: "Rename 3 items" });
+  await dialog.getByRole("radio", { name: "Number" }).click();
+  await dialog.getByLabel("Name", { exact: true }).fill("Page");
+  await dialog.getByRole("button", { name: "Rename 3" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Renamed 3 items." })).toBeVisible();
+  for (const n of ["Page 1", "Page 2", "Page 3"]) await expect(item(page, n)).toBeVisible();
+
+  // The drawing is still a drawing.
+  await item(page, "Page 2").click();
+  await expect(page.getByTestId("drawing")).toBeVisible({ timeout: 30_000 });
+});
