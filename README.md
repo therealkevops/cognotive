@@ -104,6 +104,11 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   backlinks; drawing text is searchable. A picture pasted or dropped into a drawing is also
   saved to `attachments/` (made smaller, like any added image), and the drawing's image is linked
   to it; the drawing keeps its own copy too, so it still opens in Excalidraw or Obsidian
+  - Drawings made with Obsidian's Excalidraw plugin (`.excalidraw.md`) keep their pictures as
+    files, listed under "## Embedded Files": they're loaded from the repository (embeds and
+    previews too), count as links (and follow renames), and a picture pasted in is listed there
+    rather than copied into the drawing. Pictures that aren't in the repository are named, so
+    you can import them
 - Attachments: paste or drop images into a note (saved to `attachments/` and embedded as
   `![[Pasted image ….webp]]`), add files with the upload button or by dropping them on a folder,
   and open images, PDFs, audio and video. `![[pic.png|300]]` sets an image's width

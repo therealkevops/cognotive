@@ -1,4 +1,4 @@
-import { drawingJson, isObsidianDrawing, replaceScene } from "../drawing/obsidian";
+import { drawingJson, embeddedFiles, isObsidianDrawing, replaceScene, retargetEmbeddedFiles } from "../drawing/obsidian";
 import { drawingProperties } from "../drawing/properties";
 import { parseDrawing, rewriteDrawingLinks } from "../drawing/parse";
 import { canvasLinks, canvasRelations, parseCanvas, serializeCanvas } from "../canvas/format";
@@ -96,6 +96,15 @@ export class LinkIndex {
     this.resolver.add(path);
     if (isDrawing(path)) {
       const { links } = parseDrawing(drawingJson(path, content));
+      // An Obsidian drawing's pictures, kept as files and listed under "## Embedded Files", link to them too.
+      if (isObsidianDrawing(path)) {
+        const linked = new Set(links.map((l) => l.target));
+        for (const f of embeddedFiles(content)) {
+          if (f.url || linked.has(f.target)) continue;
+          linked.add(f.target);
+          links.push({ target: f.target, embed: true, kind: "wikilink", from: 0, to: 0, line: 1 });
+        }
+      }
       this.notes.set(path, { content, parsed: { ...fromProperties(drawingProperties(path, content)), links } });
     } else if (isCanvas(path)) {
       const data = parseCanvas(content);
@@ -405,8 +414,15 @@ export class LinkIndex {
         continue;
       }
       if (isDrawing(source)) {
-        const updated = rewriteDrawingLinks(drawingJson(source, e.content), (t) => resolveOld(t, source) === oldPath, newText);
-        if (updated) out.set(source, isObsidianDrawing(source) ? replaceScene(e.content, updated) : updated);
+        const matches = (t: string) => resolveOld(t, source) === oldPath;
+        const updated = rewriteDrawingLinks(drawingJson(source, e.content), matches, newText);
+        if (!isObsidianDrawing(source)) {
+          if (updated) out.set(source, updated);
+          continue;
+        }
+        const scene = updated ? replaceScene(e.content, updated) : e.content;
+        const md = retargetEmbeddedFiles(scene, matches, newText) ?? scene;
+        if (md !== e.content) out.set(source, md);
         continue;
       }
       const edits: Array<{ from: number; to: number; insert: string }> = [];

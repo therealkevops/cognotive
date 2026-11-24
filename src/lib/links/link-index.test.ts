@@ -201,3 +201,23 @@ describe("canvases in the link index", () => {
     expect(updated.nodes[2].text).toBe("Remember [[Roadmap]]");
   });
 });
+
+describe("Obsidian drawings' embedded pictures", () => {
+  const drawing = (target: string) =>
+    `## Embedded Files\nf1: [[${target}]]\n\n%%\n## Drawing\n\`\`\`json\n{"type":"excalidraw","elements":[{"id":"i","type":"image","fileId":"f1"}],"files":{}}\n\`\`\`\n%%`;
+
+  it("count as links to the pictures, and follow their renames", () => {
+    const ix = new LinkIndex();
+    ix.addFile("attachments/Pasted Image 1.png");
+    ix.set("Sketch.excalidraw.md", drawing("Pasted Image 1.png"));
+    expect(ix.backlinks("attachments/Pasted Image 1.png").map((b) => [b.source, b.context])).toEqual([
+      ["Sketch.excalidraw.md", "Linked from the drawing"],
+    ]);
+
+    const before = ix.snapshotResolver();
+    ix.remove("attachments/Pasted Image 1.png");
+    ix.addFile("attachments/Garden.webp");
+    const out = ix.rewriteLinksTo("attachments/Pasted Image 1.png", "attachments/Garden.webp", before);
+    expect(out.get("Sketch.excalidraw.md")).toContain("f1: [[Garden.webp]]");
+  });
+});

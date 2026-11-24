@@ -10,11 +10,12 @@ import {
   serializeAsJSON,
 } from "@excalidraw/excalidraw";
 import type { BinaryFileData, ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from "@excalidraw/excalidraw/types";
-import { FilePlus2, ImagePlus, Link2, SlidersHorizontal } from "lucide-react";
+import { FilePlus2, ImageOff, ImagePlus, Link2, SlidersHorizontal, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isDark } from "@/lib/appearance";
 import { completeWikilink, newNoteName, openWikilink, textLinkUpdates } from "@/lib/drawing/links";
 import { elementLinkTarget } from "@/lib/drawing/parse";
+import type { EmbeddedFile } from "@/lib/drawing/obsidian";
 import { splitLinkText } from "@/lib/links/parse";
 import { isPluginKey } from "@/lib/drawing/properties";
 import type { PropertyInfo } from "@/lib/editor/properties";
@@ -66,7 +67,16 @@ export interface DrawingViewProps {
   /** Changes when a different drawing is opened. */
   docKey: string;
   initial: string;
-  onChange(json: string): void;
+  /**
+   * The scene changed. For an Obsidian drawing, `embedded` lists pictures pasted since it
+   * opened, to add to its "## Embedded Files" section (they're kept as files, not in the scene).
+   */
+  onChange(json: string, embedded?: Array<{ id: string; target: string }>): void;
+  /**
+   * Set for an Obsidian plugin drawing: the pictures its "## Embedded Files" section lists.
+   * They're loaded from the repository when it opens, and not written into the scene.
+   */
+  embedded?: EmbeddedFile[];
   /** Follows a note link set on an element ("[[Note]]"). */
   onOpenLink(target: string, heading?: string): void;
   vault?: DrawingVault;
@@ -99,7 +109,7 @@ function imageSize(dataURL: string, max = 480): Promise<{ width: number; height:
  * selection (or adds a linked label); "Insert image or drawing" places vault
  * pictures, linked back to their file.
  */
-export default function DrawingView({ docKey, initial, onChange, onOpenLink, vault, properties }: DrawingViewProps) {
+export default function DrawingView({ docKey, initial, onChange, onOpenLink, vault, properties, embedded }: DrawingViewProps) {
   const [showProps, setShowProps] = useState(false);
   const dark = useDarkMode();
   const onChangeRef = useRef(onChange);
@@ -111,6 +121,8 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   const [picker, setPicker] = useState<null | "link" | "picture">(null);
   const [notice, setNotice] = useState<{ text: string; key: number } | null>(null);
+  /** Pictures an Obsidian drawing links to that aren't in this repository. */
+  const [missingFor, setMissingFor] = useState<{ scene: unknown; names: string[] } | null>(null);
 
   // Say what a new link points to, and whether that note exists yet.
   const announce = useCallback(
@@ -157,9 +169,44 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
   // file tree and smaller; the drawing keeps (the smaller) copy, so it still opens anywhere, and
   // the image is linked to its file. Those already in the drawing when it opened are left alone.
   const seenFiles = useRef<Set<string>>(new Set());
+  // An Obsidian drawing's pictures kept as files (listed under "## Embedded Files"): shown, but
+  // not written into the scene. `addedEmbeds` are those pasted since it opened, still to be listed.
+  const linkedFiles = useRef<Set<string>>(new Set());
+  const addedEmbeds = useRef<Array<{ id: string; target: string }>>([]);
+  const obsidian = embedded !== undefined;
+  const embeddedRef = useRef(embedded);
   useEffect(() => {
-    seenFiles.current = new Set(Object.keys(initialData?.files ?? {}));
+    embeddedRef.current = embedded;
+  });
+  useEffect(() => {
+    const listed = embeddedRef.current ?? [];
+    seenFiles.current = new Set([...Object.keys(initialData?.files ?? {}), ...listed.map((f) => f.id)]);
+    linkedFiles.current = new Set(listed.map((f) => f.id));
+    addedEmbeds.current = [];
   }, [initialData]);
+
+  // Load an Obsidian drawing's pictures from the repository.
+  useEffect(() => {
+    const listed = embeddedRef.current ?? [];
+    if (!api || !vault || !listed.length) return;
+    let live = true;
+    void (async () => {
+      const gone: string[] = [];
+      const found: BinaryFileData[] = [];
+      for (const f of listed) {
+        const path = f.url ? null : vault.resolve(f.target);
+        const data = path ? await vault.pictureData(path).catch(() => null) : null;
+        if (data) found.push({ id: f.id, dataURL: data.dataURL, mimeType: data.mimeType, created: Date.now() } as unknown as BinaryFileData);
+        else gone.push(f.url ? `${f.target} (a web picture)` : f.target);
+      }
+      if (!live) return;
+      if (found.length) api.addFiles(found);
+      setMissingFor({ scene: initialData, names: gone });
+    })();
+    return () => {
+      live = false;
+    };
+  }, [api, vault, initialData]);
   const keepAsAttachment = useCallback(
     async (fileId: string, file: { dataURL: string; mimeType: string }) => {
       if (!api || !vault?.saveImage) return;
@@ -169,6 +216,18 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
         // "image.png" is named like a pasted image: "Pasted image 20261124….webp".
         const saved = await vault.saveImage(new File([blob], `image.${ext}`, { type: file.mimeType }));
         if (!saved) return;
+        if (obsidian) {
+          // As the plugin does it: the picture is listed under "## Embedded Files", not kept in the scene.
+          linkedFiles.current.add(fileId);
+          addedEmbeds.current = [...addedEmbeds.current, { id: fileId, target: saved.linkText }];
+          api.updateScene({
+            elements: api
+              .getSceneElements()
+              .map((e) => (e.type === "image" && e.fileId === fileId ? newElementWith(e, { link: e.link ?? `[[${saved.linkText}]]` }) : e)),
+            captureUpdate: CaptureUpdateAction.EVENTUALLY,
+          });
+          return;
+        }
         const data = await vault.pictureData(saved.path);
         if (!data) return;
         const newId = `vault-${Array.from(new TextEncoder().encode(saved.path + data.dataURL.length), (b) => b.toString(16))
@@ -190,7 +249,7 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
         // Left as it is: the drawing still has the picture.
       }
     },
-    [api, vault],
+    [api, vault, obsidian],
   );
 
   /** The middle of what's on screen, in scene coordinates. */
@@ -256,6 +315,9 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
     [api, vault, viewCenter],
   );
 
+  // Only for the drawing it was worked out for.
+  const missing = missingFor && missingFor.scene === initialData ? missingFor.names : [];
+
   if (error || !initialData) {
     return <p className="p-8 text-red-600 dark:text-red-400">{error}</p>;
   }
@@ -320,15 +382,19 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
             if (lastFingerprint.current !== null) announce([...links.values()]);
             return; // the update triggers another onChange, which saves
           }
+          // An Obsidian drawing's pictures kept as files aren't written into its scene.
+          const own = linkedFiles.current.size
+            ? Object.fromEntries(Object.entries(files).filter(([id]) => !linkedFiles.current.has(id)))
+            : files;
           // Element versions change on every real edit; selection and scrolling don't.
-          const fingerprint = `${elements.map((e) => `${e.id}:${e.version}`).join(",")}|${Object.keys(files).join(",")}|${appState.viewBackgroundColor}`;
+          const fingerprint = `${elements.map((e) => `${e.id}:${e.version}`).join(",")}|${Object.keys(own).join(",")}|${appState.viewBackgroundColor}`;
           if (lastFingerprint.current === null) {
             lastFingerprint.current = fingerprint; // the initial load isn't an edit
             return;
           }
           if (fingerprint === lastFingerprint.current) return;
           lastFingerprint.current = fingerprint;
-          onChangeRef.current(serializeAsJSON(elements, appState, files, "local"));
+          onChangeRef.current(serializeAsJSON(elements, appState, own, "local"), obsidian ? addedEmbeds.current : undefined);
         }}
         onLinkOpen={(element, event) => {
           const target = elementLinkTarget(element.link);
@@ -338,6 +404,23 @@ export default function DrawingView({ docKey, initial, onChange, onOpenLink, vau
           onOpenLinkRef.current(parts.target, parts.heading ?? (parts.block ? `^${parts.block}` : undefined));
         }}
       />
+      {missing.length > 0 && (
+        <div
+          role="status"
+          aria-label="Missing pictures"
+          className="menu-panel absolute bottom-16 left-1/2 z-10 flex w-[min(30rem,calc(100%-2rem))] -translate-x-1/2 items-start gap-2.5 px-3 py-2.5 text-sm"
+        >
+          <ImageOff size={16} aria-hidden className="mt-0.5 shrink-0 text-muted" />
+          <p className="min-w-0 flex-1">
+            {missing.length === 1 ? "A picture" : `${missing.length} pictures`} in this drawing{" "}
+            {missing.length === 1 ? "isn't" : "aren't"} in this repository: {missing.join(", ")}. Import{" "}
+            {missing.length === 1 ? "it" : "them"} (the Obsidian vault&apos;s attachments, for example), then open the drawing again.
+          </p>
+          <button type="button" className="icon-button h-6 w-6 shrink-0" aria-label="Dismiss" onClick={() => setMissingFor(null)}>
+            <X size={14} aria-hidden />
+          </button>
+        </div>
+      )}
       {notice && (
         <div
           key={notice.key}
