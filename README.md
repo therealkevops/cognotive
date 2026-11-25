@@ -11,7 +11,8 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 ### What works
 - File tree: create, rename (double-click, F2 or the pencil), delete, and drag notes or
   folders into other folders. Choose several with Ctrl/Cmd-click (or *Select* in a row's menu)
-  and Shift-click for a range, then move them together: drag one onto a folder, or *Move to…*
+  and Shift-click for a range, or all the rows shown with Ctrl/Cmd+A in the tree (or *Select
+  all*), then move them together: drag one onto a folder, or *Move to…*
   in the bar above the tree or a chosen row's menu. *Copy to…* copies them (a folder with
   everything in it) into any folder, or duplicates them where they are; a taken name gets
   " copy". Rename them by one rule (find and replace

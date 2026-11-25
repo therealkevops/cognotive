@@ -73,9 +73,9 @@ test("a chosen file's menu moves them all, and Select works without a keyboard",
   await newFolder(page, "Later");
   // Choosing from the menu (as on a touch screen).
   await item(page, "Welcome").getByRole("button", { name: "More actions for Welcome" }).click();
-  await page.getByRole("menuitem", { name: "Select" }).click();
+  await page.getByRole("menuitem", { name: "Select", exact: true }).click();
   await item(page, "Linking notes").getByRole("button", { name: "More actions for Linking notes" }).click();
-  await page.getByRole("menuitem", { name: "Select" }).click();
+  await page.getByRole("menuitem", { name: "Select", exact: true }).click();
   await expect(page.getByRole("toolbar", { name: "Chosen files" })).toContainText("2 selected");
 
   await item(page, "Welcome").click({ button: "right" });
@@ -203,4 +203,33 @@ test("chosen files are copied to a folder, or duplicated where they are", async 
   // A copy has the note's text.
   await item(page, "Welcome copy").click();
   await expect(page.locator(".cm-content")).toContainText("Welcome to Cognotive.ai");
+});
+
+test("select all: Ctrl/Cmd+A in the tree, the bar's button, or a row's menu", async ({ page }) => {
+  await openApp(page);
+  await newFolder(page, "Box");
+  const bar = page.getByRole("toolbar", { name: "Chosen files" });
+
+  // The keyboard, while the tree has it: every row shown (Box, Linking notes, Welcome).
+  await item(page, "Welcome").focus();
+  await page.keyboard.press("ControlOrMeta+a");
+  await expect(bar).toContainText("3 selected");
+  for (const n of ["Box", "Linking notes", "Welcome"]) await expect(item(page, n)).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Escape");
+  await expect(bar).toBeHidden();
+
+  // From a row's menu, then the bar's button after narrowing it down.
+  await item(page, "Box").getByRole("button", { name: "More actions for Box" }).click();
+  await page.getByRole("menuitem", { name: "Select all" }).click();
+  await expect(bar).toContainText("3 selected");
+  await item(page, "Box").click({ modifiers: ["ControlOrMeta"] });
+  await expect(bar).toContainText("2 selected");
+  await bar.getByRole("button", { name: "Select all" }).click();
+  await expect(bar).toContainText("3 selected");
+
+  // Ctrl/Cmd+A in the note still selects its text, not files.
+  await bar.getByRole("button", { name: "Clear selection" }).click();
+  await page.locator(".cm-content").click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await expect(bar).toBeHidden();
 });

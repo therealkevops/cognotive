@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CheckCheck,
   CheckSquare,
   ChevronRight,
   Columns2,
@@ -115,6 +116,7 @@ export function FileTree() {
       anchor.current = path;
     },
     clearChosen: () => setChosen([]),
+    chooseAll: () => setChosen(visiblePaths(tree, expanded)),
     duplicate: (path) => {
       const content = vault.textOf(path);
       if (content === undefined) return;
@@ -153,6 +155,8 @@ export function FileTree() {
     return false;
   };
   const clearChosen = () => setChosen([]);
+  /** Every row the tree shows (a closed folder counts once, and brings what's in it). */
+  const chooseAll = () => setChosen(visiblePaths(tree, expanded));
 
   /** Moves the chosen items into a folder (a folder's contents go with it). */
   const moveMany = async (paths: string[], folder: string) => {
@@ -276,6 +280,15 @@ export function FileTree() {
       {chosen.length > 0 && (
         <div role="toolbar" aria-label="Chosen files" className="mb-1.5 flex items-center gap-1 rounded-lg bg-accent/10 py-1 pr-1 pl-2.5 text-xs">
           <span className="min-w-0 flex-1 truncate font-medium">{chosen.length} selected</span>
+          <button
+            type="button"
+            className="icon-button h-6 w-6"
+            aria-label="Select all"
+            title="Select all (Ctrl/Cmd+A)"
+            onClick={chooseAll}
+          >
+            <CheckCheck size={13} aria-hidden />
+          </button>
           <button type="button" className="button-secondary px-2 py-0.5 text-xs" onClick={() => setMovingMany(true)}>
             <FolderInput size={12} aria-hidden /> Move to…
           </button>
@@ -314,6 +327,11 @@ export function FileTree() {
           if (e.key === "Escape" && chosen.length) {
             e.stopPropagation();
             clearChosen();
+          } else if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "a" && !(e.target as HTMLElement).closest("input")) {
+            // Select all, while the tree (not a name being edited) has the keyboard.
+            e.preventDefault();
+            e.stopPropagation();
+            chooseAll();
           }
         }}
         className={`-mx-2 min-h-24 flex-1 overflow-y-auto rounded px-2 pb-8 ${dropTarget === "" ? "bg-accent/10" : ""}`}
@@ -541,6 +559,7 @@ function Node({
               { label: `Move ${chosen.length} items to…`, icon: FolderInput, onSelect: actions.moveChosen },
               { label: `Copy ${chosen.length} items to…`, icon: Copy, onSelect: actions.copyChosen },
               { label: `Rename ${chosen.length} items…`, icon: Pencil, onSelect: actions.renameChosen },
+              { label: "Select all", icon: CheckCheck, onSelect: actions.chooseAll },
               { label: "Clear selection", icon: X, onSelect: actions.clearChosen },
               "separator" as const,
               { label: `Delete ${chosen.length} items`, icon: Trash2, danger: true, onSelect: actions.deleteChosen },
@@ -560,6 +579,7 @@ function Node({
               { label: "Rename", icon: Pencil, onSelect: () => setRenaming(node.path) },
               { label: "Move to…", icon: FolderInput, onSelect: () => actions.move(node.path) },
               { label: isChosen ? "Selected" : "Select", icon: CheckSquare, onSelect: () => actions.choose(node.path) },
+              { label: "Select all", icon: CheckCheck, onSelect: actions.chooseAll },
               ...(!isFolder && !isBinary(node.path) ? [{ label: "Duplicate", icon: Copy, onSelect: () => actions.duplicate(node.path) }] : []),
               ...(!isFolder ? [{ label: "Copy link", icon: Link2, onSelect: () => actions.copyLink(node.path) }] : []),
               ...(!isFolder && isNote(node.path)
@@ -637,6 +657,7 @@ interface TreeActions {
   copyChosen(): void;
   choose(path: string): void;
   clearChosen(): void;
+  chooseAll(): void;
   duplicate(path: string): void;
   copyLink(path: string): void;
   togglePin(path: string): void;
