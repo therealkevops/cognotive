@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowDownAZ,
   CheckCheck,
   CheckSquare,
   ChevronRight,
@@ -23,8 +24,9 @@ import {
 } from "lucide-react";
 import { useContext, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { readPref, writePref } from "@/lib/prefs";
-import { dirname, isBinary, isCanvas, isDrawing, isImage, isMarkdown, isNote, isWithin } from "@/lib/vault/paths";
+import { basename, dirname, isBinary, isCanvas, isDrawing, isImage, isMarkdown, isNote, isWithin } from "@/lib/vault/paths";
 import { copyPath, moveTargets, moveTargetsFor, planCopy, rangeOf, topmost, visiblePaths } from "@/lib/vault/tree-actions";
+import { applyOrder, placeNames } from "@/lib/vault/file-order";
 import { formatLink } from "@/lib/links/format";
 import { hubProperty } from "@/lib/links/health";
 import { Picker } from "./Picker";
@@ -42,11 +44,14 @@ const DRAG_MANY = "application/x-noted-paths";
 
 export function FileTree() {
   const vault = useVault();
-  const tree = useMemo(() => buildTree(vault.entries), [vault.entries]);
+  // In each folder's custom order (set by dragging), where it has one.
+  const tree = useMemo(() => applyOrder(buildTree(vault.entries), vault.settings.fileOrder), [vault.entries, vault.settings.fileOrder]);
   const prefKey = `vault:${vault.vaultId}:expanded`;
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(readPref<string[]>(prefKey, [])));
   const [renaming, setRenaming] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  /** Where a dragged item would go among the rows: above or below this one. */
+  const [dropLine, setDropLine] = useState<{ path: string; where: "before" | "after" } | null>(null);
 
   const setOpen = (path: string, open: boolean) => {
     setExpanded((prev) => {
@@ -117,6 +122,19 @@ export function FileTree() {
     },
     clearChosen: () => setChosen([]),
     chooseAll: () => setChosen(visiblePaths(tree, expanded)),
+    nudge: (path, by) => {
+      const names = namesIn(dirname(path));
+      const i = names.indexOf(basename(path));
+      const j = i + by;
+      if (i < 0 || j < 0 || j >= names.length) return;
+      const folder = dirname(path);
+      void reorder([path], folder ? `${folder}/${names[j]}` : names[j], by < 0 ? "before" : "after").then(() =>
+        // Moving a row in the page drops its focus: give it back, to keep going.
+        requestAnimationFrame(() => document.querySelector<HTMLElement>(`[role="treeitem"][data-path="${CSS.escape(path)}"]`)?.focus()),
+      );
+    },
+    resetOrder: (folder) => resetOrder(folder),
+    hasOrder: (folder) => !!vault.settings.fileOrder[folder]?.length,
     duplicate: (path) => {
       const content = vault.textOf(path);
       if (content === undefined) return;
@@ -178,11 +196,95 @@ export function FileTree() {
     say(`Copied ${n} ${n === 1 ? "item" : "items"} to ${folder || "the top level"}.`);
   };
 
+  /** A folder's contents' names, in the order shown. */
+  const namesIn = (folder: string): string[] => {
+    const find = (n: TreeNode): TreeNode | undefined => (n.path === folder ? n : n.children.map(find).find(Boolean));
+    return (find(tree)?.children ?? []).map((c) => basename(c.path));
+  };
+
+  /** Puts the items before or after a row (moving them into its folder first, if they're elsewhere). */
+  const reorder = async (paths: string[], anchor: string, where: "before" | "after") => {
+    const folder = dirname(anchor);
+    // A folder can't go inside itself.
+    const moving = topmost(paths).filter((p) => p !== anchor && !isWithin(folder, p));
+    if (!moving.length) return;
+    const names = namesIn(folder);
+    for (const p of moving) if (dirname(p) !== folder) await vault.move(p, folder);
+    const next = placeNames(names, moving.map(basename), basename(anchor), where);
+    await vault.updateSettings({ fileOrder: { ...vault.settings.fileOrder, [folder]: next } });
+    setChosen([]);
+  };
+
+  /** Back to the usual order (folders first, by name) in a folder. */
+  const resetOrder = (folder: string) => {
+    const rest = { ...vault.settings.fileOrder };
+    delete rest[folder];
+    void vault.updateSettings({ fileOrder: rest });
+  };
+
+  const draggedPaths = (e: DragEvent): string[] => {
+    const many = e.dataTransfer.getData(DRAG_MANY);
+    if (many) return JSON.parse(many) as string[];
+    const one = e.dataTransfer.getData(DRAG_TYPE);
+    return one ? [one] : [];
+  };
+
+  /**
+   * Dropping on a row: on its top or bottom quarter (half, for a file), the items go above
+   * or below it; on the middle of a folder, into it. Files from the computer go into the
+   * row's folder (or the folder itself).
+   */
+  const rowDropProps = (path: string, isFolder: boolean) => {
+    const whereAt = (e: DragEvent): "before" | "after" | "into" => {
+      const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const y = (e.clientY - r.top) / Math.max(1, r.height);
+      if (isFolder) return y < 0.25 ? "before" : y > 0.75 ? "after" : "into";
+      return y < 0.5 ? "before" : "after";
+    };
+    return {
+      onDragOver: (e: DragEvent) => {
+        if (!e.dataTransfer.types.includes(DRAG_TYPE) && !e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const where = e.dataTransfer.types.includes("Files") && !e.dataTransfer.types.includes(DRAG_TYPE) ? "into" : whereAt(e);
+        if (where === "into") {
+          setDropLine(null);
+          setDropTarget(isFolder ? path : dirname(path));
+        } else {
+          setDropTarget(null);
+          setDropLine({ path, where });
+        }
+      },
+      onDragLeave: () => {
+        setDropLine((l) => (l?.path === path ? null : l));
+        setDropTarget((t) => (t === path ? null : t));
+      },
+      onDrop: (e: DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDropTarget(null);
+        setDropLine(null);
+        if (e.dataTransfer.files.length) {
+          void addFiles([...e.dataTransfer.files], isFolder ? path : dirname(path));
+          return;
+        }
+        const where = whereAt(e);
+        const paths = draggedPaths(e);
+        if (!paths.length) return;
+        if (where === "into") {
+          if (isFolder) setOpen(path, true);
+          void moveMany(paths, path);
+        } else void reorder(paths, path, where);
+      },
+    };
+  };
+
   const dropProps = (folder: string) => ({
     onDragOver: (e: DragEvent) => {
       if (!e.dataTransfer.types.includes(DRAG_TYPE) && !e.dataTransfer.types.includes("Files")) return;
       e.preventDefault();
       e.stopPropagation();
+      setDropLine(null);
       setDropTarget(folder);
     },
     onDragLeave: () => setDropTarget((t) => (t === folder ? null : t)),
@@ -190,6 +292,7 @@ export function FileTree() {
       e.preventDefault();
       e.stopPropagation();
       setDropTarget(null);
+      setDropLine(null);
       // Files dragged in from the computer become attachments in that folder.
       if (e.dataTransfer.files.length) {
         void addFiles([...e.dataTransfer.files], folder);
@@ -348,7 +451,8 @@ export function FileTree() {
             renaming={renaming}
             setRenaming={setRenaming}
             dropTarget={dropTarget}
-            dropProps={dropProps}
+            dropLine={dropLine}
+            rowDropProps={rowDropProps}
             actions={actions}
             chosen={chosen}
             choose={choose}
@@ -425,7 +529,8 @@ function Node({
   renaming,
   setRenaming,
   dropTarget,
-  dropProps,
+  dropLine,
+  rowDropProps,
   actions,
   chosen,
   choose,
@@ -437,7 +542,8 @@ function Node({
   renaming: string | null;
   setRenaming(path: string | null): void;
   dropTarget: string | null;
-  dropProps: (folder: string) => Record<string, unknown>;
+  dropLine: { path: string; where: "before" | "after" } | null;
+  rowDropProps: (path: string, isFolder: boolean) => Record<string, unknown>;
   actions: TreeActions;
   chosen: string[];
   choose(path: string, how: { toggle: boolean; range: boolean }): boolean;
@@ -473,6 +579,10 @@ function Node({
     } else if (e.key === "F2") {
       e.preventDefault();
       setRenaming(node.path);
+    } else if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      // Alt+Up/Down moves it up or down among its folder's contents.
+      e.preventDefault();
+      actions.nudge(node.path, e.key === "ArrowUp" ? -1 : 1);
     } else if (e.key === "ArrowRight" && isFolder && !open) setOpen(node.path, true);
     else if (e.key === "ArrowLeft" && isFolder && open) setOpen(node.path, false);
   };
@@ -513,14 +623,16 @@ function Node({
           if (!isChosen && chosen.length) choose(node.path, { toggle: false, range: false });
           menu.current?.openAt(e.clientX, e.clientY);
         }}
-        {...(isFolder ? dropProps(node.path) : {})}
+        {...rowDropProps(node.path, isFolder)}
         className={`group flex cursor-pointer items-center gap-1.5 rounded-lg py-[0.3125rem] pr-1 text-sm select-none ${
           isChosen
             ? "bg-accent/15 text-foreground"
             : isActive
               ? "bg-foreground/[0.08] font-medium text-foreground"
               : "text-foreground/80 hover:bg-foreground/[0.05] hover:text-foreground"
-        } ${dropTarget === node.path ? "ring-1 ring-accent" : ""} ${canOpen || isFolder ? "" : "opacity-60"}`}
+        } ${dropTarget === node.path ? "ring-1 ring-accent" : ""} ${
+          dropLine?.path === node.path ? (dropLine.where === "before" ? "shadow-[inset_0_2px_0_0_var(--accent)]" : "shadow-[inset_0_-2px_0_0_var(--accent)]") : ""
+        } ${canOpen || isFolder ? "" : "opacity-60"}`}
         style={{ paddingLeft: `${depth * 0.9 + 0.25}rem` }}
         data-path={node.path}
       >
@@ -589,6 +701,12 @@ function Node({
                       : { label: "Pin to sidebar", icon: Pin, onSelect: () => actions.togglePin(node.path) },
                   ]
                 : []),
+              ...(actions.hasOrder(dirname(node.path))
+                ? [{ label: dirname(node.path) ? "Sort this folder A–Z" : "Sort the top level A–Z", icon: ArrowDownAZ, onSelect: () => actions.resetOrder(dirname(node.path)) }]
+                : []),
+              ...(isFolder && actions.hasOrder(node.path)
+                ? [{ label: "Sort its contents A–Z", icon: ArrowDownAZ, onSelect: () => actions.resetOrder(node.path) }]
+                : []),
               "separator" as const,
               { label: "Delete", icon: Trash2, danger: true, onSelect: remove },
             ]}
@@ -607,7 +725,8 @@ function Node({
               renaming={renaming}
               setRenaming={setRenaming}
               dropTarget={dropTarget}
-              dropProps={dropProps}
+              dropLine={dropLine}
+              rowDropProps={rowDropProps}
               actions={actions}
               chosen={chosen}
               choose={choose}
@@ -658,6 +777,10 @@ interface TreeActions {
   choose(path: string): void;
   clearChosen(): void;
   chooseAll(): void;
+  /** Custom order: move a row up (-1) or down (1), go back to A–Z, and whether a folder has one. */
+  nudge(path: string, by: -1 | 1): void;
+  resetOrder(folder: string): void;
+  hasOrder(folder: string): boolean;
   duplicate(path: string): void;
   copyLink(path: string): void;
   togglePin(path: string): void;

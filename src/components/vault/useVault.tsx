@@ -59,6 +59,7 @@ import {
 } from "@/lib/vault/file-properties";
 import { WELCOME_NOTES } from "@/lib/vault/welcome";
 import { decideSave } from "@/lib/vault/save-merge";
+import { orderAfterMove } from "@/lib/vault/file-order";
 import { shrinkImage } from "@/lib/attachments/shrink";
 import { formatBytes, storageLimit, storageStatus, withinLimit } from "@/lib/storage-safety";
 
@@ -628,6 +629,14 @@ export function VaultProvider({
       const moved = await afterMove(from, to);
       const props = movedFileProperties(filePropsRef.current, moved);
       if (props) await saveFileProps(props);
+      // Its place in the file tree's custom order goes with it.
+      const order = orderAfterMove(settingsRef.current.fileOrder, from, to);
+      if (order) {
+        const next = { ...settingsRef.current, fileOrder: order };
+        settingsRef.current = next;
+        setSettings(next);
+        await store.write(SETTINGS_PATH, serializeSettings(next));
+      }
 
       // Update links in other notes so they follow the renamed files.
       const rewritten = new Set<string>();

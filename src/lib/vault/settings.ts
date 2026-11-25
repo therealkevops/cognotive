@@ -34,6 +34,8 @@ export interface VaultSettings {
   /** Where quick captures go: today's daily note, or one inbox note. */
   captureTo: "daily" | "inbox";
   captureInbox: string;
+  /** The file tree's custom order, set by dragging: for each folder, its contents' names in order. */
+  fileOrder: Record<string, string[]>;
 }
 
 export const SETTINGS_PATH = ".noted/settings.json";
@@ -55,6 +57,7 @@ export const DEFAULT_SETTINGS: VaultSettings = {
   aiFolder: "AI",
   captureTo: "daily",
   captureInbox: "Inbox.md",
+  fileOrder: {},
 };
 
 export function parseSettings(text: string | undefined): VaultSettings {
@@ -79,6 +82,13 @@ export function parseSettings(text: string | undefined): VaultSettings {
       }
     }
     out.propertyTypes = types;
+    const order: VaultSettings["fileOrder"] = {};
+    if (raw.fileOrder && typeof raw.fileOrder === "object" && !Array.isArray(raw.fileOrder)) {
+      for (const [folder, names] of Object.entries(raw.fileOrder as Record<string, unknown>)) {
+        if (Array.isArray(names)) order[folder] = names.filter((n): n is string => typeof n === "string");
+      }
+    }
+    out.fileOrder = order;
     out.newNoteProperties = Array.isArray(raw.newNoteProperties)
       ? [...new Set(raw.newNoteProperties.filter((p): p is string => typeof p === "string" && /^[A-Za-z][\w-]*$/.test(p)))]
       : [];
