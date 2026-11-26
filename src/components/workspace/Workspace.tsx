@@ -53,6 +53,7 @@ import { QuickSwitcher } from "./QuickSwitcher";
 import { SearchPanel } from "./SearchPanel";
 import { CaptureDialog } from "./CaptureDialog";
 import { BackupBanner } from "./BackupBanner";
+import { NOTICE_EVENT } from "../settings/MergeVault";
 import { StorageBanner } from "./StorageBanner";
 import { fromShare, type Captured } from "@/lib/capture/capture";
 import { takeShared } from "@/lib/capture/shared";
@@ -160,7 +161,17 @@ export function Workspace() {
   const [asking, setAsking] = useState<AskSource | null>(null);
   /** Notes opened in this session, most recent first, for ranking link suggestions. */
   const [recent, setRecent] = useState<string[]>([]);
-  const [importNote, setImportNote] = useState<string | null>(null);
+  // A note left by an action that opened another repository (a merge, say), shown once.
+  const [importNote, setImportNote] = useState<string | null>(() => {
+    const left = readPref<string | null>("importNotice", null);
+    if (left) writePref("importNotice", null);
+    return left;
+  });
+  useEffect(() => {
+    const show = (e: Event) => setImportNote((e as CustomEvent<string>).detail);
+    window.addEventListener(NOTICE_EVENT, show);
+    return () => window.removeEventListener(NOTICE_EVENT, show);
+  }, []);
   const zipInput = useRef<HTMLInputElement>(null);
   const chooseZip = useCallback(() => zipInput.current?.click(), []);
   const tabsKey = `vault:${vault.vaultId}:tabs`;

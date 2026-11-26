@@ -10,6 +10,7 @@ import { TokenInstructions } from "../sync/TokenFields";
 import { SectionHeader } from "./parts";
 import { useVaults } from "../vault/useVaults";
 import { ConnectRepoForm } from "./ConnectRepoForm";
+import { MergeVault } from "./MergeVault";
 import { Field, StarterTemplatesOption, SyncFields } from "./repo-fields";
 
 /* Repositories, sync and storage. */
@@ -30,6 +31,7 @@ export function VaultsSection() {
 export function VaultList() {
   const { vaults, active, switchTo, remove, update } = useVaults();
   const [editing, setEditing] = useState<string | null>(null);
+  const [merging, setMerging] = useState<string | null>(null);
   return (
     <section aria-label="Repositories">
       <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
@@ -53,15 +55,33 @@ export function VaultList() {
                   Open
                 </button>
               )}
+              {vaults.length > 1 && (
+                <button
+                  type="button"
+                  className="button-secondary"
+                  aria-expanded={merging === v.id}
+                  aria-label={`Merge ${v.name} into another repository`}
+                  onClick={() => {
+                    setEditing(null);
+                    setMerging(merging === v.id ? null : v.id);
+                  }}
+                >
+                  Merge into…
+                </button>
+              )}
               <button
                 type="button"
                 className="button-secondary"
                 aria-expanded={editing === v.id}
-                onClick={() => setEditing(editing === v.id ? null : v.id)}
+                onClick={() => {
+                  setMerging(null);
+                  setEditing(editing === v.id ? null : v.id);
+                }}
               >
                 Edit
               </button>
             </div>
+            {merging === v.id && <MergeVault source={v} onDone={() => setMerging(null)} />}
             {editing === v.id && (
               <EditVault
                 vault={v}

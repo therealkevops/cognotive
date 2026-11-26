@@ -234,6 +234,11 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 - Installable as an app (desktop or phone) that opens offline, with shortcuts on its icon;
   notes are kept in the browser. After a new version is deployed, a page opened before it reloads
   itself the first time it needs a part of the app it hasn't loaded yet (the canvas or drawing editor)
+- Merge one repository into another (Settings → Repositories & sync → *Merge into…*), say notes
+  kept in this browser into a repository synced with GitHub: its files are copied in, under a
+  folder named after it or at the top level. Nothing is overwritten (the same files are skipped,
+  a taken name gets a number), its settings stay behind, the new files go up with the next sync,
+  and it can then be removed from this browser
 - Several repositories, with a switcher at the top of the sidebar; both sidebars collapse to
   icon rails, and can be resized by dragging their inner edge (or focus it and use the arrow
   keys; a double-click puts the default width back). Widths are kept on this device
