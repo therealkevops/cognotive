@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildTree } from "./tree";
-import { copyPath, moveTargets, moveTargetsFor, planCopy, rangeOf, topmost, visiblePaths } from "./tree-actions";
+import { copyPath, moveTargets, moveTargetsFor, planCopy, planDuplicate, rangeOf, topmost, visiblePaths } from "./tree-actions";
 
 describe("copyPath", () => {
   it("names a copy after the original, numbering further copies", () => {
@@ -99,6 +99,33 @@ describe("planCopy", () => {
     expect(planCopy([{ path: "Notes/Plan.md", isFolder: false }, { path: "Archive/Plan.md", isFolder: false }], "", entries).map((p) => p.to)).toEqual([
       "Plan.md",
       "Plan copy.md",
+    ]);
+  });
+});
+
+describe("planDuplicate", () => {
+  const entries = [
+    { path: "Notes/Plan.md", kind: "file" as const },
+    { path: "Notes/Plan copy.md", kind: "file" as const },
+    { path: "Archive/Plan.md", kind: "file" as const },
+    { path: "Box/a.png", kind: "file" as const },
+  ];
+  it("duplicates each in its own folder, with the next free name", () => {
+    expect(
+      planDuplicate(
+        [
+          { path: "Notes/Plan.md", isFolder: false },
+          { path: "Archive/Plan.md", isFolder: false },
+          { path: "Box", isFolder: true },
+          { path: "Box/a.png", isFolder: false },
+        ],
+        entries,
+      ),
+    ).toEqual([
+      { from: "Notes/Plan.md", to: "Notes/Plan copy 2.md", kind: "file" },
+      { from: "Archive/Plan.md", to: "Archive/Plan copy.md", kind: "file" },
+      { from: "Box", to: "Box copy", kind: "folder" },
+      { from: "Box/a.png", to: "Box copy/a.png", kind: "file" },
     ]);
   });
 });

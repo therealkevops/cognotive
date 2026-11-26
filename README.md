@@ -16,7 +16,8 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
   goes back to the usual order. Choose several with Ctrl/Cmd-click (or *Select* in a row's menu)
   and Shift-click for a range, or all the rows shown with Ctrl/Cmd+A in the tree (or *Select
   all*), then move them together: drag one onto a folder, or *Move to…*
-  in the bar above the tree or a chosen row's menu. *Copy to…* copies them (a folder with
+  in the bar above the tree or a chosen row's menu. *Duplicate* makes a copy of each where it
+  is ("Name copy"); *Copy to…* copies them (a folder with
   everything in it) into any folder, or duplicates them where they are; a taken name gets
   " copy". Rename them by one rule (find and replace
   in their names, text added before or after, or numbered in the order shown), with every new

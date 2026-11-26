@@ -233,3 +233,25 @@ test("select all: Ctrl/Cmd+A in the tree, the bar's button, or a row's menu", as
   await page.keyboard.press("ControlOrMeta+a");
   await expect(bar).toBeHidden();
 });
+
+test("chosen files are duplicated where they are", async ({ page }) => {
+  await openApp(page);
+  const bar = page.getByRole("toolbar", { name: "Chosen files" });
+  await item(page, "Welcome").click({ modifiers: ["ControlOrMeta"] });
+  await item(page, "Linking notes").click({ modifiers: ["ControlOrMeta"] });
+  await bar.getByRole("button", { name: "Duplicate selected" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Duplicated 2 items." })).toBeVisible();
+  await expect(item(page, "Welcome copy")).toBeVisible();
+  await expect(item(page, "Linking notes copy")).toBeVisible();
+  await expect(bar).toBeHidden();
+
+  // Again, from a chosen row's menu: the next free names.
+  await item(page, "Welcome").click({ modifiers: ["ControlOrMeta"] });
+  await item(page, "Linking notes").click({ modifiers: ["ControlOrMeta"] });
+  await item(page, "Welcome").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Duplicate 2 items" }).click();
+  await expect(item(page, "Welcome copy 2")).toBeVisible();
+  await expect(item(page, "Linking notes copy 2")).toBeVisible();
+  await item(page, "Welcome copy 2").click();
+  await expect(page.locator(".cm-content")).toContainText("Welcome to Cognotive.ai");
+});

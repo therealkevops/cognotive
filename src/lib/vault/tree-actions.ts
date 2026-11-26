@@ -114,3 +114,24 @@ export function planCopy(
   }
   return out;
 }
+
+/**
+ * Duplicates of the chosen items, each in its own folder ("Name copy", then "Name copy 2"),
+ * as Duplicate does for one; a folder's duplicate has everything in it.
+ */
+export function planDuplicate(
+  items: Array<{ path: string; isFolder: boolean }>,
+  entries: Array<{ path: string; kind: "file" | "folder" }>,
+): Array<{ from: string; to: string; kind: "file" | "folder" }> {
+  const keep = new Set(topmost(items.map((i) => i.path)));
+  const known = [...entries];
+  const out: Array<{ from: string; to: string; kind: "file" | "folder" }> = [];
+  for (const item of items) {
+    if (!keep.has(item.path)) continue;
+    // Planned copies count as taken, so two of the same name in one folder get different ones.
+    const plan = planCopy([item], dirname(item.path), known);
+    for (const p of plan) known.push({ path: p.to, kind: p.kind });
+    out.push(...plan);
+  }
+  return out;
+}

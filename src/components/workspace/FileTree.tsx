@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Columns2,
   Copy,
+  CopyPlus,
   File,
   FilePlus,
   FolderInput,
@@ -25,7 +26,7 @@ import {
 import { useContext, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { readPref, writePref } from "@/lib/prefs";
 import { basename, dirname, isBinary, isCanvas, isDrawing, isImage, isMarkdown, isNote, isWithin } from "@/lib/vault/paths";
-import { copyPath, moveTargets, moveTargetsFor, planCopy, rangeOf, topmost, visiblePaths } from "@/lib/vault/tree-actions";
+import { copyPath, moveTargets, moveTargetsFor, planCopy, planDuplicate, rangeOf, topmost, visiblePaths } from "@/lib/vault/tree-actions";
 import { applyOrder, placeNames } from "@/lib/vault/file-order";
 import { formatLink } from "@/lib/links/format";
 import { hubProperty } from "@/lib/links/health";
@@ -116,6 +117,7 @@ export function FileTree() {
     deleteChosen: () => setDeletingMany(true),
     renameChosen: () => setRenamingMany(true),
     copyChosen: () => setCopyingMany(true),
+    duplicateChosen: () => void duplicateMany(chosen),
     choose: (path) => {
       setChosen((prev) => (prev.includes(path) ? prev : [...prev, path]));
       anchor.current = path;
@@ -279,6 +281,15 @@ export function FileTree() {
     };
   };
 
+  /** Duplicates the chosen items, each in its own folder ("Name copy"). */
+  const duplicateMany = async (paths: string[]) => {
+    const items = paths.map((p) => ({ path: p, isFolder: !vault.entries.some((e) => e.path === p && e.kind === "file") }));
+    await vault.copyFiles(planDuplicate(items, vault.entries));
+    setChosen([]);
+    const n = topmost(paths).length;
+    say(`Duplicated ${n} ${n === 1 ? "item" : "items"}.`);
+  };
+
   const dropProps = (folder: string) => ({
     onDragOver: (e: DragEvent) => {
       if (!e.dataTransfer.types.includes(DRAG_TYPE) && !e.dataTransfer.types.includes("Files")) return;
@@ -394,6 +405,9 @@ export function FileTree() {
           </button>
           <button type="button" className="button-secondary px-2 py-0.5 text-xs" onClick={() => setMovingMany(true)}>
             <FolderInput size={12} aria-hidden /> Move to…
+          </button>
+          <button type="button" className="icon-button h-6 w-6" aria-label="Duplicate selected" title="Duplicate" onClick={() => void duplicateMany(chosen)}>
+            <CopyPlus size={13} aria-hidden />
           </button>
           <button type="button" className="icon-button h-6 w-6" aria-label="Copy selected" title="Copy to…" onClick={() => setCopyingMany(true)}>
             <Copy size={13} aria-hidden />
@@ -669,6 +683,7 @@ function Node({
             className={`ml-auto ${isActive ? "[@media(hover:none)]:opacity-100" : ""}`}
             items={many ? [
               { label: `Move ${chosen.length} items to…`, icon: FolderInput, onSelect: actions.moveChosen },
+              { label: `Duplicate ${chosen.length} items`, icon: CopyPlus, onSelect: actions.duplicateChosen },
               { label: `Copy ${chosen.length} items to…`, icon: Copy, onSelect: actions.copyChosen },
               { label: `Rename ${chosen.length} items…`, icon: Pencil, onSelect: actions.renameChosen },
               { label: "Select all", icon: CheckCheck, onSelect: actions.chooseAll },
@@ -774,6 +789,7 @@ interface TreeActions {
   deleteChosen(): void;
   renameChosen(): void;
   copyChosen(): void;
+  duplicateChosen(): void;
   choose(path: string): void;
   clearChosen(): void;
   chooseAll(): void;
