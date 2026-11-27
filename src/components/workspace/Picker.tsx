@@ -27,6 +27,7 @@ export function Picker({
   onPick,
   onClose,
   empty = "Nothing matches.",
+  footer,
 }: {
   title: string;
   placeholder: string;
@@ -34,6 +35,8 @@ export function Picker({
   onPick(item: PickerItem): void;
   onClose(): void;
   empty?: string;
+  /** Options shown under the list (a checkbox, say). */
+  footer?: React.ReactNode;
 }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
@@ -108,6 +111,7 @@ export function Picker({
             </li>
           ))}
         </ul>
+        {footer && <div className="border-t border-border px-5 py-3 text-sm">{footer}</div>}
       </div>
     </div>
   );

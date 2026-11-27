@@ -26,7 +26,7 @@ import {
 import { useContext, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { readPref, writePref } from "@/lib/prefs";
 import { basename, dirname, isBinary, isCanvas, isDrawing, isImage, isMarkdown, isNote, isWithin } from "@/lib/vault/paths";
-import { copyPath, moveTargets, moveTargetsFor, planCopy, planDuplicate, rangeOf, topmost, visiblePaths } from "@/lib/vault/tree-actions";
+import { copyPath, moveTargets, moveTargetsFor, ownAttachments, planCopy, planDuplicate, rangeOf, topmost, visiblePaths } from "@/lib/vault/tree-actions";
 import { applyOrder, placeNames } from "@/lib/vault/file-order";
 import { formatLink } from "@/lib/links/format";
 import { hubProperty } from "@/lib/links/health";
@@ -84,6 +84,12 @@ export function FileTree() {
   // Where the file picker's files go: the folder whose menu asked, or the default.
   const uploadTo = useRef("");
   const [moving, setMoving] = useState<string | null>(null);
+  // Moving a note brings the attachments only it uses, unless this is unticked.
+  const [bringAttachments, setBringAttachments] = useState(true);
+  const movingOwn = useMemo(
+    () => (moving ? ownAttachments(moving, vault.links.outgoing(moving), (p) => vault.links.backlinks(p), isBinary) : []),
+    [moving, vault.links],
+  );
   // Several items chosen at once (Ctrl/Cmd-click, Shift-click), to move together.
   const [chosenRaw, setChosen] = useState<string[]>([]);
   const anchor = useRef<string | null>(null);
@@ -485,9 +491,30 @@ export function FileTree() {
           items={moveTargets(tree, moving)}
           onPick={(item) => {
             if (item.id) setOpen(item.id, true);
-            void vault.move(moving, item.id);
+            const along = bringAttachments ? movingOwn.filter((a) => dirname(a) !== item.id) : [];
+            void (async () => {
+              await vault.move(moving, item.id);
+              for (const a of along) await vault.move(a, item.id);
+              if (along.length) say(`Moved with ${along.length} ${along.length === 1 ? "attachment" : "attachments"}.`);
+            })();
           }}
-          onClose={() => setMoving(null)}
+          onClose={() => {
+            setMoving(null);
+            setBringAttachments(true);
+          }}
+          footer={
+            movingOwn.length > 0 && (
+              <label className="flex items-start gap-2">
+                <input type="checkbox" className="mt-0.5" checked={bringAttachments} onChange={(e) => setBringAttachments(e.target.checked)} />
+                <span className="min-w-0">
+                  Bring its {movingOwn.length === 1 ? "attachment" : `${movingOwn.length} attachments`} along
+                  <span className="block truncate text-xs text-muted" title={movingOwn.map(basename).join(", ")}>
+                    {movingOwn.map(basename).join(", ")}: only this note uses {movingOwn.length === 1 ? "it" : "them"}
+                  </span>
+                </span>
+              </label>
+            )
+          }
         />
       )}
       {renamingMany && chosen.length > 1 && (

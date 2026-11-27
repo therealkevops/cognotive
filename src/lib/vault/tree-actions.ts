@@ -135,3 +135,17 @@ export function planDuplicate(
   }
   return out;
 }
+
+/**
+ * The attachments only this note uses: those it links to or embeds that no other note, drawing
+ * or canvas links to. Moving the note can bring them along.
+ */
+export function ownAttachments(
+  path: string,
+  outgoing: Array<{ resolved: string | null }>,
+  backlinks: (path: string) => Array<{ source: string }>,
+  isAttachment: (path: string) => boolean,
+): string[] {
+  const targets = [...new Set(outgoing.flatMap((o) => (o.resolved && o.resolved !== path && isAttachment(o.resolved) ? [o.resolved] : [])))];
+  return targets.filter((t) => backlinks(t).every((b) => b.source === path)).sort();
+}

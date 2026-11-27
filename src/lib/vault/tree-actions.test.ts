@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildTree } from "./tree";
-import { copyPath, moveTargets, moveTargetsFor, planCopy, planDuplicate, rangeOf, topmost, visiblePaths } from "./tree-actions";
+import { copyPath, moveTargets, moveTargetsFor, ownAttachments, planCopy, planDuplicate, rangeOf, topmost, visiblePaths } from "./tree-actions";
 
 describe("copyPath", () => {
   it("names a copy after the original, numbering further copies", () => {
@@ -127,5 +127,29 @@ describe("planDuplicate", () => {
       { from: "Box", to: "Box copy", kind: "folder" },
       { from: "Box/a.png", to: "Box copy/a.png", kind: "file" },
     ]);
+  });
+});
+
+describe("ownAttachments", () => {
+  it("lists the attachments only this note uses", () => {
+    const back: Record<string, string[]> = {
+      "attachments/a.png": ["Plan.md"],
+      "attachments/b.pdf": ["Plan.md", "Plan.md"],
+      "attachments/shared.png": ["Plan.md", "Other.md"],
+    };
+    const out = ownAttachments(
+      "Plan.md",
+      [
+        { resolved: "attachments/b.pdf" },
+        { resolved: "attachments/a.png" },
+        { resolved: "attachments/a.png" },
+        { resolved: "attachments/shared.png" },
+        { resolved: "Ideas.md" },
+        { resolved: null },
+      ],
+      (p) => (back[p] ?? []).map((source) => ({ source })),
+      (p) => !p.endsWith(".md"),
+    );
+    expect(out).toEqual(["attachments/a.png", "attachments/b.pdf"]);
   });
 });

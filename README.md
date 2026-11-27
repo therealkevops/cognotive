@@ -10,7 +10,8 @@ See [docs/PLAN.md](docs/PLAN.md) for the design and the phase plan.
 
 ### What works
 - File tree: create, rename (double-click, F2 or the pencil), delete, and drag notes or
-  folders into other folders. Drag a row onto another's top or bottom edge to put it above
+  folders into other folders. *Move to…* on a note brings the attachments only it uses along
+  (a checkbox in the picker, with their names, leaves them where they are). Drag a row onto another's top or bottom edge to put it above
   or below (Alt+Up/Down with the keyboard): each folder's custom order is kept in
   `.noted/settings.json`, so it syncs, and new files come after it; *Sort A–Z* in a row's menu
   goes back to the usual order. Choose several with Ctrl/Cmd-click (or *Select* in a row's menu)
