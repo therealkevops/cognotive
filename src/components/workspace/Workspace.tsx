@@ -9,7 +9,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell, RailButton } from "@/components/AppShell";
 import { isDark } from "@/lib/appearance";
 import type { OpenHow } from "@/lib/links/open";
-import { EMPTY_HISTORY, goBack, goForward, renameInHistory, visit, type NavHistory } from "@/lib/nav/history";
 import { onNotice, takeLeftNotice } from "@/lib/notice";
 import { readPref, writePref } from "@/lib/prefs";
 import { editTableSource } from "@/lib/editor/table-keys";
@@ -55,6 +54,7 @@ import { SearchPanel } from "./SearchPanel";
 import { CaptureDialog } from "./CaptureDialog";
 import { BackupBanner } from "./BackupBanner";
 import { StorageBanner } from "./StorageBanner";
+import { useNavigation } from "./useNavigation";
 import { fromShare, type Captured } from "@/lib/capture/capture";
 import { takeShared } from "@/lib/capture/shared";
 import { TasksPanel } from "./TasksPanel";
@@ -95,15 +95,35 @@ const MODES: Array<{ id: Mode; label: string; icon: typeof Pencil }> = [
   { id: "reading", label: "Reading", icon: BookOpen },
 ];
 
+/** The dialog open over the workspace (one at a time). */
+type Dialog =
+  | { kind: "switcher" }
+  | { kind: "palette" }
+  | { kind: "settings"; section: SettingsSection }
+  | { kind: "health" }
+  | { kind: "history" }
+  | { kind: "linkPicker" }
+  /** Choosing a template (from the command palette), then using it. */
+  | { kind: "templatePicker"; mode: "new" | "insert" }
+  | { kind: "useTemplate"; path: string; mode: "new" | "insert" }
+  /** Files whose properties are open as a table. */
+  | { kind: "propertyTable"; paths: string[] }
+  /** A sync conflict open for review. */
+  | { kind: "review"; record: ConflictRecord }
+  | { kind: "delete"; path: string }
+  | { kind: "ask"; source: AskSource }
+  | { kind: "capture"; initial?: { captured: Captured; files: File[] } };
+
 export function Workspace() {
   const vault = useVault();
   const [mode, setModeState] = useState<Mode>(() => readPref<Mode>("mode", "live"));
   const [lastEditMode, setLastEditMode] = useState<Exclude<Mode, "reading">>(() => readPref("editMode", "live"));
   const [tab, setTab] = useState<SidebarTab>("files");
-  const [switcherOpen, setSwitcherOpen] = useState(false);
-  /** Which settings section is open, or false. */
-  const [settingsOpen, setSettingsOpen] = useState<false | SettingsSection>(false);
-  const [healthOpen, setHealthOpen] = useState(false);
+  // At most one dialog is open; opening another replaces it.
+  const [dialog, setDialog] = useState<Dialog | null>(null);
+  /** Closes the `kind` dialog if it's still the one open (not one it just opened instead). */
+  const closeDialog = useCallback((kind: Dialog["kind"]) => setDialog((d) => (d?.kind === kind ? null : d)), []);
+  const dialogOf = <K extends Dialog["kind"]>(kind: K) => (dialog?.kind === kind ? (dialog as Extract<Dialog, { kind: K }>) : null);
   const [panelTab, setPanelTabState] = useState<PanelTab>(() =>
     (["outline", "chat"] as const).find((t) => t === readPref<string>("panelTab", "links")) ?? "links",
   );
@@ -136,29 +156,19 @@ export function Workspace() {
   });
   const [view, setView] = useState<EditorView | null>(null);
   const readingRef = useRef<HTMLDivElement>(null);
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  // Choosing a template (from the command palette), then using it.
-  const [templatePicker, setTemplatePicker] = useState<"new" | "insert" | null>(null);
-  const [usingTemplate, setUsingTemplate] = useState<{ path: string; mode: "new" | "insert" } | null>(null);
-  // Where to put the cursor once a note created from a template opens.
   /**
    * Where to put the cursor once a new note opens, counted from the end of the
    * note (new-note properties may be added at the top when it's created).
    */
   const pendingCursor = useRef<{ path: string; fromEnd: number } | null>(null);
   const [sidePath, setSidePath] = useState<string | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  /** A note about to be created from a link, waiting for the user to confirm its name and folder. */
-  /** Files whose properties are open as a table. */
-  const [propertyTable, setPropertyTable] = useState<string[] | null>(null);
-  /** A sync conflict open for review. */
-  const [reviewing, setReviewing] = useState<ConflictRecord | null>(null);
   /** A canvas being edited as text (to repair one that isn't valid JSON). */
   const [canvasAsText, setCanvasAsText] = useState<string | null>(null);
+  /**
+   * A note about to be created from a link, waiting for the user to confirm its name and folder.
+   * Not one of the dialogs above: it opens over the health dialog and returns to it.
+   */
   const [creating, setCreating] = useState<{ name: string; folder: string; hub?: boolean } | null>(null);
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const [linkPickerOpen, setLinkPickerOpen] = useState(false);
-  const [asking, setAsking] = useState<AskSource | null>(null);
   /** Notes opened in this session, most recent first, for ranking link suggestions. */
   const [recent, setRecent] = useState<string[]>([]);
   // A note left by an action that opened another repository (a merge, say), shown once.
@@ -185,18 +195,13 @@ export function Workspace() {
   }, [repo, vault, vaults, firstSyncDone]);
   /** Latest openDaily, for the keyboard shortcut handler. */
   const openDailyRef = useRef<() => Promise<void>>(async () => {});
-  /** Back/Forward through visited notes. */
-  const [nav, setNav] = useState<NavHistory>(EMPTY_HISTORY);
-  /**
-   * Why the next note is being opened, if not the default (a new tab): following
-   * a link in this tab, or stepping Back/Forward. Applies only once `path` opens.
-   */
-  const [navIntent, setNavIntent] = useState<{ path: string; kind: "replace" | "history" } | null>(null);
-  /** Where each note was scrolled to, so Back and Forward return there. */
-  const scrollPositions = useRef(new Map<string, number>());
-  const [pendingScroll, setPendingScroll] = useState<{ path: string; top: number } | null>(null);
-  /** Latest Back/Forward, for the keyboard and mouse-button handlers. */
-  const navigateRef = useRef<(dir: "back" | "forward") => void>(() => {});
+  /** The element that scrolls the open note: the editor's scroller, or the page area. */
+  const scroller = useCallback((): HTMLElement | null => {
+    const cm = view?.scrollDOM;
+    if (mode !== "reading" && cm && cm.isConnected && cm.scrollHeight > cm.clientHeight) return cm;
+    return readingRef.current;
+  }, [mode, view]);
+  const { canGoBack, canGoForward, navigate, arrived, followHere, rememberScroll } = useNavigation(vault, scroller);
 
   const setMode = useCallback((m: Mode) => {
     setModeState(m);
@@ -215,10 +220,10 @@ export function Workspace() {
       const key = e.key.toLowerCase();
       if (key === "o" && !e.shiftKey && !e.altKey) {
         e.preventDefault();
-        setSwitcherOpen(true);
+        setDialog({ kind: "switcher" });
       } else if (key === "p" && !e.shiftKey && !e.altKey) {
         e.preventDefault();
-        setPaletteOpen(true);
+        setDialog({ kind: "palette" });
       } else if (key === "d" && e.shiftKey && !e.altKey) {
         e.preventDefault();
         void openDailyRef.current();
@@ -237,23 +242,10 @@ export function Workspace() {
         e.preventDefault();
         if (e.shiftKey) toggleSidesRef.current.right();
         else toggleSidesRef.current.left();
-      } else if ((key === "arrowleft" || key === "arrowright") && e.altKey && !e.shiftKey) {
-        e.preventDefault();
-        navigateRef.current(key === "arrowleft" ? "back" : "forward");
       }
     };
-    // The mouse's own Back and Forward buttons.
-    const onMouse = (e: MouseEvent) => {
-      if (e.button !== 3 && e.button !== 4) return;
-      e.preventDefault();
-      navigateRef.current(e.button === 3 ? "back" : "forward");
-    };
     window.addEventListener("keydown", onKey);
-    window.addEventListener("mouseup", onMouse);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("mouseup", onMouse);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [mode, lastEditMode, setMode, vault]);
 
   // Close the mobile sidebar after opening a note from it.
@@ -265,10 +257,7 @@ export function Workspace() {
     setSidebarOpen(false);
     const renamed = !!seenPath && !!activePath && !vault.exists(seenPath);
     if (activePath) setRecent((r) => [activePath, ...r.filter((p) => p !== activePath && p !== (renamed ? seenPath : null))].slice(0, 50));
-    const intent = navIntent && navIntent.path === activePath ? navIntent.kind : null;
-    if (navIntent) setNavIntent(null);
-    if (renamed) setNav((h) => renameInHistory(h, seenPath, activePath));
-    else if (intent !== "history") setNav((h) => visit(h, seenPath ?? null));
+    const intent = arrived(seenPath, activePath, renamed);
     // Keep a tab for every opened file. A rename, a link followed in this tab, and
     // Back/Forward replace the current tab; anything else opens a new one.
     if (activePath) {
@@ -302,7 +291,6 @@ export function Workspace() {
   };
 
   // Quick capture: a dialog (or something shared to the app) adds an item to today's note or the inbox.
-  const [capturing, setCapturing] = useState<{ initial?: { captured: Captured; files: File[] } } | null>(null);
   const [captured, setCaptured] = useState<string | null>(null);
   useEffect(() => {
     if (!captured) return;
@@ -345,14 +333,14 @@ export function Workspace() {
         }
         if (heading && isNote(path)) setPendingHeading(heading);
         if (path === from) return;
-        if (how === "here") setNavIntent({ path, kind: "replace" });
+        if (how === "here") followHere(path);
         await vault.open(path);
         return;
       }
       // A note that doesn't exist yet: ask before creating it.
       if (target.trim()) setCreating(newNoteFromLink(target, from, vault.settings));
     },
-    [vault],
+    [vault, followHere],
   );
 
   /** Offers to create a missing note `target`, as linked from `from` (`hub`: a hub waiting to be written). */
@@ -387,46 +375,6 @@ export function Workspace() {
     return () => cancelAnimationFrame(id);
   }, [pendingHeading, vault.active, vault.activeText, jumpTo, mode, view]);
 
-  /** Back or Forward to the previous or next visited note, at the scroll position you left it. */
-  const navigate = (dir: "back" | "forward") => {
-    const step = (dir === "back" ? goBack : goForward)(nav, activePath ?? null, (p) => vault.exists(p));
-    if (!step) return;
-    setNav(step.history);
-    setNavIntent({ path: step.path, kind: "history" });
-    setPendingScroll({ path: step.path, top: scrollPositions.current.get(step.path) ?? 0 });
-    void vault.open(step.path);
-  };
-  useEffect(() => {
-    navigateRef.current = navigate;
-  });
-
-  /** The element that scrolls the open note: the editor's scroller, or the page area. */
-  const scroller = useCallback((): HTMLElement | null => {
-    const cm = view?.scrollDOM;
-    if (mode !== "reading" && cm && cm.isConnected && cm.scrollHeight > cm.clientHeight) return cm;
-    return readingRef.current;
-  }, [mode, view]);
-
-  // After Back/Forward, restore the scroll position once the note has rendered.
-  useEffect(() => {
-    if (!pendingScroll || pendingScroll.path !== activePath) return;
-    let tries = 0;
-    let id: ReturnType<typeof setTimeout>;
-    const apply = () => {
-      const el = scroller();
-      if (el && (el.scrollHeight - el.clientHeight >= pendingScroll.top || tries >= 20)) {
-        el.scrollTop = pendingScroll.top;
-        setPendingScroll(null);
-      } else {
-        tries++;
-        id = setTimeout(apply, 50);
-      }
-    };
-    // Wait for the editor to finish loading the note (it scrolls new notes to the top).
-    id = setTimeout(apply, 50);
-    return () => clearTimeout(id);
-  }, [pendingScroll, activePath, scroller]);
-
   // App shortcuts (from the installed app's icon) open "/?action=…". Run the action
   // once the vault is ready, then tidy the URL. A window that's already open gets
   // later shortcuts through the launch queue instead of a reload.
@@ -436,12 +384,12 @@ export function Workspace() {
       if (action === "new-note") void vault.createNote();
       else if (action === "new-canvas") void vault.createCanvas();
       else if (action === "daily") void openDaily();
-      else if (action === "capture") setCapturing({});
+      else if (action === "capture") setDialog({ kind: "capture" });
       else if (action === "shared") {
         // Shared to the installed app: the service worker kept it for us.
         void takeShared().then((sh) => {
           if (!sh) return;
-          setCapturing({ initial: { captured: fromShare(sh), files: sh.files } });
+          setDialog({ kind: "capture", initial: { captured: fromShare(sh), files: sh.files } });
         });
       }
       else if (action === "search") {
@@ -484,7 +432,7 @@ export function Workspace() {
     const { from, to } = view.state.selection.main;
     const text = view.state.sliceDoc(from, to);
     if (!text.trim()) return;
-    setAsking({ path, from, to, text });
+    setDialog({ kind: "ask", source: { path, from, to, text } });
   };
   const askRef = useRef(askSelection);
   useEffect(() => {
@@ -527,8 +475,8 @@ export function Workspace() {
 
 
 
-  const onLinkSelection = useCallback(() => setLinkPickerOpen(true), []);
-  const onInsertTemplate = useCallback(() => setTemplatePicker("insert"), []);
+  const onLinkSelection = useCallback(() => setDialog({ kind: "linkPicker" }), []);
+  const onInsertTemplate = useCallback(() => setDialog({ kind: "templatePicker", mode: "insert" }), []);
   const { inbound, propertyInfo, linkHost, linkContext, drawingVault, canvasVault } = useEditorHosts({ openLink, recent, onLinkSelection, onInsertTemplate, askRef, aiRef });
 
   const activePathNow = vault.active?.path ?? null;
@@ -556,7 +504,7 @@ export function Workspace() {
   /** Starts a note from a template, or inserts one; asks for its prompts first if it has any. */
   const applyTemplate = (path: string, mode: "new" | "insert") => {
     if (mode === "insert" && !editing) return;
-    if (needsDialog(vault, path, mode)) setUsingTemplate({ path, mode });
+    if (needsDialog(vault, path, mode)) setDialog({ kind: "useTemplate", path, mode });
     else
       insertRendered(
         renderTemplate(vault.links.content(path) ?? "", {
@@ -611,7 +559,7 @@ export function Workspace() {
       {/* The header row: the same height as the note's and the panel's, so they line up. */}
       <div className="mb-1 flex h-12 shrink-0 items-center gap-1">
         <div className="min-w-0 flex-1">
-          <VaultSwitcher onManage={() => setSettingsOpen("vaults")} />
+          <VaultSwitcher onManage={() => setDialog({ kind: "settings", section: "vaults" })} />
         </div>
         <button
           type="button"
@@ -671,9 +619,9 @@ export function Workspace() {
             query={searchQuery}
             onQuery={setSearchQuery}
             autoFocus
-            onEditProperties={setPropertyTable}
+            onEditProperties={(paths) => setDialog({ kind: "propertyTable", paths })}
             onOpenAt={openAt}
-            onSearchSettings={() => setSettingsOpen("search")}
+            onSearchSettings={() => setDialog({ kind: "settings", section: "search" })}
           />
         ) : tab === "tasks" ? (
           <TasksPanel onOpen={openAt} onToggle={toggleTaskIn} />
@@ -687,7 +635,7 @@ export function Workspace() {
             }}
             onRename={(from, to) => renamePropertyEverywhere(vault, from, to)}
             onDelete={(key) => deletePropertyEverywhere(vault, key)}
-            onTable={(key) => setPropertyTable(filesWithProperties(vault.links, [{ key }]))}
+            onTable={(key) => setDialog({ kind: "propertyTable", paths: filesWithProperties(vault.links, [{ key }]) })}
           />
         ) : (
           <TemplatesPanel onUse={applyTemplate} canInsert={editing} />
@@ -706,7 +654,7 @@ export function Workspace() {
         <button
           type="button"
           className="nav-item text-foreground/80"
-          onClick={() => setCapturing({})}
+          onClick={() => setDialog({ kind: "capture" })}
           title="Add a quick note to today's note or your inbox"
         >
           <Zap size={15} aria-hidden />
@@ -715,7 +663,7 @@ export function Workspace() {
         <button
           type="button"
           className="nav-item text-foreground/80"
-          onClick={() => setHealthOpen(true)}
+          onClick={() => setDialog({ kind: "health" })}
           title="Broken links, orphans, dead ends and hubs"
         >
           <Activity size={15} aria-hidden />
@@ -726,7 +674,7 @@ export function Workspace() {
         <button
           type="button"
           className="nav-item w-full text-foreground/80"
-          onClick={() => setSettingsOpen("appearance")}
+          onClick={() => setDialog({ kind: "settings", section: "appearance" })}
         >
           <Settings size={15} aria-hidden />
           Settings
@@ -768,11 +716,11 @@ export function Workspace() {
       <RailButton label="Today" onClick={() => void openDaily()}>
         <CalendarDays size={18} aria-hidden />
       </RailButton>
-      <RailButton label="Repository health" onClick={() => setHealthOpen(true)}>
+      <RailButton label="Repository health" onClick={() => setDialog({ kind: "health" })}>
         <Activity size={18} aria-hidden />
       </RailButton>
       <div className="mt-auto">
-        <RailButton label="Settings" onClick={() => setSettingsOpen("appearance")}>
+        <RailButton label="Settings" onClick={() => setDialog({ kind: "settings", section: "appearance" })}>
           <Settings size={18} aria-hidden />
         </RailButton>
       </div>
@@ -795,7 +743,7 @@ export function Workspace() {
       ready: aiSetup === null,
       ask: (passage, question) => {
         const path = vault.active?.path;
-        if (path) setAsking({ path, ...passage, ...(question ? { question } : {}) });
+        if (path) setDialog({ kind: "ask", source: { path, ...passage, ...(question ? { question } : {}) } });
       },
       run: (kind) => {
         const path = vault.active?.path;
@@ -804,7 +752,7 @@ export function Workspace() {
       },
     };
   });
-  usePairFromLink(() => setSettingsOpen("ai"));
+  usePairFromLink(() => setDialog({ kind: "settings", section: "ai" }));
   const currentHealth = () => {
     const mtimes = new Map(vault.entries.map((e) => [e.path, e.mtime]));
     return vaultHealth(vault.links, { mtime: (p) => mtimes.get(p), ignore: healthIgnored(vault.settings) });
@@ -935,8 +883,8 @@ export function Workspace() {
     "new-canvas": () => void vault.createCanvas(),
     daily: () => void openDaily(),
     "daily-yesterday": () => void openDaily(new Date(Date.now() - 86_400_000)),
-    template: () => setTemplatePicker("insert"),
-    templateNote: () => setTemplatePicker("new"),
+    template: () => setDialog({ kind: "templatePicker", mode: "insert" }),
+    templateNote: () => setDialog({ kind: "templatePicker", mode: "new" }),
     "property-add": () => {
       if (!view) return;
       addProperty(view);
@@ -945,18 +893,18 @@ export function Workspace() {
     "table-format": () => view && editTableSource(view, "format"),
     "table-from-lines": () => view && editTableSource(view, "from-lines"),
     "table-to-lines": () => view && editTableSource(view, "to-lines"),
-    "link-selection": () => setLinkPickerOpen(true),
+    "link-selection": () => setDialog({ kind: "linkPicker" }),
     "ask-selection": () => askSelection(),
     "links-to-markdown": () => convertActiveLinks("markdown"),
     "links-to-wikilinks": () => convertActiveLinks("wikilink"),
-    switcher: () => setSwitcherOpen(true),
+    switcher: () => setDialog({ kind: "switcher" }),
     search: () => {
       setTab("search");
       setSidebarOpen(true);
     },
-    health: () => setHealthOpen(true),
+    health: () => setDialog({ kind: "health" }),
     tasks: () => openSidebarTab("tasks"),
-    capture: () => setCapturing({}),
+    capture: () => setDialog({ kind: "capture" }),
     "insert-query": () => {
       if (!view) return;
       const { from } = view.state.selection.main;
@@ -983,22 +931,30 @@ export function Workspace() {
     "toggle-right": () => setRightCollapsed(!rightCollapsed),
     "tab-close": () => activePathNow && closeTab(activePathNow),
     "tab-close-all": closeAllTabs,
-    delete: () => activePathNow && setDeleting(activePathNow),
+    delete: () => activePathNow && setDialog({ kind: "delete", path: activePathNow }),
     sync: sync.syncNow,
     conflicts: () => {
       const c = sync.conflicts.find((x) => x.path === activePathNow) ?? sync.conflicts[0];
       if (!c) return;
       if (vault.exists(c.path) && c.path !== activePathNow) void vault.open(c.path);
-      setReviewing(c);
+      setDialog({ kind: "review", record: c });
     },
-    history: () => setHistoryOpen(true),
+    history: () => setDialog({ kind: "history" }),
     export: () => void exportZip(vault, vaults.active.name),
     import: chooseZip,
-    settings: () => setSettingsOpen("appearance"),
-    storage: () => setSettingsOpen("storage"),
-    install: () => setSettingsOpen("app"),
+    settings: () => setDialog({ kind: "settings", section: "appearance" }),
+    storage: () => setDialog({ kind: "settings", section: "storage" }),
+    install: () => setDialog({ kind: "settings", section: "app" }),
   };
 
+  const settingsDialog = dialogOf("settings");
+  const templatePicker = dialogOf("templatePicker");
+  const usingTemplate = dialogOf("useTemplate");
+  const propertyTable = dialogOf("propertyTable");
+  const reviewing = dialogOf("review");
+  const deleting = dialogOf("delete");
+  const asking = dialogOf("ask");
+  const capturing = dialogOf("capture");
   return (
     <AiActionsContext.Provider value={runAction}>
       <SidePaneContext.Provider value={setSidePath}>
@@ -1051,7 +1007,7 @@ export function Workspace() {
                 ) : panelTab === "links" ? (
                   <LinksPanel onOpenLink={(t) => void openLink(t)} onMapCanvas={kind === "note" && activePathNow ? () => void mapAsCanvas(vault, activePathNow) : undefined} />
                 ) : (
-                  <ChatPanel links={linkContext} onOpenLink={(t) => void openLink(t)} onOpenSettings={() => setSettingsOpen("ai")} />
+                  <ChatPanel links={linkContext} onOpenLink={(t) => void openLink(t)} onOpenSettings={() => setDialog({ kind: "settings", section: "ai" })} />
                 )}
               </>
             ) : null
@@ -1072,7 +1028,7 @@ export function Workspace() {
                 className="icon-button"
                 aria-label="Back"
                 title="Back (Ctrl/Cmd+Alt+←)"
-                disabled={!nav.back.some((p) => p !== activePath && vault.exists(p))}
+                disabled={!canGoBack}
                 onClick={() => navigate("back")}
               >
                 <ArrowLeft size={16} aria-hidden />
@@ -1082,7 +1038,7 @@ export function Workspace() {
                 className="icon-button"
                 aria-label="Forward"
                 title="Forward (Ctrl/Cmd+Alt+→)"
-                disabled={!nav.forward.some((p) => p !== activePath && vault.exists(p))}
+                disabled={!canGoForward}
                 onClick={() => navigate("forward")}
               >
                 <ArrowRight size={16} aria-hidden />
@@ -1101,7 +1057,7 @@ export function Workspace() {
                 className="icon-button"
                 aria-label="Version history"
                 title="Version history"
-                onClick={() => setHistoryOpen(true)}
+                onClick={() => setDialog({ kind: "history" })}
               >
                 <History size={16} aria-hidden />
               </button>
@@ -1130,9 +1086,9 @@ export function Workspace() {
               <Toolbar view={view} />
             </div>
           )}
-          {activePathNow && <ConflictBanner path={activePathNow} onReview={setReviewing} />}
-          <BackupBanner onExport={() => exportZip(vault, vaults.active.name)} onConnect={() => setSettingsOpen("vaults")} />
-          <StorageBanner onOpenStorage={() => setSettingsOpen("storage")} />
+          {activePathNow && <ConflictBanner path={activePathNow} onReview={(record) => setDialog({ kind: "review", record })} />}
+          <BackupBanner onExport={() => exportZip(vault, vaults.active.name)} onConnect={() => setDialog({ kind: "settings", section: "vaults" })} />
+          <StorageBanner onOpenStorage={() => setDialog({ kind: "settings", section: "storage" })} />
           <div className="flex min-h-0 flex-1">
             <div
               className={`min-h-0 min-w-0 flex-1 ${kind === "drawing" || kind === "canvas" ? "overflow-hidden" : "overflow-y-auto"}`}
@@ -1140,7 +1096,7 @@ export function Workspace() {
               onScrollCapture={(e) => {
                 const el = e.target as HTMLElement;
                 if (activePathNow && (el === readingRef.current || el.classList.contains("cm-scroller"))) {
-                  scrollPositions.current.set(activePathNow, el.scrollTop);
+                  rememberScroll(activePathNow, el.scrollTop);
                 }
               }}
             >
@@ -1148,7 +1104,7 @@ export function Workspace() {
               {!vault.ready ? (
                 <p className="p-8 text-muted">Loading repository…</p>
               ) : !vault.active ? (
-                <EmptyState onCreate={() => void vault.createNote()} onFind={() => setSwitcherOpen(true)} />
+                <EmptyState onCreate={() => void vault.createNote()} onFind={() => setDialog({ kind: "switcher" })} />
               ) : kind === "canvas" && canvasAsText === vault.active.path ? (
                 <div className="flex h-full flex-col">
                   <div className="flex items-center gap-3 border-b border-border px-6 py-2 text-sm text-muted">
@@ -1254,23 +1210,23 @@ export function Workspace() {
           </div>
         </AppShell>
       </SidePaneContext.Provider>
-      {switcherOpen && (
-        <ErrorBoundary name="Quick switcher" onClose={() => setSwitcherOpen(false)}>
-          <QuickSwitcher onClose={() => setSwitcherOpen(false)} onOpenSide={setSidePath} />
+      {dialog?.kind === "switcher" && (
+        <ErrorBoundary name="Quick switcher" onClose={() => closeDialog("switcher")}>
+          <QuickSwitcher onClose={() => closeDialog("switcher")} onOpenSide={setSidePath} />
         </ErrorBoundary>
       )}
-      {paletteOpen && (
+      {dialog?.kind === "palette" && (
         <Picker
           title="Command palette"
           placeholder="Type a command…"
           items={commands.filter((c) => c.when !== false)}
           onPick={(item) => runCommand[item.id]?.()}
-          onClose={() => setPaletteOpen(false)}
+          onClose={() => closeDialog("palette")}
         />
       )}
-      {historyOpen && activePathNow && (
-        <ErrorBoundary name="Version history" onClose={() => setHistoryOpen(false)}>
-          <HistoryDialog path={activePathNow} onClose={() => setHistoryOpen(false)} />
+      {dialog?.kind === "history" && activePathNow && (
+        <ErrorBoundary name="Version history" onClose={() => closeDialog("history")}>
+          <HistoryDialog path={activePathNow} onClose={() => closeDialog("history")} />
         </ErrorBoundary>
       )}
       <input
@@ -1303,12 +1259,12 @@ export function Workspace() {
       )}
       {templatePicker && (
         <Picker
-          title={templatePicker === "new" ? "New note from template" : "Insert template"}
+          title={templatePicker.mode === "new" ? "New note from template" : "Insert template"}
           placeholder="Choose a template…"
           items={templates.map((p) => ({ id: p, label: noteTitle(p), hint: dirname(p) }))}
           empty={`No templates yet. Open the Templates tab in the sidebar to add some.`}
-          onPick={(item) => applyTemplate(item.id, templatePicker)}
-          onClose={() => setTemplatePicker(null)}
+          onPick={(item) => applyTemplate(item.id, templatePicker.mode)}
+          onClose={() => closeDialog("templatePicker")}
         />
       )}
       {usingTemplate && (
@@ -1320,10 +1276,10 @@ export function Workspace() {
           onCreating={(path, fromEnd) => {
             pendingCursor.current = { path, fromEnd };
           }}
-          onClose={() => setUsingTemplate(null)}
+          onClose={() => closeDialog("useTemplate")}
         />
       )}
-      {linkPickerOpen && (
+      {dialog?.kind === "linkPicker" && (
         <Picker
           title="Link selection to"
           placeholder="Link to which note?"
@@ -1334,7 +1290,7 @@ export function Workspace() {
             .map((p) => ({ id: p, label: isNote(p) || isDrawing(p) || isCanvas(p) ? displayName(p) : basename(p), hint: dirname(p) }))}
           onPick={(item) => linkSelectionTo(item.id)}
           onClose={() => {
-            setLinkPickerOpen(false);
+            closeDialog("linkPicker");
             view?.focus();
           }}
         />
@@ -1344,7 +1300,7 @@ export function Workspace() {
           initial={capturing.initial}
           destination={captureTarget(vault).label}
           onSave={async (c, files) => setCaptured(await saveCapture(vault, c, files))}
-          onClose={() => setCapturing(null)}
+          onClose={() => closeDialog("capture")}
         />
       )}
       {captured && (
@@ -1364,17 +1320,17 @@ export function Workspace() {
       )}
       {asking && (
         <AskDialog
-          source={asking}
+          source={asking.source}
           links={linkContext}
           onClose={() => {
-            setAsking(null);
+            closeDialog("ask");
             view?.focus();
           }}
           onLinkSelection={replacePassage}
           onInsert={insertAfterPassage}
           onOpenSettings={() => {
-            setAsking(null);
-            setSettingsOpen("ai");
+            closeDialog("ask");
+            setDialog({ kind: "settings", section: "ai" });
           }}
         />
       )}
@@ -1384,26 +1340,26 @@ export function Workspace() {
         </ErrorBoundary>
       )}
       {deleting && (
-        <ErrorBoundary name="Deleting" onClose={() => setDeleting(null)}>
-          <DeleteDialog items={[{ path: deleting, isFolder: false }]} onClose={() => setDeleting(null)} />
+        <ErrorBoundary name="Deleting" onClose={() => closeDialog("delete")}>
+          <DeleteDialog items={[{ path: deleting.path, isFolder: false }]} onClose={() => closeDialog("delete")} />
         </ErrorBoundary>
       )}
-      {settingsOpen && (
-        <ErrorBoundary name="Settings" onClose={() => setSettingsOpen(false)}>
-          <SettingsDialog initial={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      {settingsDialog && (
+        <ErrorBoundary name="Settings" onClose={() => closeDialog("settings")}>
+          <SettingsDialog initial={settingsDialog.section} onClose={() => closeDialog("settings")} />
         </ErrorBoundary>
       )}
       {propertyTable && (
-        <PropertyTable paths={propertyTable} onClose={() => setPropertyTable(null)} onOpen={(p) => void vault.open(p)} />
+        <PropertyTable paths={propertyTable.paths} onClose={() => closeDialog("propertyTable")} onOpen={(p) => void vault.open(p)} />
       )}
       {reviewing && (
-        <ErrorBoundary name="Conflict review" onClose={() => setReviewing(null)}>
-          <ConflictDialog record={reviewing} onClose={() => setReviewing(null)} />
+        <ErrorBoundary name="Conflict review" onClose={() => closeDialog("review")}>
+          <ConflictDialog record={reviewing.record} onClose={() => closeDialog("review")} />
         </ErrorBoundary>
       )}
-      {healthOpen && (
-        <ErrorBoundary name="Repository health" onClose={() => setHealthOpen(false)}>
-          <HealthDialog onClose={() => setHealthOpen(false)} onCreate={offerCreate} />
+      {dialog?.kind === "health" && (
+        <ErrorBoundary name="Repository health" onClose={() => closeDialog("health")}>
+          <HealthDialog onClose={() => closeDialog("health")} onCreate={offerCreate} />
         </ErrorBoundary>
       )}
       <Toasts />
