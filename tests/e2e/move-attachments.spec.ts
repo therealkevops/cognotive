@@ -24,7 +24,8 @@ async function setUp(page: Page) {
     await editor(page).click();
     await page.keyboard.press("ControlOrMeta+End");
     await page.keyboard.type(text);
-    await expect(editor(page)).toContainText(text.trim().split(" ")[0]);
+    // The last embed, where the cursor is: live preview shows the others as their pictures.
+    await expect(editor(page)).toContainText(text.trim().split(" ").at(-1)!);
   }
   await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
   await page.getByRole("button", { name: "New folder" }).click();

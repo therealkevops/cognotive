@@ -28,7 +28,8 @@ async function palette(page: Page, command: string) {
   await expect(dialog).toBeHidden();
 }
 
-const lastUser = (llm: FakeLLM) => [...llm.calls.at(-1)!.messages].reverse().find((m) => m.role === "user")!.content;
+/** The last question sent to the model ("" until one is: polls retry on a value, not an error). */
+const lastUser = (llm: FakeLLM) => [...(llm.calls.at(-1)?.messages ?? [])].reverse().find((m) => m.role === "user")?.content ?? "";
 
 test("summarise a note from the palette, and save the summary as a property", async ({ page }) => {
   const llm = new FakeLLM();
