@@ -2,17 +2,10 @@
 
 import "@/lib/drawing/assets";
 import "@excalidraw/excalidraw/index.css";
-import {
-  CaptureUpdateAction,
-  convertToExcalidrawElements,
-  Excalidraw,
-  newElementWith,
-  serializeAsJSON,
-} from "@excalidraw/excalidraw";
+import { CaptureUpdateAction, convertToExcalidrawElements, Excalidraw, newElementWith, serializeAsJSON } from "@excalidraw/excalidraw";
 import type { BinaryFileData, ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from "@excalidraw/excalidraw/types";
 import { FilePlus2, ImagePlus, Link2, SlidersHorizontal } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { isDark } from "@/lib/appearance";
 import { completeWikilink, newNoteName, openWikilink, textLinkUpdates } from "@/lib/drawing/links";
 import { elementLinkTarget } from "@/lib/drawing/parse";
 import { splitLinkText } from "@/lib/links/parse";
@@ -20,23 +13,9 @@ import { isPluginKey } from "@/lib/drawing/properties";
 import type { PropertyInfo } from "@/lib/editor/properties";
 import { matches, Picker } from "./Picker";
 import { PropertiesEditor } from "./PropertiesEditor";
+import { useDarkMode } from "../useDarkMode";
 
 type InitialData = ExcalidrawInitialDataState;
-
-function useDarkMode() {
-  const [dark, setDark] = useState(isDark);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const on = () => setDark(isDark());
-    mq.addEventListener("change", on);
-    window.addEventListener("noted-appearance", on);
-    return () => {
-      mq.removeEventListener("change", on);
-      window.removeEventListener("noted-appearance", on);
-    };
-  }, []);
-  return dark;
-}
 
 export interface DrawingNote {
   path: string;
