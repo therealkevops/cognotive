@@ -31,7 +31,7 @@ export function useApplyProposal() {
             return fail(p.before === null ? "A file with that name exists now." : "The note changed in the same place since. Ask again to redo this change.");
           }
           if (p.before === null) await vault.writeFile(p.path, text);
-          else await vault.writeNote(p.path, text);
+          else await vault.writeFile(p.path, text);
         }
         chatStore.updateProposal(p.id, { status: "applied", error: undefined });
         return true;

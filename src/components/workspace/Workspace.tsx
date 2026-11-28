@@ -10,6 +10,7 @@ import { AppShell, RailButton } from "@/components/AppShell";
 import { isDark } from "@/lib/appearance";
 import type { OpenHow } from "@/lib/links/open";
 import { EMPTY_HISTORY, goBack, goForward, renameInHistory, visit, type NavHistory } from "@/lib/nav/history";
+import { onNotice, takeLeftNotice } from "@/lib/notice";
 import { readPref, writePref } from "@/lib/prefs";
 import { editTableSource } from "@/lib/editor/table-keys";
 import { addProperty } from "@/lib/editor/properties-panel";
@@ -53,7 +54,6 @@ import { QuickSwitcher } from "./QuickSwitcher";
 import { SearchPanel } from "./SearchPanel";
 import { CaptureDialog } from "./CaptureDialog";
 import { BackupBanner } from "./BackupBanner";
-import { NOTICE_EVENT } from "../settings/MergeVault";
 import { StorageBanner } from "./StorageBanner";
 import { fromShare, type Captured } from "@/lib/capture/capture";
 import { takeShared } from "@/lib/capture/shared";
@@ -162,16 +162,8 @@ export function Workspace() {
   /** Notes opened in this session, most recent first, for ranking link suggestions. */
   const [recent, setRecent] = useState<string[]>([]);
   // A note left by an action that opened another repository (a merge, say), shown once.
-  const [importNote, setImportNote] = useState<string | null>(() => {
-    const left = readPref<string | null>("importNotice", null);
-    if (left) writePref("importNotice", null);
-    return left;
-  });
-  useEffect(() => {
-    const show = (e: Event) => setImportNote((e as CustomEvent<string>).detail);
-    window.addEventListener(NOTICE_EVENT, show);
-    return () => window.removeEventListener(NOTICE_EVENT, show);
-  }, []);
+  const [importNote, setImportNote] = useState<string | null>(takeLeftNotice);
+  useEffect(() => onNotice(setImportNote), []);
   const zipInput = useRef<HTMLInputElement>(null);
   const chooseZip = useCallback(() => zipInput.current?.click(), []);
   const tabsKey = `vault:${vault.vaultId}:tabs`;
@@ -266,7 +258,8 @@ export function Workspace() {
 
   // Close the mobile sidebar after opening a note from it.
   const activePath = vault.active?.path;
-  const [seenPath, setSeenPath] = useState(activePath);
+  // Starts as none, so a note already open when the workspace appears gets its tab too.
+  const [seenPath, setSeenPath] = useState<string | undefined>(undefined);
   if (seenPath !== activePath) {
     setSeenPath(activePath);
     setSidebarOpen(false);
@@ -606,7 +599,7 @@ export function Workspace() {
       if (l.text !== task.raw) return false;
       view.dispatch({ changes: { from: l.from, to: l.to, insert: line }, userEvent: "input.toggle" });
     } else {
-      await vault.writeNote(task.path, next);
+      await vault.writeFile(task.path, next);
     }
     return true;
   };
@@ -844,7 +837,7 @@ export function Workspace() {
     const next = convertLinks(text, from, to, (t) => vault.links.resolve(t, from), (p) => vault.links.linkText(p));
     if (next === text) return;
     if (view && mode !== "reading") view.dispatch({ changes: { from: 0, to: text.length, insert: next }, userEvent: "input" });
-    else void vault.writeNote(from, next);
+    else void vault.writeFile(from, next);
   };
 
   /** Sets or removes a property of the open note (one undoable edit in the editor). */
@@ -854,7 +847,7 @@ export function Workspace() {
     const next = setFrontmatterProperty(text, key, value);
     if (next === text) return;
     if (view && mode !== "reading") view.dispatch({ changes: { from: 0, to: text.length, insert: next }, userEvent: "input" });
-    else void vault.writeNote(activePathNow, next);
+    else void vault.writeFile(activePathNow, next);
   };
   const activeIsMarkedHub =
     !!activePathNow && hubProperty(vault.links.get(activePathNow)?.properties) === true;
@@ -1221,7 +1214,7 @@ export function Workspace() {
                       const path = vault.active?.path;
                       if (!path) return;
                       const next = setFrontmatterProperty(vault.activeText, key, value === undefined ? undefined : yamlValue(value));
-                      if (next !== vault.activeText) void vault.writeNote(path, next);
+                      if (next !== vault.activeText) void vault.writeFile(path, next);
                     },
                   }}
                   onOpenLink={(t, h, how) => void openLink(t, h, how)}

@@ -1,16 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { writePref } from "@/lib/prefs";
+import { leaveNotice, showNotice } from "@/lib/notice";
 import { LocalStore } from "@/lib/vault/local-store";
 import { mergeInto } from "@/lib/vault/merge";
 import type { VaultConfig } from "@/lib/vault/registry";
 import { useVault } from "../vault/useVault";
 import { useVaults } from "../vault/useVaults";
 import { Field } from "./repo-fields";
-
-/** Sent on `window` with a sentence for the workspace to show (see Workspace). */
-export const NOTICE_EVENT = "noted-notice";
 
 /** A repository's name as a folder name (no slashes or characters a name can't have). */
 const folderName = (name: string) => name.replace(/[\\/:*?"<>|#^[\]]/g, "-").replace(/^\.+/, "").trim() || "Merged";
@@ -59,11 +56,11 @@ export function MergeVault({ source, onDone }: { source: VaultConfig; onDone(): 
       if (target.id === active.id) {
         await vault.reload(r.paths);
         // Removing the source takes this form away with its row: say it in the workspace.
-        if (removeSource) window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: summary }));
+        if (removeSource) showNotice(summary);
         else setResult(summary);
       } else {
         // Opening it reloads the workspace (and closes Settings): say so there.
-        writePref("importNotice", summary);
+        leaveNotice(summary);
       }
       if (removeSource) await remove(source.id);
       if (target.id !== active.id) switchTo(target.id);

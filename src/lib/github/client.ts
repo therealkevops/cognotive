@@ -4,6 +4,8 @@
  * through Vercel functions.
  */
 
+import { base64ToBytes, base64ToUtf8, bytesToBase64, utf8ToBase64 } from "../base64";
+
 const API = "https://api.github.com";
 
 export class GitHubError extends Error {
@@ -51,23 +53,6 @@ export function parseTokenExpiry(header: string | null): number | null {
   return Number.isFinite(t) ? t : null;
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  let bin = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  }
-  return btoa(bin);
-}
-
-function base64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64.replace(/\s/g, ""));
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes;
-}
-
-const utf8ToBase64 = (text: string) => bytesToBase64(new TextEncoder().encode(text));
-const base64ToUtf8 = (b64: string) => new TextDecoder().decode(base64ToBytes(b64));
 const toBase64 = (c: string | Uint8Array) => (typeof c === "string" ? utf8ToBase64(c) : bytesToBase64(c));
 
 export class GitHubClient {
@@ -106,40 +91,6 @@ export class GitHubClient {
 
   private repoPath(owner: string, repo: string) {
     return `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
-  }
-
-  /** Repositories the user has installed the app on (user-to-server tokens see only those). */
-  async listRepos(): Promise<RepoSummary[]> {
-    const { installations } = await this.request<{ installations: Array<{ id: number }> }>(
-      "GET",
-      "/user/installations?per_page=100",
-    );
-    const repos: RepoSummary[] = [];
-    for (const inst of installations) {
-      for (let page = 1; ; page++) {
-        const r = await this.request<{
-          total_count: number;
-          repositories: Array<{
-            name: string;
-            full_name: string;
-            owner: { login: string };
-            default_branch: string;
-            private: boolean;
-          }>;
-        }>("GET", `/user/installations/${inst.id}/repositories?per_page=100&page=${page}`);
-        for (const x of r.repositories) {
-          repos.push({
-            owner: x.owner.login,
-            name: x.name,
-            fullName: x.full_name,
-            defaultBranch: x.default_branch,
-            private: x.private,
-          });
-        }
-        if (r.repositories.length < 100) break;
-      }
-    }
-    return repos.sort((a, b) => a.fullName.localeCompare(b.fullName));
   }
 
   /**
@@ -309,10 +260,6 @@ export class GitHubClient {
       sha,
       force: false,
     });
-  }
-
-  async createBranch(owner: string, repo: string, branch: string, sha: string): Promise<void> {
-    await this.request("POST", `${this.repoPath(owner, repo)}/git/refs`, { ref: `refs/heads/${branch}`, sha });
   }
 
   /** Commits on `branch` that touched `path`, newest first. */

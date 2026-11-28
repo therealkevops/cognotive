@@ -153,7 +153,7 @@ export function useEditorHosts({
         const same = now.find((b) => b.from === block.from && b.text === block.text) ?? now.find((b) => b.text === block.text);
         if (!same || same.id) return;
         const c = blockIdChange(same, id);
-        void vault.writeNote(p, content.slice(0, c.from) + c.insert + content.slice(c.from));
+        void vault.writeFile(p, content.slice(0, c.from) + c.insert + content.slice(c.from));
       },
       headings: (p) => vault.links.get(p)?.headings.map((h) => h.text) ?? [],
       notePreview: (t, sub) => {
@@ -252,7 +252,7 @@ export function useEditorHosts({
     }),
     [vault.indexed, vault.active?.path, runQueryBlock],
   );
-  const { fileUrl: fileUrlOf, writeNote: writeNoteAt } = vault;
+  const { fileUrl: fileUrlOf, writeFile: writeNoteAt } = vault;
   // What a canvas needs: files to place as cards, note previews, pictures and link resolution.
   const canvasVault = useMemo<CanvasVault>(
     () => ({

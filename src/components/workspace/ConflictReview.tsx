@@ -162,7 +162,7 @@ export function ConflictDialog({ record, onClose }: { record: ConflictRecord; on
         <button
           type="button"
           className="button-primary"
-          onClick={() => void finish(() => vault.writeNote(record.path, resolveBlocks(blocks, choices)))}
+          onClick={() => void finish(() => vault.writeFile(record.path, resolveBlocks(blocks, choices)))}
         >
           Apply
         </button>

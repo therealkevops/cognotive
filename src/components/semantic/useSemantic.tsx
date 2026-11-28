@@ -125,7 +125,7 @@ export function SemanticProvider({ children }: { children: ReactNode }) {
     if (!enabled || !vault.ready) return;
     const t = setTimeout(() => void sync(), indexRef.current?.size ? SYNC_DELAY_MS : 0);
     return () => clearTimeout(t);
-  }, [enabled, vault.ready, vault.indexVersion, sync]);
+  }, [enabled, vault.ready, vault.indexed.version, sync]);
 
   const search = useCallback(async (q: string, limit?: number) => (indexRef.current ? indexRef.current.search(q, limit) : []), []);
   const similar = useCallback((p: string, limit?: number) => indexRef.current?.similar(p, limit) ?? [], []);

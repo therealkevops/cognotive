@@ -96,11 +96,8 @@ export interface VaultApi {
   ready: boolean;
   vaultId: string;
   entries: VaultEntry[];
-  index: NoteIndex;
-  /** Links, backlinks, tags and properties of every note. Changes with `indexVersion`. */
+  /** Links, backlinks, tags and properties of every note (the same as `indexed.links`). */
   links: LinkIndex;
-  /** Increments whenever the index changes, so search views can recompute. */
-  indexVersion: number;
   /**
    * The indexes, as an object that is replaced whenever they change. Views that derive
    * something from the index read it through this and list `vault.indexed` as a dependency.
@@ -160,8 +157,6 @@ export interface VaultApi {
   updateSettings(patch: Partial<VaultSettings>): Promise<void>;
   /** Creates a note with content (e.g. from a template) and opens it. */
   createNoteWith(path: string, content: string): Promise<string | undefined>;
-  /** Replaces a note's text from outside the editor (e.g. linking a mention). Reloads it if open. */
-  writeNote(path: string, content: string): Promise<void>;
   /** Writes any file (text or bytes), creating or replacing it. Reloads it if open. */
   writeFile(path: string, content: string | Uint8Array): Promise<void>;
   /** Copies files and folders as planned (see planCopy); returns how many files were copied. */
@@ -405,65 +400,43 @@ export function VaultProvider({
     [settings.newNoteProperties, settings.templateFolder],
   );
 
-  const createNote = useCallback(
-    async (folder = "", name = "Untitled") => {
-      try {
-        const err = validateName(name);
-        if (err) throw new Error(err);
-        const path = uniquePath(joinPath(folder, `${name.trim()}.md`), exists);
-        const content = newNoteContent(path, "");
-        await store.write(path, content);
-        indexes.set(path, content);
-        bumpIndex();
-        await refresh();
-        changed();
-        await open(path);
-        return path;
-      } catch (e) {
-        fail(e);
-      }
+  /** Saves a new file, indexes it and opens it. */
+  const createAt = useCallback(
+    async (path: string, content: string) => {
+      await store.write(path, content);
+      indexes.set(path, content);
+      bumpIndex();
+      await refresh();
+      changed();
+      await open(path);
+      return path;
     },
-    [store, indexes, exists, refresh, open, bumpIndex, fail, changed, newNoteContent],
+    [store, indexes, bumpIndex, refresh, changed, open],
   );
 
+  /** A new file named `name` (numbered if taken) in `folder`. */
+  const createNamed = useCallback(
+    async (folder: string, name: string, ext: string, content: (path: string) => string) => {
+      try {
+        const err = validateName(name);
+        if (err) throw new Error(err);
+        const path = uniquePath(joinPath(folder, `${name.trim()}${ext}`), exists);
+        return await createAt(path, content(path));
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [exists, createAt, fail],
+  );
+  const createNote = useCallback(
+    (folder = "", name = "Untitled") => createNamed(folder, name, ".md", (path) => newNoteContent(path, "")),
+    [createNamed, newNoteContent],
+  );
   const createDrawing = useCallback(
-    async (folder = "", name = "Drawing") => {
-      try {
-        const err = validateName(name);
-        if (err) throw new Error(err);
-        const path = uniquePath(joinPath(folder, `${name.trim()}.excalidraw`), exists);
-        await store.write(path, EMPTY_DRAWING);
-        indexes.set(path, EMPTY_DRAWING);
-        bumpIndex();
-        await refresh();
-        changed();
-        await open(path);
-        return path;
-      } catch (e) {
-        fail(e);
-      }
-    },
-    [store, indexes, exists, refresh, open, bumpIndex, fail, changed],
+    (folder = "", name = "Drawing") => createNamed(folder, name, ".excalidraw", () => EMPTY_DRAWING),
+    [createNamed],
   );
-  const createCanvas = useCallback(
-    async (folder = "", name = "Canvas") => {
-      try {
-        const err = validateName(name);
-        if (err) throw new Error(err);
-        const path = uniquePath(joinPath(folder, `${name.trim()}.canvas`), exists);
-        await store.write(path, EMPTY_CANVAS);
-        indexes.set(path, EMPTY_CANVAS);
-        bumpIndex();
-        await refresh();
-        changed();
-        await open(path);
-        return path;
-      } catch (e) {
-        fail(e);
-      }
-    },
-    [store, indexes, exists, refresh, open, bumpIndex, fail, changed],
-  );
+  const createCanvas = useCallback((folder = "", name = "Canvas") => createNamed(folder, name, ".canvas", () => EMPTY_CANVAS), [createNamed]);
 
   const addAttachments = useCallback(
     async (files: File[], folder = settingsRef.current.attachmentFolder || ATTACHMENT_FOLDER) => {
@@ -787,58 +760,37 @@ export function VaultProvider({
   const createNoteWith = useCallback(
     async (path: string, content: string) => {
       try {
-        if (exists(path)) {
-          await open(path);
-          return path;
-        }
-        content = newNoteContent(path, content);
-        await store.write(path, content);
-        indexes.set(path, content);
-        bumpIndex();
-        await refresh();
-        changed();
+        if (!exists(path)) return await createAt(path, newNoteContent(path, content));
         await open(path);
         return path;
       } catch (e) {
         fail(e);
       }
     },
-    [store, indexes, exists, refresh, open, bumpIndex, changed, fail, newNoteContent],
+    [exists, createAt, open, fail, newNoteContent],
   );
 
-  const writeNote = useCallback(
-    async (path: string, content: string) => {
-      try {
-        await flush();
-        await store.write(path, content);
-        indexes.set(path, content);
-        bumpIndex();
-        setEntries(await store.list());
-        if (activePath.current === path) await open(path);
-        changed();
-      } catch (e) {
-        fail(e);
-      }
-    },
-    [flush, store, indexes, bumpIndex, open, changed, fail],
-  );
-
+  /** Writes text or bytes to any file, creating or replacing it; reloads it if it's open. */
   const writeFile = useCallback(
     async (path: string, content: string | Uint8Array) => {
-      if (typeof content === "string") return writeNote(path, content);
       try {
         await flush();
-        await store.writeBinary(path, content);
-        indexes.addFile(path);
+        if (typeof content === "string") {
+          await store.write(path, content);
+          indexes.set(path, content);
+        } else {
+          await store.writeBinary(path, content);
+          indexes.addFile(path);
+        }
         bumpIndex();
-        setEntries(await store.list());
+        await refresh();
         if (activePath.current === path) await open(path);
         changed();
       } catch (e) {
         fail(e);
       }
     },
-    [writeNote, flush, store, indexes, bumpIndex, open, changed, fail],
+    [flush, store, indexes, bumpIndex, refresh, open, changed, fail],
   );
 
   const copyFiles = useCallback(
@@ -882,9 +834,9 @@ export function VaultProvider({
       const file = await store.read(path);
       if (!file) return;
       const next = setPropertyIn(path, file.content, key, value);
-      if (next !== "unchanged") await writeNote(path, next);
+      if (next !== "unchanged") await writeFile(path, next);
     },
-    [setFileProperty, flush, store, writeNote],
+    [setFileProperty, flush, store, writeFile],
   );
 
   const reload = useCallback(
@@ -981,9 +933,7 @@ export function VaultProvider({
       ready,
       vaultId,
       entries,
-      index,
       links,
-      indexVersion,
       indexed,
       active,
       activeText,
@@ -1001,7 +951,6 @@ export function VaultProvider({
       rename,
       move,
       remove,
-      writeNote,
       writeFile,
       copyFiles,
       exportZip,
@@ -1022,9 +971,7 @@ export function VaultProvider({
       ready,
       vaultId,
       entries,
-      index,
       links,
-      indexVersion,
       indexed,
       active,
       activeText,
@@ -1042,7 +989,6 @@ export function VaultProvider({
       rename,
       move,
       remove,
-      writeNote,
       writeFile,
       copyFiles,
       exportZip,

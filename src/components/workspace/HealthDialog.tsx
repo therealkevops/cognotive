@@ -97,7 +97,7 @@ export function HealthDialog({
     const content = vault.textOf(hub);
     if (content === undefined) return;
     const target = vault.links.linkText(note);
-    await vault.writeNote(hub, addToHub(content, formatLink(vault.settings.linkFormat, hub, { path: note, target }, target)));
+    await vault.writeFile(hub, addToHub(content, formatLink(vault.settings.linkFormat, hub, { path: note, target }, target)));
   };
 
   /** Turns the mention into a link (in the repository's link format). */
@@ -106,21 +106,21 @@ export function HealthDialog({
     if (content === undefined || content.slice(m.from, m.from + m.text.length) !== m.text) return;
     const target = vault.links.linkText(m.target);
     const link = formatLink(vault.settings.linkFormat, m.source, { path: m.target, target, alias: target === m.text ? undefined : m.text }, target);
-    await vault.writeNote(m.source, content.slice(0, m.from) + link + content.slice(m.from + m.text.length));
+    await vault.writeFile(m.source, content.slice(0, m.from) + link + content.slice(m.from + m.text.length));
   };
 
   /** Sets (true/false) or removes the note's `hub` property. */
   const markHub = async (path: string, value: boolean | undefined) => {
     const content = vault.links.content(path);
     if (content === undefined) return;
-    await vault.writeNote(path, setFrontmatterProperty(content, "hub", value));
+    await vault.writeFile(path, setFrontmatterProperty(content, "hub", value));
   };
 
   /** Records today as the note's `reviewed:` date. */
   const markReviewed = async (path: string) => {
     const content = vault.textOf(path);
     if (content === undefined) return;
-    await vault.writeNote(path, setFrontmatterProperty(content, "reviewed", todayStamp()));
+    await vault.writeFile(path, setFrontmatterProperty(content, "reviewed", todayStamp()));
   };
 
   const ignore = (p: string) => void vault.updateSettings({ healthIgnore: [...vault.settings.healthIgnore, p] });

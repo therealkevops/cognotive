@@ -90,7 +90,7 @@ export function SidePane({
                 // The open note's latest text (it may be in the main editor too), else the saved text.
                 const text = vault.textOf(path) ?? "";
                 const next = setFrontmatterProperty(text, key, value === undefined ? undefined : yamlValue(value));
-                if (next !== text) void vault.writeNote(path, next);
+                if (next !== text) void vault.writeFile(path, next);
               },
             }}
             fileUrl={(p) => vault.fileUrl(p, { dark: isDark() })}

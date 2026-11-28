@@ -186,7 +186,7 @@ export function LinksPanel({
     const content = vault.textOf(hub);
     if (content === undefined) return;
     const target = vault.links.linkText(path);
-    await vault.writeNote(hub, addToHub(content, formatLink(vault.settings.linkFormat, hub, { path, target }, target)));
+    await vault.writeFile(hub, addToHub(content, formatLink(vault.settings.linkFormat, hub, { path, target }, target)));
   };
 
   const linkMention = async (m: Mention) => {
@@ -194,7 +194,7 @@ export function LinksPanel({
     if (content === undefined || content.slice(m.from, m.from + m.text.length) !== m.text) return;
     const target = vault.links.linkText(path);
     const link = formatLink(vault.settings.linkFormat, m.source, { path, target, alias: target === m.text ? undefined : m.text }, target);
-    await vault.writeNote(m.source, content.slice(0, m.from) + link + content.slice(m.from + m.text.length));
+    await vault.writeFile(m.source, content.slice(0, m.from) + link + content.slice(m.from + m.text.length));
   };
 
   const uniqueOut = new Map<string, { label: string; resolved: string | null }>();

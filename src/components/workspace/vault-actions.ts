@@ -51,7 +51,7 @@ export async function saveCapture(vault: VaultApi, c: Captured, files: File[]): 
     return formatLink(vault.settings.linkFormat, target.path, { path: p, target: t, embed: true }, t);
   });
   const entry = captureEntry({ ...c, embeds }, captureTime());
-  if (vault.exists(target.path)) await vault.writeNote(target.path, appendCapture(vault.textOf(target.path) ?? "", entry));
+  if (vault.exists(target.path)) await vault.writeFile(target.path, appendCapture(vault.textOf(target.path) ?? "", entry));
   else await vault.writeFile(target.path, appendCapture(target.start, entry));
   return target.path;
 }
@@ -79,7 +79,7 @@ export async function renamePropertyEverywhere(vault: VaultApi, from: string, to
     const next = renamePropertyIn(path, latestText(vault, path), from, to);
     if (next === "clash") clashes++;
     else if (next !== "unchanged") {
-      await vault.writeNote(path, next);
+      await vault.writeFile(path, next);
       changed++;
     }
   }
@@ -99,7 +99,7 @@ export async function deletePropertyEverywhere(vault: VaultApi, key: string) {
     }
     const next = deletePropertyIn(path, latestText(vault, path), key);
     if (next !== "unchanged") {
-      await vault.writeNote(path, next);
+      await vault.writeFile(path, next);
       changed++;
     }
   }

@@ -36,7 +36,7 @@ export function DeleteDialog({ items: given, onClose }: { items: Array<{ path: s
   const remove = async () => {
     setBusy(true);
     if (unlink) {
-      for (const [source, text] of vault.links.unlinkTo(isGone)) await vault.writeNote(source, text);
+      for (const [source, text] of vault.links.unlinkTo(isGone)) await vault.writeFile(source, text);
     }
     for (const i of items) await vault.remove(i.path);
     onClose();

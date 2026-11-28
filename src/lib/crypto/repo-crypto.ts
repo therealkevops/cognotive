@@ -19,6 +19,8 @@
  *   they survive case-insensitive file systems.
  */
 
+import { base64ToBytes as fromBase64, bytesToBase64 as toBase64 } from "../base64";
+
 export const HEADER_PATH = ".noted/encryption.json";
 /** Where encrypted files live in the repo. */
 export const ENCRYPTED_DIR = "encrypted";
@@ -62,14 +64,7 @@ const bytes = (n: number) => globalThis.crypto.getRandomValues(new Uint8Array(n)
 /** Web Crypto wants ArrayBuffer-backed views. */
 const buf = (b: Uint8Array) => b as Uint8Array<ArrayBuffer>;
 
-export function toBase64(b: Uint8Array): string {
-  let s = "";
-  for (const x of b) s += String.fromCharCode(x);
-  return btoa(s);
-}
-export function fromBase64(s: string): Uint8Array {
-  return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-}
+export { fromBase64, toBase64 };
 
 const B32 = "abcdefghijklmnopqrstuvwxyz234567";
 export function toBase32(b: Uint8Array): string {

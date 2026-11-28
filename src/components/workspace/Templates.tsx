@@ -42,7 +42,7 @@ export async function addStarterTemplates(vault: VaultApi): Promise<number> {
   for (const [name, content] of Object.entries(STARTER_TEMPLATES)) {
     const path = joinPath(folder, name);
     if (vault.exists(path)) continue;
-    await vault.writeNote(path, content);
+    await vault.writeFile(path, content);
     added++;
   }
   if (!vault.settings.dailyTemplate) await vault.updateSettings({ dailyTemplate: joinPath(folder, "Daily.md") });

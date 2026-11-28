@@ -136,7 +136,7 @@ export function HistoryDialog({ path, onClose }: { path: string; onClose(): void
                       className="button-primary"
                       disabled={text === current}
                       onClick={async () => {
-                        await vault.writeNote(path, text);
+                        await vault.writeFile(path, text);
                         onClose();
                       }}
                     >

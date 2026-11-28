@@ -5,10 +5,10 @@ rich formatting, Excalidraw drawings, and an LLM that can answer questions by ex
 note graph. Notes live in **a GitHub repository you choose in Settings** (or locally in the
 browser). Hosted on **Vercel's free Hobby plan**.
 
-Semantic (embedding) search is deliberately deferred; see [Later](#later-semantic-search).
+Everything runs in the browser: there are no server routes apart from a static `/api/health`.
+AI features are described in [AI_PLAN.md](AI_PLAN.md).
 
 ---
-
 
 > **Terminology:** the app calls a set of notes a **repository** (Obsidian's "vault"). This
 > document and the code still say "vault" in places; they mean the same thing.
@@ -19,26 +19,24 @@ Semantic (embedding) search is deliberately deferred; see [Later](#later-semanti
 
 | Limit (Hobby) | Value | Design consequence |
 |---|---|---|
-| Function max duration | 300 s | Each LLM request is **one model turn**, streamed. The tool loop runs in the browser, so no request runs long. |
-| Function invocations | 1,000,000 / month | Plenty, as long as GitHub traffic does **not** go through our functions. |
-| Active CPU | 4 hours / month | Functions must be thin: token exchange and an LLM proxy only. No indexing or parsing on the server. |
+| Functions (duration, invocations, CPU, request body) | 300 s, 1M / month, 4 h / month, 4.5 MB | The app uses none: GitHub and AI providers are called straight from the browser. |
 | Fast Origin Transfer | 10 GB / month | Don't proxy note files or images through Vercel. The browser talks to GitHub directly. |
-| Fast Data Transfer | 100 GB / month | Static app bundle served from CDN; lazy-load heavy parts (Excalidraw, Mermaid, KaTeX). |
-| Function request body | 4.5 MB | Never upload attachments through a function; the browser commits them to GitHub directly. |
+| Fast Data Transfer | 100 GB / month | Static app bundle served from CDN; lazy-load heavy parts (Excalidraw, Mermaid, KaTeX, React Flow, the search model). |
+| Deployments | Each one is kept | `vercel.json` deploys `main` only, so branches don't add a copy each. |
 | Cron jobs | Once per day | No background workers or queues. Anything periodic happens in the open browser tab. |
 | Runtime logs | Kept for 1 hour | Log errors to the browser console; add client-side error reporting later if needed. |
 | Usage | Non-commercial only | Fine for personal use. Moving to Pro is a config change, not a redesign. |
 | Git integration | Personal-account repos only | `therealkevops/noted-ai` is on a personal account, so auto-deploys work. |
 
-The answer to all of these is the same: **do the work in the browser.** The server is a
-small, stateless helper.
+The answer to all of these is the same: **do the work in the browser.** Vercel only serves
+static files.
 
 ### No database in v1
 
 With GitHub as the store, there is nothing the server needs to remember. Notes, drawings,
 attachments and vault settings live in the repo; the link graph and search index are built
-in the browser and cached in IndexedDB. This removes the hosted database (and its free-tier
-limits) entirely until semantic search needs one.
+in the browser and cached in IndexedDB. Search by meaning runs in the browser too (see
+[Semantic search](#semantic-search)), so there is no hosted database.
 
 ---
 
@@ -48,18 +46,16 @@ limits) entirely until semantic search needs one.
 ┌────────────────────────── Browser ──────────────────────────┐
 │  Next.js UI (CodeMirror 6, Excalidraw, graph view)          │
 │        │                                                    │
-│  VaultStore ──┬── LocalStore  (IndexedDB / OPFS)            │
-│               └── GitHubStore (REST + Git Data API) ───────────────► api.github.com
+│  VaultStore ── LocalStore (IndexedDB), one per repository   │
 │        │                                                    │
-│  Indexer (Web Worker): links, tags, headings, MiniSearch    │
+│  Sync engine ── GitHub remote (REST + Git Data API) ────────────► api.github.com
+│        │        (optionally wrapped by EncryptedRemote)     │
+│  Indexes: links, tags, properties, MiniSearch;              │
+│           embeddings in a Web Worker (opt-in)               │
 │        │                                                    │
-│  Agent loop: runs tools locally against the index           │
-└────────┼────────────────────────────────────────────────────┘
-         │  (one model turn per request, streamed)
-┌────────▼──── Vercel Functions (Hobby) ───┐
-│ /api/auth/*   GitHub App OAuth + refresh │
-│ /api/chat     Claude proxy, SSE stream   │ ─────────────► api.anthropic.com
-└──────────────────────────────────────────┘
+│  Agent loop: runs tools locally against the indexes ────────────► OpenRouter / local / custom
+└─────────────────────────────────────────────────────────────┘
+   Vercel serves the static app only (plus a static /api/health).
 ```
 
 | Layer | Choice |
@@ -68,11 +64,12 @@ limits) entirely until semantic search needs one.
 | Editor | CodeMirror 6 with a live-preview mode (markdown stays the source of truth) |
 | Markdown | `unified` / `remark`: GFM, frontmatter, wikilinks, callouts, KaTeX, Mermaid |
 | Drawings | `@excalidraw/excalidraw`, dynamically imported |
-| Search | MiniSearch (keyword, fuzzy, prefix) in a Web Worker |
-| Graph view | `react-force-graph` (or Sigma.js if it needs to scale further) |
-| Local cache | IndexedDB via `idb`: file contents keyed by Git blob SHA, plus the index |
-| Auth | GitHub App (user-to-server tokens) — this is also the login |
-| LLM | Claude API (`@anthropic-ai/sdk`, `claude-opus-5-5`), tool use, streaming |
+| Canvas | React Flow (`@xyflow/react`), JSON Canvas files, dynamically imported |
+| Search | MiniSearch (keyword, fuzzy, prefix); embeddings via transformers.js in a Web Worker |
+| Graph view | A small deterministic force layout (`src/lib/links/graph-layout.ts`) drawn as SVG |
+| Local cache | IndexedDB via `idb`: file contents and entries per repository, sync state |
+| Auth | A fine-grained GitHub token per repository, kept in IndexedDB on the device |
+| LLM | Any OpenAI-compatible endpoint from the browser; see [AI_PLAN.md](AI_PLAN.md) |
 | Tests | Vitest (parsers, indexer, sync), Playwright (editor flows) |
 
 ---
@@ -86,7 +83,7 @@ switching is instant after the first load. For each vault the user picks:
 
 - **Name**
 - **Backend:** `Local (this browser)` or `GitHub repository`
-- **Repository:** chosen from the repos the GitHub App was installed on
+- **Repository:** chosen from the repos the token can write to
 - **Branch:** default `main`
 - **Vault folder:** optional subfolder, so a vault can live inside a larger repo
 - **Sync mode:** **auto by default** (commit after an idle period, on tab blur, and on
@@ -98,28 +95,14 @@ App-wide preferences (theme, editor mode) live in `localStorage`. Vault-level se
 (attachment folder, daily-note format, ignored paths) live in the repo at
 `.noted/settings.json` so they follow the vault across devices.
 
-### Update: connecting with a token is now the default
-Setting up the GitHub App meant creating an app and configuring the deployment, which was too
-much friction for a personal app. Repositories can now connect with a **fine-grained personal
-access token** limited to the notes repository (Contents: read & write), pasted once per device
-and stored in IndexedDB (`noted-ai:tokens`). No server routes or environment variables are
-involved. The trade-off is that the token is readable by code running in the page, unlike the
-App's httpOnly refresh token, so the instructions keep it to one repository and an expiry; the
-app warns a week before expiry and asks for a new token on a 401. GitHub App sign-in, its server
-routes (`/api/auth/*`), the setup page and the Vercel automation were then removed altogether:
-the app has no server routes for GitHub, and the sections below describe the original design.
-
-### Why a GitHub App (not a classic OAuth App or a pasted token)
-- Fine-grained: the user grants access to specific repositories only, with
-  `Contents: read & write` and `Metadata: read`.
-- Short-lived user tokens (8 h) with a refresh token.
-- Doubles as login, so there's no separate auth provider.
-
-**Token handling:** the client secret stays on the server. `/api/auth/callback` exchanges
-the code and stores the **refresh token in an encrypted, httpOnly cookie**. The browser
-asks `/api/auth/token` for a short-lived access token, keeps it in memory, and calls
-`api.github.com` directly (GitHub's API supports CORS). That keeps GitHub traffic off
-Vercel's invocation and transfer budgets.
+### Connecting
+Repositories connect with a **fine-grained personal access token** limited to the notes
+repository (Contents: read & write), pasted once per device and stored in IndexedDB
+(`noted-ai:tokens`). The browser calls `api.github.com` directly (it supports CORS), so no server
+routes or environment variables are involved. The token is readable by code running in the page,
+so the instructions keep it to one repository and an expiry; the app warns a week before expiry
+and asks for a new token on a 401. (An earlier GitHub App sign-in, with server routes for the
+token exchange, was removed.)
 
 ### Repository layout (also a valid Obsidian vault)
 ```
@@ -187,9 +170,9 @@ through the API and renders it as an object URL, cached by SHA.
 
 ---
 
-## 4. Knowledge graph (no embeddings yet)
+## 4. Knowledge graph
 
-Built in a Web Worker from the cached markdown, updated incrementally on each save:
+Built in the browser from the cached markdown, updated incrementally on each save:
 
 - **Links:** `[[Note]]`, `[[Note#Heading]]`, `[[Note#^block]]`, `[[Note|alias]]`,
   `![[embed]]`, and standard markdown links.
@@ -207,39 +190,10 @@ Views: backlinks pane, outgoing links, tag pane, a global graph, and a local gra
 
 ## 5. Querying with the LLM
 
-> **Superseded by [AI_PLAN.md](AI_PLAN.md):** models are called from the browser through
-> OpenRouter, a local server (Ollama, LM Studio) or any OpenAI-compatible endpoint, with the
-> user's own key on the device, instead of a server-side Claude proxy. The tools below carry
-> over, and write tools become reviewed proposals. Kept for history.
-
-A chat side panel. Claude answers questions by calling tools that run **in the browser**
-against the local index:
-
-| Tool | Purpose |
-|---|---|
-| `search_notes(query, limit)` | Keyword search (MiniSearch), returns snippets |
-| `get_note(path)` | Full markdown of a note |
-| `get_links(path, direction)` | Outgoing links, backlinks, or both |
-| `traverse(path, depth, filter)` | Walk the graph N hops from a note |
-| `find_by_tag(tag)` / `find_by_property(key, value)` | Structured queries |
-| `list_folder(path)` | Browse the vault |
-| *(later)* `create_note`, `append_to_note`, `add_link` | Write tools; each change shown as a diff to accept |
-
-**Flow:** the browser sends the conversation to `/api/chat`; the function makes **one**
-streamed Messages API call and relays it. If Claude asks for tools, the browser runs them,
-appends the results, and sends the next turn. Each invocation is short, so the 300 s limit
-and the 4-hour CPU budget aren't a concern (streaming time spent waiting on the network
-uses very little active CPU).
-
-**Answers cite notes**, and each citation opens the note.
-
-**API key:** stored as a Vercel environment variable. `/api/chat` only serves logged-in
-users on an allowlist of GitHub user IDs (for now, just the owner), so nobody else can
-spend the key. "Bring your own key" is a future decision, to revisit if other people use the
-app; `/api/chat` takes the key from one place so adding it later is a small change.
-
-**Context size:** notes go to the model only when a tool asks for them; long notes are
-returned by section rather than whole.
+Described in [AI_PLAN.md](AI_PLAN.md): models are called from the browser through OpenRouter, a
+local server (Ollama, LM Studio) or any OpenAI-compatible endpoint, with the user's own key on the
+device. The agent's tools run in the browser against the local indexes, answers cite the notes
+they read, and changes are proposals the user reviews.
 
 ---
 
@@ -252,7 +206,7 @@ returned by section rather than whole.
 - Paste or drop images → committed to `attachments/` and linked.
 - `[[` autocomplete, hover previews, Ctrl/Cmd-click to open or create.
 - Quick switcher (Ctrl/Cmd+O), command palette (Ctrl/Cmd+P), tabs, split panes.
-- Daily notes and templates (later in phase 1 or 2).
+- Daily notes and templates.
 
 ### Excalidraw
 - Drawings are `.excalidraw` JSON files in the repo, edited full screen.
@@ -279,10 +233,10 @@ returned by section rather than whole.
 |---|---|---|
 | **0. Scaffold** ✅ | Next.js + TS, Tailwind, ESLint, Vitest, Playwright, GitHub Actions CI, Vercel project linked | A hello-world deploys from `main` and CI is green |
 | **1. Local editor** ✅ | `VaultStore` interface + `LocalStore`; file tree; CodeMirror with live preview and all formatting; quick switcher; keyword search | You can write and organise notes entirely in the browser |
-| **2. GitHub store** ✅ (text files) | GitHub App, login, Settings → Vaults (multiple vaults, switcher), `GitHubStore`, sync engine with batching, pull, conflicts, offline; attachments | Edits made in the app show up as commits; edits pushed from Obsidian show up in the app |
+| **2. GitHub store** ✅ (text files) | Token connection, Settings → Vaults (multiple vaults, switcher), `GitHubStore`, sync engine with batching, pull, conflicts, offline; attachments | Edits made in the app show up as commits; edits pushed from Obsidian show up in the app |
 | **3. Linking** ✅ | Wikilinks, autocomplete, backlinks, unlinked mentions, tags, frontmatter, rename refactor, graph views | The graph matches what Obsidian shows for the same vault |
 | **4. Excalidraw** ✅ (with attachments) | Drawing files, embeds, SVG previews, links from drawings | Drawings round-trip through the repo and appear in the graph |
-| **5. LLM** | See [AI_PLAN.md](AI_PLAN.md): phases A–E (providers and chat, read agent, write proposals, agent actions, bridge and MCP) | You can ask "what have I written about X and how does it connect to Y?", and the agent can propose changes |
+| **5. LLM** ✅ | See [AI_PLAN.md](AI_PLAN.md): phases A–E (providers and chat, read agent, write proposals, agent actions, bridge and MCP) | You can ask "what have I written about X and how does it connect to Y?", and the agent can propose changes |
 | **6. Polish** ✅ | Command palette, themes, mobile layout, templates, daily notes, tabs, side pane, version history, zip import/export, installable offline app | — |
 
 Each phase ends deployed to Vercel and usable.
@@ -293,7 +247,6 @@ Each phase ends deployed to Vercel and usable.
   note while writing another; a second live editor is a larger change.
 - **Indexing in a Web Worker.** Not needed yet: indexing is fast for personal vaults, and first
   syncs now download files in parallel. Revisit if a vault reaches thousands of notes.
-- **Phase 5 (LLM)** is postponed, as is giving the LLM write tools.
 
 ---
 
@@ -325,12 +278,12 @@ Either plugs into the same `search_notes` tool, merged with keyword results.
   with every sync. Batching and the idle delay keep this manageable.
 - **Large vaults:** first load of thousands of notes is many requests. Mitigation: cache by
   SHA, fetch in parallel with a concurrency cap, and show the UI before indexing finishes.
-- **Privacy:** notes sent to the LLM go to Anthropic. The chat panel should make clear
-  which notes were read.
+- **Privacy:** notes the agent reads go to the chosen AI provider. The chat panel lists which
+  notes were read, and an encrypted repository defaults to a local model.
 - **Hobby is non-commercial:** if this becomes a product, move to Pro.
 
 ## Decisions
 - **Multiple vaults:** yes. One account can add several vaults (repos or local) and switch
   between them.
 - **Sync:** auto-commit by default; mode and idle interval are configurable per vault.
-- **Bring your own Anthropic key:** deferred. The app is single-user for now.
+- **AI keys:** each user brings their own, kept on the device (`src/lib/ai/keys.ts`).

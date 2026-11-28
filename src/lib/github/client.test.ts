@@ -46,7 +46,7 @@ describe("GitHubClient", () => {
     await expect(gh.blob("o", "r", "s")).rejects.toThrow(/rate limit/);
   });
 
-  it("lists repos across installations, following pages", async () => {
+  it("lists a token's repos, following pages", async () => {
     const repo = (i: number) => ({
       name: `r${i}`,
       full_name: `o/r${i}`,
@@ -55,12 +55,8 @@ describe("GitHubClient", () => {
       private: true,
     });
     const page1 = Array.from({ length: 100 }, (_, i) => repo(i));
-    const { gh } = client([
-      json({ installations: [{ id: 7 }] }),
-      json({ total_count: 101, repositories: page1 }),
-      json({ total_count: 101, repositories: [repo(100)] }),
-    ]);
-    const repos = await gh.listRepos();
+    const { gh } = client([json(page1), json([repo(100)])]);
+    const repos = await gh.listUserRepos();
     expect(repos).toHaveLength(101);
     expect(repos[0]).toEqual({ owner: "o", name: "r0", fullName: "o/r0", defaultBranch: "main", private: true });
   });

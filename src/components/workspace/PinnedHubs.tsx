@@ -42,7 +42,7 @@ export function PinnedHubs({ onCreate }: { onCreate(target: string, from: string
   };
   const unpin = async (path: string) => {
     const content = vault.textOf(path);
-    if (content !== undefined) await vault.writeNote(path, setFrontmatterProperty(content, "hub", undefined));
+    if (content !== undefined) await vault.writeFile(path, setFrontmatterProperty(content, "hub", undefined));
   };
 
   return (
