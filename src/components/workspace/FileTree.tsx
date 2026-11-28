@@ -23,10 +23,10 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useContext, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
+import { useContext, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { readPref, writePref } from "@/lib/prefs";
 import { basename, dirname, isBinary, isCanvas, isDrawing, isImage, isMarkdown, isNote, isWithin } from "@/lib/vault/paths";
-import { copyPath, moveTargets, moveTargetsFor, ownAttachments, planCopy, planDuplicate, rangeOf, topmost, visiblePaths } from "@/lib/vault/tree-actions";
+import { copyPath, moveTargets, moveTargetsFor, ownAttachments, planCopy, planDuplicate, topmost, visiblePaths } from "@/lib/vault/tree-actions";
 import { applyOrder, placeNames } from "@/lib/vault/file-order";
 import { formatLink } from "@/lib/links/format";
 import { hubProperty } from "@/lib/links/health";
@@ -39,9 +39,11 @@ import { RowMenu, type RowMenuHandle } from "../RowMenu";
 import { SidePaneContext } from "./SidePane";
 
 import { TREE_DRAG_TYPE as DRAG_TYPE } from "@/lib/vault/drag";
+import { DRAG_MANY, useTreeDrop } from "./useTreeDrop";
+import { useTreeSelection } from "./useTreeSelection";
 
-/** Dragging several chosen items: their paths, as JSON. */
-const DRAG_MANY = "application/x-noted-paths";
+/** The tree's open dialog: moving one item, or doing something with the chosen ones. */
+type TreeDialog = { kind: "move"; path: string } | { kind: "moveChosen" } | { kind: "copyChosen" } | { kind: "renameChosen" } | { kind: "deleteChosen" };
 
 export function FileTree() {
   const vault = useVault();
@@ -50,9 +52,6 @@ export function FileTree() {
   const prefKey = `vault:${vault.vaultId}:expanded`;
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(readPref<string[]>(prefKey, [])));
   const [renaming, setRenaming] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<string | null>(null);
-  /** Where a dragged item would go among the rows: above or below this one. */
-  const [dropLine, setDropLine] = useState<{ path: string; where: "before" | "after" } | null>(null);
 
   const setOpen = (path: string, open: boolean) => {
     setExpanded((prev) => {
@@ -83,7 +82,9 @@ export function FileTree() {
   };
   // Where the file picker's files go: the folder whose menu asked, or the default.
   const uploadTo = useRef("");
-  const [moving, setMoving] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<TreeDialog | null>(null);
+  const closeDialog = () => setDialog(null);
+  const moving = dialog?.kind === "move" ? dialog.path : null;
   // Moving a note brings the attachments only it uses, unless this is unticked.
   const [bringAttachments, setBringAttachments] = useState(true);
   const movingOwn = useMemo(
@@ -91,13 +92,11 @@ export function FileTree() {
     [moving, vault.links],
   );
   // Several items chosen at once (Ctrl/Cmd-click, Shift-click), to move together.
-  const [chosenRaw, setChosen] = useState<string[]>([]);
-  const anchor = useRef<string | null>(null);
-  const chosen = useMemo(() => chosenRaw.filter((p) => vault.entries.some((e) => e.path === p || isWithin(e.path, p))), [chosenRaw, vault.entries]);
-  const [movingMany, setMovingMany] = useState(false);
-  const [deletingMany, setDeletingMany] = useState(false);
-  const [renamingMany, setRenamingMany] = useState(false);
-  const [copyingMany, setCopyingMany] = useState(false);
+  const selection = useTreeSelection(tree, expanded, vault.entries, vault.active?.path);
+  const { chosen, choose, chooseAll } = selection;
+  const clearChosen = selection.clear;
+  /** Paths as items for the dialogs: whether each is a folder. */
+  const itemsOf = (paths: string[]) => paths.map((p) => ({ path: p, isFolder: !vault.entries.some((e) => e.path === p && e.kind === "file") }));
   const [notice, setNotice] = useState<string | null>(null);
   const say = (text: string) => {
     setNotice(text);
@@ -118,18 +117,15 @@ export function FileTree() {
       uploadTo.current = f;
       upload.current?.click();
     },
-    move: setMoving,
-    moveChosen: () => setMovingMany(true),
-    deleteChosen: () => setDeletingMany(true),
-    renameChosen: () => setRenamingMany(true),
-    copyChosen: () => setCopyingMany(true),
+    move: (path) => setDialog({ kind: "move", path }),
+    moveChosen: () => setDialog({ kind: "moveChosen" }),
+    deleteChosen: () => setDialog({ kind: "deleteChosen" }),
+    renameChosen: () => setDialog({ kind: "renameChosen" }),
+    copyChosen: () => setDialog({ kind: "copyChosen" }),
     duplicateChosen: () => void duplicateMany(chosen),
-    choose: (path) => {
-      setChosen((prev) => (prev.includes(path) ? prev : [...prev, path]));
-      anchor.current = path;
-    },
-    clearChosen: () => setChosen([]),
-    chooseAll: () => setChosen(visiblePaths(tree, expanded)),
+    choose: selection.add,
+    clearChosen,
+    chooseAll,
     nudge: (path, by) => {
       const names = namesIn(dirname(path));
       const i = names.indexOf(basename(path));
@@ -164,42 +160,21 @@ export function FileTree() {
     },
   };
 
-  /** A click on a row with Ctrl/Cmd (add or take away) or Shift (a range); false for a plain click. */
-  const choose = (path: string, how: { toggle: boolean; range: boolean }): boolean => {
-    if (how.range) {
-      const order = visiblePaths(tree, expanded);
-      setChosen(rangeOf(order, anchor.current ?? vault.active?.path ?? null, path));
-      return true;
-    }
-    if (how.toggle) {
-      setChosen((prev) => (prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path]));
-      anchor.current = path;
-      return true;
-    }
-    setChosen([]);
-    anchor.current = path;
-    return false;
-  };
-  const clearChosen = () => setChosen([]);
-  /** Every row the tree shows (a closed folder counts once, and brings what's in it). */
-  const chooseAll = () => setChosen(visiblePaths(tree, expanded));
-
   /** Moves the chosen items into a folder (a folder's contents go with it). */
   const moveMany = async (paths: string[], folder: string) => {
     const items = topmost(paths).filter((p) => dirname(p) !== folder && !isWithin(folder, p));
     for (const p of items) await vault.move(p, folder);
     if (folder) setOpen(folder, true);
-    setChosen([]);
+    clearChosen();
     if (items.length) say(`Moved ${items.length} ${items.length === 1 ? "item" : "items"} to ${folder || "the top level"}.`);
   };
 
   /** Copies the chosen items into a folder (their own, for duplicates); clashing names get " copy". */
   const copyMany = async (paths: string[], folder: string) => {
-    const items = paths.map((p) => ({ path: p, isFolder: !vault.entries.some((e) => e.path === p && e.kind === "file") }));
-    const plan = planCopy(items, folder, vault.entries);
+    const plan = planCopy(itemsOf(paths), folder, vault.entries);
     await vault.copyFiles(plan);
     if (folder) setOpen(folder, true);
-    setChosen([]);
+    clearChosen();
     const n = topmost(paths).length;
     say(`Copied ${n} ${n === 1 ? "item" : "items"} to ${folder || "the top level"}.`);
   };
@@ -220,7 +195,7 @@ export function FileTree() {
     for (const p of moving) if (dirname(p) !== folder) await vault.move(p, folder);
     const next = placeNames(names, moving.map(basename), basename(anchor), where);
     await vault.updateSettings({ fileOrder: { ...vault.settings.fileOrder, [folder]: next } });
-    setChosen([]);
+    clearChosen();
   };
 
   /** Back to the usual order (folders first, by name) in a folder. */
@@ -230,102 +205,20 @@ export function FileTree() {
     void vault.updateSettings({ fileOrder: rest });
   };
 
-  const draggedPaths = (e: DragEvent): string[] => {
-    const many = e.dataTransfer.getData(DRAG_MANY);
-    if (many) return JSON.parse(many) as string[];
-    const one = e.dataTransfer.getData(DRAG_TYPE);
-    return one ? [one] : [];
-  };
-
-  /**
-   * Dropping on a row: on its top or bottom quarter (half, for a file), the items go above
-   * or below it; on the middle of a folder, into it. Files from the computer go into the
-   * row's folder (or the folder itself).
-   */
-  const rowDropProps = (path: string, isFolder: boolean) => {
-    const whereAt = (e: DragEvent): "before" | "after" | "into" => {
-      const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const y = (e.clientY - r.top) / Math.max(1, r.height);
-      if (isFolder) return y < 0.25 ? "before" : y > 0.75 ? "after" : "into";
-      return y < 0.5 ? "before" : "after";
-    };
-    return {
-      onDragOver: (e: DragEvent) => {
-        if (!e.dataTransfer.types.includes(DRAG_TYPE) && !e.dataTransfer.types.includes("Files")) return;
-        e.preventDefault();
-        e.stopPropagation();
-        const where = e.dataTransfer.types.includes("Files") && !e.dataTransfer.types.includes(DRAG_TYPE) ? "into" : whereAt(e);
-        if (where === "into") {
-          setDropLine(null);
-          setDropTarget(isFolder ? path : dirname(path));
-        } else {
-          setDropTarget(null);
-          setDropLine({ path, where });
-        }
-      },
-      onDragLeave: () => {
-        setDropLine((l) => (l?.path === path ? null : l));
-        setDropTarget((t) => (t === path ? null : t));
-      },
-      onDrop: (e: DragEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setDropTarget(null);
-        setDropLine(null);
-        if (e.dataTransfer.files.length) {
-          void addFiles([...e.dataTransfer.files], isFolder ? path : dirname(path));
-          return;
-        }
-        const where = whereAt(e);
-        const paths = draggedPaths(e);
-        if (!paths.length) return;
-        if (where === "into") {
-          if (isFolder) setOpen(path, true);
-          void moveMany(paths, path);
-        } else void reorder(paths, path, where);
-      },
-    };
-  };
-
   /** Duplicates the chosen items, each in its own folder ("Name copy"). */
   const duplicateMany = async (paths: string[]) => {
-    const items = paths.map((p) => ({ path: p, isFolder: !vault.entries.some((e) => e.path === p && e.kind === "file") }));
-    await vault.copyFiles(planDuplicate(items, vault.entries));
-    setChosen([]);
+    await vault.copyFiles(planDuplicate(itemsOf(paths), vault.entries));
+    clearChosen();
     const n = topmost(paths).length;
     say(`Duplicated ${n} ${n === 1 ? "item" : "items"}.`);
   };
 
-  const dropProps = (folder: string) => ({
-    onDragOver: (e: DragEvent) => {
-      if (!e.dataTransfer.types.includes(DRAG_TYPE) && !e.dataTransfer.types.includes("Files")) return;
-      e.preventDefault();
-      e.stopPropagation();
-      setDropLine(null);
-      setDropTarget(folder);
-    },
-    onDragLeave: () => setDropTarget((t) => (t === folder ? null : t)),
-    onDrop: (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setDropTarget(null);
-      setDropLine(null);
-      // Files dragged in from the computer become attachments in that folder.
-      if (e.dataTransfer.files.length) {
-        void addFiles([...e.dataTransfer.files], folder);
-        return;
-      }
-      const many = e.dataTransfer.getData(DRAG_MANY);
-      if (many) {
-        void moveMany(JSON.parse(many) as string[], folder);
-        return;
-      }
-      const path = e.dataTransfer.getData(DRAG_TYPE);
-      if (path) {
-        if (folder) setOpen(folder, true);
-        void vault.move(path, folder);
-      }
-    },
+  const { dropTarget, dropLine, rowDropProps, dropProps } = useTreeDrop({
+    addFiles: (files, folder) => void addFiles(files, folder),
+    moveMany: (paths, folder) => void moveMany(paths, folder),
+    moveOne: (path, folder) => void vault.move(path, folder),
+    reorder: (paths, anchor, where) => void reorder(paths, anchor, where),
+    openFolder: (path) => setOpen(path, true),
   });
 
   return (
@@ -409,13 +302,13 @@ export function FileTree() {
           >
             <CheckCheck size={13} aria-hidden />
           </button>
-          <button type="button" className="button-secondary px-2 py-0.5 text-xs" onClick={() => setMovingMany(true)}>
+          <button type="button" className="button-secondary px-2 py-0.5 text-xs" onClick={() => setDialog({ kind: "moveChosen" })}>
             <FolderInput size={12} aria-hidden /> Move to…
           </button>
           <button type="button" className="icon-button h-6 w-6" aria-label="Duplicate selected" title="Duplicate" onClick={() => void duplicateMany(chosen)}>
             <CopyPlus size={13} aria-hidden />
           </button>
-          <button type="button" className="icon-button h-6 w-6" aria-label="Copy selected" title="Copy to…" onClick={() => setCopyingMany(true)}>
+          <button type="button" className="icon-button h-6 w-6" aria-label="Copy selected" title="Copy to…" onClick={() => setDialog({ kind: "copyChosen" })}>
             <Copy size={13} aria-hidden />
           </button>
           <button
@@ -424,7 +317,7 @@ export function FileTree() {
             aria-label="Rename selected"
             title="Rename selected"
             disabled={chosen.length < 2}
-            onClick={() => setRenamingMany(true)}
+            onClick={() => setDialog({ kind: "renameChosen" })}
           >
             <Pencil size={13} aria-hidden />
           </button>
@@ -433,7 +326,7 @@ export function FileTree() {
             className="icon-button h-6 w-6 hover:text-red-600 dark:hover:text-red-400"
             aria-label="Delete selected"
             title="Delete selected"
-            onClick={() => setDeletingMany(true)}
+            onClick={() => setDialog({ kind: "deleteChosen" })}
           >
             <Trash2 size={13} aria-hidden />
           </button>
@@ -499,7 +392,7 @@ export function FileTree() {
             })();
           }}
           onClose={() => {
-            setMoving(null);
+            closeDialog();
             setBringAttachments(true);
           }}
           footer={
@@ -517,45 +410,45 @@ export function FileTree() {
           }
         />
       )}
-      {renamingMany && chosen.length > 1 && (
+      {dialog?.kind === "renameChosen" && chosen.length > 1 && (
         <BatchRename
           // In the order the tree shows them (chosen items in closed folders after).
           items={(() => {
             const order = visiblePaths(tree, expanded);
             const sorted = [...chosen].sort((a, b) => (order.indexOf(a) + 1 || Infinity) - (order.indexOf(b) + 1 || Infinity));
-            return sorted.map((p) => ({ path: p, isFolder: !vault.entries.some((e) => e.path === p && e.kind === "file") }));
+            return itemsOf(sorted);
           })()}
-          onClose={() => setRenamingMany(false)}
+          onClose={closeDialog}
           onDone={(n) => {
-            setChosen([]);
+            clearChosen();
             if (n) say(`Renamed ${n} ${n === 1 ? "item" : "items"}.`);
           }}
         />
       )}
-      {deletingMany && chosen.length > 0 && (
+      {dialog?.kind === "deleteChosen" && chosen.length > 0 && (
         <DeleteDialog
-          items={chosen.map((p) => ({ path: p, isFolder: !vault.entries.some((e) => e.path === p && e.kind === "file") }))}
+          items={itemsOf(chosen)}
           // Cancelling keeps the selection; deleted items drop out of it by themselves.
-          onClose={() => setDeletingMany(false)}
+          onClose={closeDialog}
         />
       )}
-      {copyingMany && chosen.length > 0 && (
+      {dialog?.kind === "copyChosen" && chosen.length > 0 && (
         <Picker
           title={`Copy ${chosen.length} ${chosen.length === 1 ? "item" : "items"} to…`}
           placeholder="Folder (its own for duplicates)"
           // Any folder: the one they're in makes "Name copy" duplicates.
           items={moveTargetsFor(tree, [])}
           onPick={(item) => void copyMany(chosen, item.id)}
-          onClose={() => setCopyingMany(false)}
+          onClose={closeDialog}
         />
       )}
-      {movingMany && chosen.length > 0 && (
+      {dialog?.kind === "moveChosen" && chosen.length > 0 && (
         <Picker
           title={`Move ${chosen.length} ${chosen.length === 1 ? "item" : "items"} to…`}
           placeholder="Folder"
           items={moveTargetsFor(tree, chosen)}
           onPick={(item) => void moveMany(chosen, item.id)}
-          onClose={() => setMovingMany(false)}
+          onClose={closeDialog}
         />
       )}
     </nav>
